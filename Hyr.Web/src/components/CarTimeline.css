@@ -1,0 +1,64 @@
+.car-timeline {
+  font-family: sans-serif;
+  border: 1px solid #ddd;
+  background: #f9f9f9;
+}
+.timeline-header {
+  display: flex;
+}
+.car-col-header {
+  width: 150px;
+}
+.hours-row {
+  display: flex;
+  flex: 1;
+}
+.hour-col {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  border-left: 1px solid #ccc;
+  background: #eee;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.timeline-body {
+}
+.car-row {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  min-height: 40px;
+}
+.car-col {
+  width: 150px;
+  background: #2c5a87;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+.reservations-row {
+  position: relative;
+  flex: 1;
+  height: 40px;
+}
+.reservation-block {
+  position: absolute;
+  top: 4px;
+  height: 32px;
+  background: #6c63a7;
+  color: #fff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.reservation-code {
+  font-weight: bold;
+}
+.reservation-customer {
+  font-size: 12px;
+}

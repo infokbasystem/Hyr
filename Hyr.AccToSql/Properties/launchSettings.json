@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "Hyr.AccToSql_CheckConnection": {
+      "commandName": "Project",
+      "commandLineArgs": "CheckConnectionAndReadCompany 3 \"C:\\Arkiv\\Support\\MrLift\\HL_data.mdb"
+    },
+    "Hyr.AccToSql_ImportInvoices": {
+      "commandName": "Project",
+      "commandLineArgs": "ImportInvoices 3 \"C:\\Arkiv\\Support\\MrLift\\HL_data.mdb\" \"Server=192.168.1.146;Database=HyrFlex;User Id=sa;Password=Losenord101;TrustServerCertificate=True;\""
+
+    }
+  }
+}

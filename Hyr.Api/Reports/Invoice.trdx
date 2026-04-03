@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report Width="17cm" Name="Invoice" SnapGridSize="0.1cm" xmlns="http://schemas.telerik.com/reporting/2025/2.0">
+  <DataSources>
+    <ObjectDataSource ParameterValues="null" Name="InvoiceDataSource" />
+  </DataSources>
+  <Items>
+    <PageHeaderSection Height="2.1cm" Name="pageHeaderSection1">
+      <Items>
+        <PictureBox Image="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" Width="4.9cm" Height="1.3cm" Left="0.7cm" Top="0.3cm" Sizing="ScaleProportional" MimeType="" Name="pictureBox1" />
+        <TextBox Width="3.4cm" Height="0.7cm" Left="9.9cm" Top="0.6cm" Value="Faktura" Angle="0" Name="textBox3">
+          <Style Color="128, 128, 128">
+            <Font Size="16pt" Bold="True" />
+          </Style>
+        </TextBox>
+      </Items>
+    </PageHeaderSection>
+    <DetailSection Height="9.7cm" Name="detailSection1">
+      <Items>
+        <TextBox Width="3cm" Height="0.5cm" Left="0.5cm" Top="0.4cm" Value="Mottagare" Name="textBox1">
+          <Style Color="128, 128, 128">
+            <Font Size="9pt" Bold="True" />
+          </Style>
+        </TextBox>
+        <TextBox Width="4.4cm" Height="0.5cm" Left="0.5cm" Top="1.1cm" Value="=Fields.CustomerName" Name="textBox2" />
+      </Items>
+    </DetailSection>
+    <PageFooterSection Height="2cm" Name="pageFooterSection1" />
+  </Items>
+  <PageSettings PaperKind="A4" Landscape="False">
+    <Margins>
+      <MarginsU Left="2cm" Right="2cm" Top="2cm" Bottom="2cm" />
+    </Margins>
+  </PageSettings>
+  <StyleSheet>
+    <StyleRule>
+      <Style>
+        <Padding Left="2pt" Right="2pt" />
+      </Style>
+      <Selectors>
+        <TypeSelector Type="TextItemBase" />
+        <TypeSelector Type="HtmlTextBox" />
+      </Selectors>
+    </StyleRule>
+    <StyleRule>
+      <Style Color="Black">
+        <Font Name="Tahoma" Size="9pt" />
+        <BorderStyle Default="Solid" />
+        <BorderColor Default="Black" />
+        <BorderWidth Default="1px" />
+      </Style>
+      <Selectors>
+        <StyleSelector Type="Table" StyleName="Normal.TableNormal" />
+      </Selectors>
+    </StyleRule>
+    <StyleRule>
+      <Style>
+        <Font Name="Tahoma" Size="9pt" />
+        <BorderStyle Default="Solid" />
+        <BorderColor Default="Black" />
+        <BorderWidth Default="1px" />
+      </Style>
+      <Selectors>
+        <DescendantSelector>
+          <Selectors>
+            <TypeSelector Type="Table" />
+            <StyleSelector Type="ReportItem" StyleName="Normal.TableBody" />
+          </Selectors>
+        </DescendantSelector>
+      </Selectors>
+    </StyleRule>
+    <StyleRule>
+      <Style VerticalAlign="Middle">
+        <Font Name="Tahoma" Size="10pt" />
+        <BorderStyle Default="Solid" />
+        <BorderColor Default="Black" />
+        <BorderWidth Default="1px" />
+      </Style>
+      <Selectors>
+        <DescendantSelector>
+          <Selectors>
+            <TypeSelector Type="Table" />
+            <StyleSelector Type="ReportItem" StyleName="Normal.TableHeader" />
+          </Selectors>
+        </DescendantSelector>
+      </Selectors>
+    </StyleRule>
+  </StyleSheet>
+</Report>
