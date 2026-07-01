@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import apiClient from "../../lib/apiClient";
 
 const FortnoxRedirect = () => {
-    const apiUrl = import.meta.env.VITE_API_URL;
     const [code, setCode] = useState("");
     const [state, setState] = useState("");
     const [loading, setLoading] = useState(false);
@@ -18,27 +18,18 @@ const FortnoxRedirect = () => {
         setLoading(true);
         setMessage("");
         try {
-            const token = localStorage.getItem('token');
             const redirectUrl = window.location.origin + '/settings/fortnoxredirect';
-            const response = await fetch(`${apiUrl}/settings/fortnoxactivate`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ code, state, redirectUrl }),
-            });
-            if (response.ok) {
-                setActivated(true);
-                setMessage("Kopplingen aktiverades! Du kan nu stänga denna flik och bokföra fakturor.");
-            } else {
-                const err = await response.status;
-                const data = await response.json();
-                setMessage("Fel vid aktivering: " + err + ". " + data.message);
-            }
+            await apiClient.post('/settings/fortnoxactivate', { code, state, redirectUrl });
+            setActivated(true);
+            setMessage("Kopplingen aktiverades! Du kan nu stänga denna flik och bokföra fakturor.");
         } catch (error) {
-            const err = await response.status;
-            setMessage("Nätverksfel: " + error.message);
+            const status = error?.response?.status;
+            const message = error?.response?.data?.message ?? error.message;
+            if (status) {
+                setMessage(`Fel vid aktivering: ${status}. ${message}`);
+            } else {
+                setMessage(`Nätverksfel: ${message}`);
+            }
         } finally {
             setLoading(false);
         }

@@ -9,6 +9,7 @@ using Hyr.Api.Models;
 using Hyr.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+const string FrontendCorsPolicy = "FrontendCorsPolicy";
 
 // Add services to the container.
 
@@ -57,12 +58,17 @@ builder.Services.Configure<JwtSettings>(options =>
 // CORS Configuration
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    options.AddPolicy(FrontendCorsPolicy, policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "https://hyrsys.se",
+                "https://www.hyrsys.se",
+                "http://localhost:5173",
+                                "https://localhost:5173",
+                                "http://localhost:5174",
+                                "https://localhost:5174")
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              ;
+              .AllowAnyMethod();
     });
 });
 
@@ -79,7 +85,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
-app.UseCors();
+app.UseCors(FrontendCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

@@ -1,7 +1,6 @@
 import { useContext, createContext, useState } from "react";
 import { data, useNavigate } from "react-router-dom";
-
-const apiUrl = import.meta.env.VITE_API_URL;
+import apiClient from "../lib/apiClient";
 
 const AuthContext = createContext();
 
@@ -12,23 +11,16 @@ const AuthProvider = ({ children }) => {
 
   const loginAction = async (data) => {
     try {
-      const response = await fetch(`${apiUrl}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      const res = await response.json();
-      if (response.ok) {
+      const response = await apiClient.post('/auth/login', data);
+      const res = response.data;
+      if (response.status >= 200 && response.status < 300) {
         setUser(res.user);
         setToken(res.token);
         localStorage.setItem("token", res.token);
         // navigate("/dashboard");
         return { success: true };
       } else {
-        const errorData = await response.json();
-        return { success: false, error: errorData.message || 'Login failed' };
+        return { success: false, error: 'Login failed' };
       }
     } catch (err) {
       console.error(err);
@@ -42,23 +34,16 @@ const AuthProvider = ({ children }) => {
     }, 3000);
     return;
     try {
-      const response = await fetch(`${apiUrl}/auth/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: null,
-      });
-      const res = await response.json();
-      if (response.ok) {
+      const response = await apiClient.post('/auth/verify', null);
+      const res = response.data;
+      if (response.status >= 200 && response.status < 300) {
         setUser(res.user);
         setToken(res.token);
         localStorage.setItem("token", res.token);
         // navigate("/dashboard");
         return { success: true };
       } else {
-        const errorData = await response.json();
-        return { success: false, error: errorData.message || 'Login failed' };
+        return { success: false, error: 'Login failed' };
       }
     } catch (err) {
       console.error(err);

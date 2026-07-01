@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import CarSearchModal from '../../Modals/CarSearchModal';
+import CarSearchModal from '../../modals/CarSearchModal';
 
 // ---------------------------------------------------------------------------
 // Themes

@@ -6,27 +6,40 @@ import bg from '../assets/header.png'
 import logo from '../assets/logo.png'
 
 
-const Header = () => {
+const Header = ({ user, onSignOut }) => {
+    const navigate = useNavigate();
     const auth = useAuth();
+    const activeUser = user ?? auth?.user;
 
-    const handleLogin = async (e) => {
-        console.log('handleLogin');
-        const res = await auth.logOut();
-        // navigate("/login");
+    const handleLogout = async () => {
+        if (onSignOut) {
+            await onSignOut();
+        } else if (auth?.logOut) {
+            await auth.logOut();
+        }
+        navigate("/login");
     };
 
     return (
         <div id='header' className='flex items-center' style={{ backgroundImage: `url(${bg})` }}>
-            <div className="flex-1 basis-0">
-                <p className='place-self-center mt-1'><img src={logo} /></p>
+            <div className="flex-2 basis-0">
+                <p className='place-self-center mt-1'><img src={logo} alt="Hyr logo" /></p>
             </div>
-            <div className="flex-grow">
-                <div className='grow place-self-center text-center'>
-                    <p className='text-xs text-white-500 leading-0 p-1 mt-1'><span>Välkommen</span><span className='ms-1 text-white'>Stefan Loyd</span></p>
-                    <button type='button' onClick={(event) => handleLogin()} className="text-xs text-white-500 bg-transparent hover:text-white-600 leading-0 p-1">Logga ut</button>
+            <div className="">
+                <div className='grow place-self-center text-left pt-1 ml-0 mr-40'>
+                    <div className="mt-2 flex w-full items-center justify-between">
+                        <p className='text-xs text-white-700 leading-0 p-1'>
+                            <span>Välkommen</span>
+                            <span className='ms-1 text-white font-medium'>{activeUser?.displayName ?? activeUser?.email ?? "Användare"}</span>
+                        </p>
+                        <button type='button' onClick={handleLogout} className="place-self-end text-xs text-white-700 font-medium bg-transparent hover:text-white-600 leading-0 p-1">Logga ut</button>
+                    </div>
+                    <p className='text-xs text-white-700 p-1 mt-1'>
+                        <span>Behöver du hjälp? Ring eller maila oss på:   tel: 0733-414142   mail: support@tvpsys.se</span>
+                    </p>
                 </div>
             </div>
-            <div className="flex-1 basis-0">
+            <div className="flex-2 basis-0">
                 <div className='place-self-center'>
                     <div className="relative text-gray-600 mr-9">
                         <input type="search" name="serch" placeholder="Sök" className="bg-gray-200 h-7 px-5 pr-10 rounded text-xs focus:outline-none" />

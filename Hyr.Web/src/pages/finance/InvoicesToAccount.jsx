@@ -1,21 +1,36 @@
 import React from 'react'
 import { useState, useEffect, useMemo } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Search, Calendar, Filter, Play, Loader2, CheckCircle, XCircle, ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import apiClient from '../../lib/apiClient';
+import DateRangePicker from '../../components/DaterangePicker';
+
+function formatDateForQuery(value) {
+    if (!value) {
+        return '';
+    }
+
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return '';
+    }
+
+    return parsed.toISOString().slice(0, 10);
+}
 
 const InvoicesToAccount = () => {
-    const apiUrl = import.meta.env.VITE_API_URL;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [invoices, setInvoices] = useState([]);
     const [totalPages, setTotalPages] = useState(1);
+    const [selectedRowId, setSelectedRowId] = useState(null);
     const [processing, setProcessing] = useState(false);
     const [processingResults, setProcessingResults] = useState({});
 
-    const [fromDate, setFromDate] = useState('');
-    const [toDate, setToDate] = useState('');
+    const [fromDate, setFromDate] = useState(null);
+    const [toDate, setToDate] = useState(null);
     const [invoiceNumber, setInvoiceNumber] = useState('');
 
     const [filters, setFilters] = useState({
@@ -30,22 +45,22 @@ const InvoicesToAccount = () => {
     const buildAndExecuteQuery = (newFromDate = fromDate, newToDate = toDate, newInvoiceNumber = invoiceNumber, newFilters = null) => {
         const queryParams = new URLSearchParams();
         const currentFilters = newFilters || filters;
+        const queryFromDate = formatDateForQuery(newFromDate);
+        const queryToDate = formatDateForQuery(newToDate);
 
         // Add the three main parameters if they have values
-        if (newFromDate) {
-            queryParams.append('InvoiceDateFrom', newFromDate);
+        if (queryFromDate) {
+            queryParams.append('InvoiceDateFrom', queryFromDate);
         }
-        if (newToDate) {
-            queryParams.append('InvoiceDateTo', newToDate);
+        if (queryToDate) {
+            queryParams.append('InvoiceDateTo', queryToDate);
         }
         if (newInvoiceNumber) {
             queryParams.append('InvoiceNr', newInvoiceNumber);
         }
 
-        // Add additional filter parameters
-        if (currentFilters.sortBy) {
-            queryParams.append('SortBy', currentFilters.sortBy);
-        }
+        // Always sort by invoice number ascending.
+        queryParams.append('SortBy', 'InvoiceNr:asc');
         queryParams.append('SortDirection', currentFilters.sortDirection);
         queryParams.append('Page', currentFilters.page.toString());
         queryParams.append('PageSize', currentFilters.pageSize.toString());
@@ -59,23 +74,13 @@ const InvoicesToAccount = () => {
         setLoading(true);
         setError(null);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${apiUrl}/invoice?${queryParams.toString()}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const data = await response.json();
+            const response = await apiClient.get(`/invoice?${queryParams.toString()}`);
+            const data = response.data;
             setTotalPages(data.totalPages);
             setInvoices(data.data);
         } catch (error) {
             console.error('Error fetching invoices:', error);
-            setError(err.message);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -135,21 +140,18 @@ const InvoicesToAccount = () => {
 
 
     const processInvoice = async (invoice) => {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${apiUrl}/invoice/account`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify(invoice.id),
-        });
-        if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.message || 'Error');
-            return;
+        let response;
+        try {
+            response = await apiClient.post('/invoice/account', JSON.stringify(invoice.id), {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+        } catch (error) {
+            const data = error?.response?.data;
+            throw new Error(data?.message || 'Error');
         }
-        const data = await res.json();
+        const data = response.data;
         if (data.status == 'FORTNOX_PAIRING_IN_PROGRESS') {
             return {
                 success: false,
@@ -168,14 +170,13 @@ const InvoicesToAccount = () => {
     };
 
 
-    const handleFromDateChange = (value) => {
-        setFromDate(value);
-        buildAndExecuteQuery(value, toDate, invoiceNumber);
-    };
+    const handlePeriodApply = ({ startDate, endDate }) => {
+        setFromDate(startDate ?? null);
+        setToDate(endDate ?? null);
 
-    const handleToDateChange = (value) => {
-        setToDate(value);
-        buildAndExecuteQuery(fromDate, value, invoiceNumber);
+        const newFilters = { ...filters, page: 1 };
+        setFilters(newFilters);
+        buildAndExecuteQuery(startDate ?? null, endDate ?? null, invoiceNumber, newFilters);
     };
 
     const handleInvoiceNumberChange = (value) => {
@@ -199,43 +200,41 @@ const InvoicesToAccount = () => {
     const selectedCount = invoices.filter(inv => inv.selected).length;
 
     return (
-        <div className="flex flex-col h-full p-2">
+        <div className="flex flex-col h-full py-2">
             <div className='ml-5 text-sm text-gray-500'>Bokför fakturor</div>
-            <div className='flex justify-between items-center mt-3 ml-5'>
+            <div className={`mt-3 mx-5 flex flex-wrap items-center gap-5 ${loading ? 'pointer-events-none opacity-70' : ''}`}>
                 <div className='flex items-center'>
                     <label className="mr-5 text-xs text-gray-700">Period</label>
-                    <input
-                        type="date"
-                        value={fromDate}
-                        onChange={(e) => handleFromDateChange(e.target.value)}
-                        className="w-30 text-xs px-2 py-1 border border-gray-300 bg-white rounded-sm focus:outline-none focus:ring-1 focus:ring-green-500"
-                    />
-                    <input
-                        type="date"
-                        value={toDate}
-                        onChange={(e) => handleToDateChange(e.target.value)}
-                        className="ml-1 w-30 text-xs px-2 py-1 border border-gray-300 bg-white rounded-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                    <DateRangePicker
+                        presets={['this-month', 'last-month', 'last-3-months', 'last-12-months', 'last-year', 'year-to-date']}
+                        placeholder="Välj period"
+                        onApply={handlePeriodApply}
+                        triggerRadius="full"
+                        triggerClassName="h-7 w-[260px] border-lime-600 px-3 text-xs text-gray-700 focus:border-lime-700"
+                        openTriggerClassName="border-lime-700 ring-1 ring-lime-200"
+                        closedTriggerClassName="border-lime-600 hover:border-lime-700"
                     />
                     <label className="ml-10 mr-5 text-xs text-gray-700">Fakturanr.</label>
                     <input
                         type="number"
                         value={invoiceNumber}
                         onChange={(e) => handleInvoiceNumberChange(e.target.value)}
-                        className="ml-1 w-30 text-xs px-2 py-1 border border-gray-300 bg-white rounded-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                        className="h-7 w-[120px] rounded-full border border-lime-600 bg-white px-3 text-xs text-gray-700 outline-none transition placeholder:text-gray-500 focus:border-lime-700"
                         placeholder=""
                     />
                     <button
-                        className={`shadow-md/30 ml-10 w-40 text-center text-xs text-white bg-lime-700 hover:bg-lime-900 p-[5px] ${selectedCount > 0 ? '' : 'opacity-50 cursor-not-allowed'}`}
+                        className={`ml-10 h-7 w-40 rounded-full border border-lime-700 bg-lime-700 px-3 text-center text-xs text-white transition hover:bg-lime-900 disabled:cursor-not-allowed disabled:opacity-50`}
                         disabled={selectedCount === 0}
                         onClick={processSelectedInvoices}>Bokför valda fakturor</button>
                     {selectedCount > 0 && <div className='w-50 ml-10 text-xs text-gray-500'>Valda fakturor: <strong>{selectedCount}</strong></div>}
                 </div>
                 {/* Pagination Controls */}
-                <div className="flex items-center">
+                <div className="ml-auto mr-4 flex items-center" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
                     <div className="mr-3 text-xs text-gray-700">
-                        Visar {filters.pageSize} fakturor per sida.   Sida <strong>{filters.page}</strong> av <strong>{totalPages || 1}</strong>
+                        {/* Visar {filters.pageSize} fakturor per sida.  */}
+                        Sida <strong>{filters.page}</strong> av <strong>{totalPages || 1}</strong>
                     </div>
-                    <div className="flex gap-1 mr-10">
+                    <div className="flex gap-1">
                         <button
                             onClick={() => {
                                 const newFilters = { ...filters, page: Math.max(1, filters.page - 1) };
@@ -243,8 +242,8 @@ const InvoicesToAccount = () => {
                                 buildAndExecuteQuery(fromDate, toDate, invoiceNumber, newFilters);
                             }}
                             disabled={filters.page <= 1 || loading}
-                            className="disabled:opacity-50 disabled:cursor-not-allowed">
-                            <ArrowLeftCircle className="h-5 w-5 text-red-400 hover:text-red-500 disabled:opacity-50 disabled:text-gray-500" />
+                            className="disabled:cursor-not-allowed disabled:opacity-50">
+                            <ArrowLeftCircle className="h-5 w-5 text-red-300 hover:text-red-400" />
                         </button>
                         <button
                             onClick={() => {
@@ -253,8 +252,8 @@ const InvoicesToAccount = () => {
                                 buildAndExecuteQuery(fromDate, toDate, invoiceNumber, newFilters);
                             }}
                             disabled={loading || invoices.length < filters.pageSize}
-                            className="disabled:opacity-50 disabled:cursor-not-allowed">
-                            <ArrowRightCircle className="h-5 w-5 text-red-400 hover:text-red-600 disabled:opacity-50 disabled:text-gray-500" />
+                            className="disabled:cursor-not-allowed disabled:opacity-50">
+                            <ArrowRightCircle className="h-5 w-5 text-red-300 hover:text-red-400" />
                         </button>
                         {/* <button
                             onClick={() => {
@@ -290,12 +289,12 @@ const InvoicesToAccount = () => {
                 </div>
             )}
 
-            <div className='border-t border-gray-300 rounded-sm py-1 mt-4 h-full overflow-y-auto'>
+            <div className='mx-3 border-t border-gray-300 rounded-sm py-1 mt-4 h-full overflow-y-auto'>
                 {loading || !invoices ? (
                     <div className='skeleton-content'><Skeleton count={3} className="h-5 m-0" /></div>
                 ) :
                     (
-                        <table className="min-w-full divide-y divide-gray-100">
+                        <table className="min-w-full divide-y divide-gray-100" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
                             <thead>
                                 <tr>
                                     <th className='w-10'>
@@ -311,12 +310,12 @@ const InvoicesToAccount = () => {
                                             className="h-3 w-3.5 text-green-600 focus:outline-none focus:ring-1 focus:ring-green-500 border-gray-300"
                                         />
                                     </th>
-                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 uppercase tracking-wider">Fakturanr</th>
-                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 uppercase tracking-wider">Kund</th>
-                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 uppercase tracking-wider">Fakturadatum</th>
-                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 uppercase tracking-wider">Förfallodatum</th>
-                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 uppercase tracking-wider w-50 text-right">Belopp ink moms</th>
-                                    <th className="pl-10 py-1.5 text-left text-tiny font-medium text-gray-400 uppercase tracking-wider w-150">Status</th>
+                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider">Fakturanr</th>
+                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider">Kund</th>
+                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider">Fakturadatum</th>
+                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider">Förfallodatum</th>
+                                    <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider w-50 text-right">Belopp ink moms</th>
+                                    <th className="pl-10 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider w-150">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-100">
@@ -328,18 +327,31 @@ const InvoicesToAccount = () => {
                                     invoices.map((invoice) => {
                                         const currentProcessingResult = processingResults[invoice.id];
                                         return (
-                                            <tr key={invoice.id} >
+                                            <tr
+                                                key={invoice.id}
+                                                className={selectedRowId === invoice.id ? 'bg-lime-100' : 'bg-transparent hover:bg-lime-50'}
+                                                onClick={() => setSelectedRowId((prev) => (prev === invoice.id ? null : invoice.id))}
+                                            >
                                                 <td className="px-6 py-0 whitespace-nowrap">
                                                     <input
                                                         key={invoice.id}
                                                         type="checkbox"
                                                         checked={invoice.selected}
                                                         onChange={() => handleCheckboxChange(invoice.id)}
+                                                        onClick={(event) => event.stopPropagation()}
                                                         className="mt-2 py-0 h-3 w-3.5 text-green-600 focus:outline-none focus:ring-1 focus:ring-green-500 border-gray-300"
                                                     />
                                                 </td>
                                                 <td className="pl-2 pt-[6px] pb-[4px] whitespace-nowrap text-xs text-gray-800">
-                                                    <NavLink to={`/finance/invoice/${invoice.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">{invoice.invoiceNr}</NavLink>
+                                                    <NavLink
+                                                        to={`/finance/invoice/${invoice.id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+                                                        onClick={(event) => event.stopPropagation()}
+                                                    >
+                                                        {invoice.invoiceNr}
+                                                    </NavLink>
                                                 </td>
                                                 <td className="px-2 pt-[6px] pb-[4px] whitespace-nowrap text-xs text-gray-800">{invoice.customerName}</td>
                                                 <td className="px-2 pt-[6px] pb-[4px] whitespace-nowrap text-xs text-gray-800">{new Date(invoice.invoiceDate).toLocaleDateString()}</td>

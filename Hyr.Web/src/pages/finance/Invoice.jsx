@@ -12,11 +12,11 @@ import LabeledReactSelect from '../../components/LabeledReactSelect';
 import NumberInput from '../../components/NumberInput';
 import ArticleSearchInput from '../../components/ArticleSearchInput';
 import InvoiceCalculations from '../../utils/invoiceCalculations';
+import apiClient from '../../lib/apiClient';
 
 
 
 const Invoice = () => {
-    const apiUrl = import.meta.env.VITE_API_URL;
     const navigate = useNavigate();
     const params = useParams();
     const [invoice, setInvoice] = useState(null);
@@ -180,19 +180,9 @@ const Invoice = () => {
     const getInvoiceById = async (id, calculationId) => {
         console.log('getInvoiceById', id);
         try {
-            const token = localStorage.getItem('token');
             const queryParams = calculationId ? `?calculationId=${calculationId}` : '';
-            const response = await fetch(`${apiUrl}/invoice/${id}${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const data = await response.json();
+            const response = await apiClient.get(`/invoice/${id}${queryParams}`);
+            const data = response.data;
 
             const attachments = (
                 Array.isArray(data?.attachments)
@@ -230,22 +220,16 @@ const Invoice = () => {
         }
         console.log('invoice:', invoice);
 
-        const token = localStorage.getItem('token');
         const invoiceData = { ...invoice };
-        const res = await fetch(`${apiUrl}/invoice`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify(invoiceData),
-        });
-        if (!res.ok) {
-            const errorText = await res.text();
+        let res;
+        try {
+            res = await apiClient.post('/invoice', invoiceData);
+        } catch (error) {
+            const errorText = error?.response?.data ?? error?.message;
             setMessages([{ type: 'error', text: errorText }]);
             return;
         }
-        const data = await res.json();
+        const data = res.data;
         console.log('invoice updated:', data);
         await getInvoiceById(data);
         window.history.replaceState({}, '', `/sales/invoice/${data}`);
@@ -266,29 +250,22 @@ const Invoice = () => {
         setShowDeleteConfirm(false);
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${apiUrl}/invoice/${invoice.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-
-            if (!res.ok) {
-                const errorText = await res.text();
+            await apiClient.delete(`/invoice/${invoice.id}`);
+        } catch (error) {
+            const errorText = error?.response?.data;
+            if (errorText) {
                 setMessages([{ type: 'error', text: errorText || 'Kunde inte ta bort förfrågan' }]);
                 return;
             }
-
-            setMessages([{ type: 'success', text: 'Fakturan borttagen' }]);
-            // Navigate back to a list or home page after deletion
-            setTimeout(() => {
-                navigate('/sales/inquiries');
-            }, 1000);
-        } catch (error) {
             console.error('Error deleting invoice:', error);
             setMessages([{ type: 'error', text: 'Ett fel uppstod vid borttagning' }]);
+            return;
         }
+        setMessages([{ type: 'success', text: 'Fakturan borttagen' }]);
+        // Navigate back to a list or home page after deletion
+        setTimeout(() => {
+            navigate('/sales/inquiries');
+        }, 1000);
     };
 
     const getPdf = async ({ ignoreUnsaved = false } = {}) => {
@@ -304,16 +281,11 @@ const Invoice = () => {
         openPdfPreview('');
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${apiUrl}/pdf/invoice/${invoice.id}`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
+            const res = await apiClient.get(`/pdf/invoice/${invoice.id}`, {
+                responseType: 'blob',
             });
-            console.log('Response ok:', res.ok, 'content-type:', res.headers.get('content-type'));
-            if (!res.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const blob = await res.blob();
+            console.log('Response ok:', true, 'content-type:', res.headers['content-type']);
+            const blob = res.data;
             console.log('Blob size:', blob.size, 'type:', blob.type);
             const url = URL.createObjectURL(blob);
             openPdfPreview(url); // update the panel with the real PDF
@@ -485,7 +457,6 @@ const Invoice = () => {
                                                         value={row.articleNr}
                                                         onChange={(value) => handleRowChange(getRowTempId(row), 'articleNr', value)}
                                                         onArticleSelect={(article) => handleArticleSelect(getRowTempId(row), article)}
-                                                        apiUrl={apiUrl}
                                                     />
                                                 </td>
                                                 <td className="p-0">

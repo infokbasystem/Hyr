@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import DateRangeSelect from '../components/DateRangeSelect';
+import apiClient from '../lib/apiClient';
 
 
 const CarSearchModal = ({ isOpen, onClose, onSearch }) => {
-    const apiUrl = import.meta.env.VITE_API_URL;
     const [period, setPeriod] = useState({ from: null, to: null });
     const [category, setCategory] = useState('');
     const [model, setModel] = useState('');
@@ -18,18 +18,8 @@ const CarSearchModal = ({ isOpen, onClose, onSearch }) => {
     const fetchLists = async () => {
 
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${apiUrl}/itemcategory`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const data = await response.json();
+            const response = await apiClient.get('/itemcategory');
+            const data = response.data;
             setAvailableCategories([{ id: '', name: '' }, ...data]);
         } catch (error) {
             console.error('Error fetching calculationunits:', error);

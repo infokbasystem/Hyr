@@ -153,16 +153,16 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<ActionResult<Invoice>> GetInvoice(int id)
         {
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                         ?? User?.FindFirst("sub")?.Value
-                         ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
+            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                     ?? User?.FindFirst("sub")?.Value
+                     ?? User?.FindFirst("id")?.Value;
+            _ = int.TryParse(userIdClaim, out int userId);
 
-                var user = await _context.Users.FindAsync(userId);
-                if (user == null)
-                {
-                    return Unauthorized(new { message = "User not found" });
-                }
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
             var invoiceInDb = await _context.Invoices.Where(i => i.Id == id && i.OfficeId == user.OfficeId).FirstOrDefaultAsync();
 
             if (invoiceInDb == null)
@@ -451,6 +451,9 @@ namespace Hyr.Api.Controllers
 #else
                             var redirectUrl = "https://hyrsys.se/settings/fortnoxredirect";
 #endif
+
+                    // redirectUrl = "https://hyrsys.se/settings/fortnoxredirect";
+
                     var scopes = new List<Scope>()
                                     {
                                         //Scope.Article,

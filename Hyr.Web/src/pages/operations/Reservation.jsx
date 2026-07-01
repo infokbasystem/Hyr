@@ -18,11 +18,11 @@ import ReservationItemLift from './ReservationItemLift';
 import ReservationItemHaki from './ReservationItemHaki';
 import ReservationItemAlu from './ReservationItemAlu';
 import ReservationItemEquipment from './ReservationItemEquipment';
+import apiClient from '../../lib/apiClient';
 
 
 const Reservation = () => {
     // const { user, setUser } = useContext(AuthContext);
-    const apiUrl = import.meta.env.VITE_API_URL;
     const navigate = useNavigate();
     const params = useParams();
     const [reservation, setReservation] = useState(null);
@@ -153,19 +153,9 @@ const Reservation = () => {
             return newReservation;
         }
         try {
-            const token = localStorage.getItem('token');
             const queryParams = ''; //calculationId ? `?calculationId=${calculationId}` : '';
-            const response = await fetch(`${apiUrl}/reservation/${id}${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const data = await response.json();
+            const response = await apiClient.get(`/reservation/${id}${queryParams}`);
+            const data = response.data;
 
             const attachments = (
                 Array.isArray(data?.attachments)
@@ -201,22 +191,16 @@ const Reservation = () => {
         }
         console.log('reservation:', reservation);
 
-        const token = localStorage.getItem('token');
         const reservationData = { ...reservation };
-        const res = await fetch(`${apiUrl}/reservation`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify(reservationData),
-        });
-        if (!res.ok) {
-            const errorText = await res.text();
+        let res;
+        try {
+            res = await apiClient.post('/reservation', reservationData);
+        } catch (error) {
+            const errorText = error?.response?.data ?? error?.message;
             setMessages([{ type: 'error', text: errorText }]);
             return;
         }
-        const data = await res.json();
+        const data = res.data;
         console.log('reservation updated:', data);
         await getReservationById(data);
         window.history.replaceState({}, '', `/operations/reservation/${data}`);
@@ -237,29 +221,22 @@ const Reservation = () => {
         setShowDeleteConfirm(false);
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${apiUrl}/reservation/${reservation.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-
-            if (!res.ok) {
-                const errorText = await res.text();
+            await apiClient.delete(`/reservation/${reservation.id}`);
+        } catch (error) {
+            const errorText = error?.response?.data;
+            if (errorText) {
                 setMessages([{ type: 'error', text: errorText || 'Kunde inte ta bort förfrågan' }]);
                 return;
             }
-
-            setMessages([{ type: 'success', text: 'Fakturan borttagen' }]);
-            // Navigate back to a list or home page after deletion
-            setTimeout(() => {
-                navigate('/sales/inquiries');
-            }, 1000);
-        } catch (error) {
             console.error('Error deleting reservation:', error);
             setMessages([{ type: 'error', text: 'Ett fel uppstod vid borttagning' }]);
+            return;
         }
+        setMessages([{ type: 'success', text: 'Fakturan borttagen' }]);
+        // Navigate back to a list or home page after deletion
+        setTimeout(() => {
+            navigate('/sales/inquiries');
+        }, 1000);
     };
 
     const getPdf = async ({ ignoreUnsaved = false } = {}) => {
@@ -275,16 +252,11 @@ const Reservation = () => {
         openPdfPreview('');
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${apiUrl}/pdf/reservation/${reservation.id}`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
+            const res = await apiClient.get(`/pdf/reservation/${reservation.id}`, {
+                responseType: 'blob',
             });
-            console.log('Response ok:', res.ok, 'content-type:', res.headers.get('content-type'));
-            if (!res.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const blob = await res.blob();
+            console.log('Response ok:', true, 'content-type:', res.headers['content-type']);
+            const blob = res.data;
             console.log('Blob size:', blob.size, 'type:', blob.type);
             const url = URL.createObjectURL(blob);
             openPdfPreview(url); // update the panel with the real PDF

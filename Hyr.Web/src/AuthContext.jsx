@@ -1,9 +1,9 @@
 import React, { createContext, useState, useEffect } from "react";
+import apiClient from "./lib/apiClient";
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const apiUrl = import.meta.env.VITE_API_URL;
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(localStorage.getItem("token") || "");
     const [loading, setLoading] = useState(true);
@@ -20,23 +20,18 @@ export const AuthProvider = ({ children }) => {
 
     const verifyToken = async (token) => {
         try {
-            const res = await fetch(`${apiUrl}/auth/verify`, {
-                method: 'GET',
+            const res = await apiClient.get('/auth/verify', {
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                }
+                    Authorization: `Bearer ${token}`,
+                },
             });
-            if (res.ok) {
-                const data = await res.json();
-                localStorage.setItem("user", data.user);
-                localStorage.setItem("token", data.token);
-                setUser(data.user);
-            } else {
-                setUser(null);
-                localStorage.removeItem("token");
-            }
+            const data = res.data;
+            localStorage.setItem("user", data.user);
+            localStorage.setItem("token", data.token);
+            setUser(data.user);
         } catch (error) {
+            setUser(null);
+            localStorage.removeItem("token");
             console.error("Token verification failed", error);
         } finally {
             setLoading(false);
@@ -44,16 +39,13 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (loginData) => {
-        const res = await fetch(`${apiUrl}/auth/login`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(loginData),
-        });
-        if (!res.ok)
+        let res;
+        try {
+            res = await apiClient.post('/auth/login', loginData);
+        } catch {
             throw new Error("Invalid credentials");
-        const data = await res.json();
+        }
+        const data = res.data;
         localStorage.setItem("user", data.user);
         localStorage.setItem("token", data.token);
         setUser(data.user);

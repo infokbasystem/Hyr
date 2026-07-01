@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Search } from 'lucide-react';
+import apiClient from '../lib/apiClient';
 
 export default function CustomerSearchModal({ isOpen, onClose, onSelectCustomer }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
-    const apiUrl = import.meta.env.VITE_API_URL;
 
     const searchCustomers = async (query) => {
         if (!query.trim()) {
@@ -17,23 +17,8 @@ export default function CustomerSearchModal({ isOpen, onClose, onSelectCustomer 
 
         setIsLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(
-                `${apiUrl}/customer?searchTerm=${encodeURIComponent(query)}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    }
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error('Failed to search customers');
-            }
-
-            const data = await response.json();
+            const response = await apiClient.get(`/customer?searchTerm=${encodeURIComponent(query)}`);
+            const data = response.data;
             setSearchResults(Array.isArray(data.data) ? data.data : []);
         } catch (error) {
             console.error('Error searching customers:', error);

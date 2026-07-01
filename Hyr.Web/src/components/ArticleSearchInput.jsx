@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import apiClient from '../lib/apiClient';
 
 /**
  * Article search input component with autocomplete popup
@@ -7,14 +8,12 @@ import { Search } from 'lucide-react';
  * @param {string} value - Current article number value
  * @param {function} onChange - Callback when value changes (value)
  * @param {function} onArticleSelect - Callback when article is selected (article)
- * @param {string} apiUrl - Base API URL
  * @param {string} className - Additional CSS classes for the input
  */
 const ArticleSearchInput = ({
     value,
     onChange,
     onArticleSelect,
-    apiUrl,
     className = ''
 }) => {
     const [searchResults, setSearchResults] = useState([]);
@@ -78,18 +77,8 @@ const ArticleSearchInput = ({
         }, 100);
 
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${apiUrl}/article?searchTerm=${encodeURIComponent(searchTerm)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Search failed');
-            }
-            const data = await response.json();
+            const response = await apiClient.get(`/article?searchTerm=${encodeURIComponent(searchTerm)}`);
+            const data = response.data;
             
             // Only update results if this is still the latest search
             if (searchTerm === lastSearchTermRef.current) {

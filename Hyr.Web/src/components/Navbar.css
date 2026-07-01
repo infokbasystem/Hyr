@@ -19,7 +19,7 @@
     height: 52px;
     width: 120px;
     display: inline;
-    margin: 0px 2px;
+    margin: 0px 0px;
     list-style: none;
     text-align: center;
     transition: background-color 0.4s ease;
@@ -47,23 +47,23 @@
 }
 
 #menu .overview:hover, .overview-backcolor {
-    background-color: #98bf0d;
+    background-color: #BFB600;
 }
 
 #menu .operations:hover, .operations-backcolor {
-    background-color: #98bf0d;
+    background-color: #6D7533;
 }
 
 #menu .finance:hover, .finance-backcolor {
-    background-color: #98bf0d;
+    background-color: #FFB400;
 }
 
 #menu .management:hover, .management-backcolor {
-    background-color: #98bf0d;
+    background-color: #FB830F;
 }    
 
 #menu .reports:hover, .reports-backcolor {
-    background-color: #98bf0d;
+    background-color: #717EC3;
 }
 
 #menu .registers:hover, .registers-backcolor {
@@ -71,5 +71,5 @@
 }
 
 #menu .settings:hover, .settings-backcolor {
-    background-color: #98bf0d;
+    background-color: #40AF77;
 }
