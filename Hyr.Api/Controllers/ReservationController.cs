@@ -6,6 +6,9 @@ using Hyr.Api.Data;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
 using Hyr.Api.Utils;
+using Hyr.Api.Dtos;
+using System.Linq.Expressions;
+using System.Text.Json;
 
 
 namespace Hyr.Api.Controllers
@@ -112,6 +115,213 @@ namespace Hyr.Api.Controllers
             {
                 return BadRequest(new { message = "Error retrieving reservations", error = ex.Message });
             }
+        }
+
+        [HttpPost("search")]
+        [Authorize]
+        public async Task<ActionResult<PagedResultDto<ReservationSearchRowDto>>> Search([FromBody] ReservationSearchRequestDto? request)
+        {
+            try
+            {
+                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                         ?? User?.FindFirst("sub")?.Value
+                         ?? User?.FindFirst("id")?.Value;
+                _ = int.TryParse(userIdClaim, out int userId);
+
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
+                {
+                    return Unauthorized(new { message = "User not found" });
+                }
+
+                request ??= new ReservationSearchRequestDto();
+                var pagination = request.Pagination ?? new PaginationRequest();
+                var filter = request.Filter ?? new FilterRequest();
+                var sorts = request.Sorts ?? [];
+
+                var query = _context.Reservations
+                    .Where(r => r.OfficeId == user.OfficeId)
+                    .AsQueryable();
+
+                // Apply filters
+                if (filter.Conditions != null)
+                {
+                    foreach (var condition in filter.Conditions)
+                    {
+                        query = ApplyFilterCondition(query, condition);
+                    }
+                }
+
+                var totalCount = await query.CountAsync();
+                var totalPages = (totalCount + pagination.PageSize - 1) / pagination.PageSize;
+
+                // Apply sorting
+                if (sorts.Any())
+                {
+                    foreach (var sort in sorts)
+                    {
+                        var isDescending = sort.Direction?.ToLower() == "desc";
+                        query = ApplySorting(query, sort.Field, isDescending);
+                    }
+                }
+                else
+                {
+                    query = query.OrderByDescending(r => r.Id);
+                }
+
+                var items = await query
+                    .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+                    .Take(pagination.PageSize)
+                    .Select(r => new ReservationSearchRowDto(
+                        r.Id,
+                        r.ReservationNr,
+                        r.CustomerName,
+                        r.CreatedDate,
+                        r.StatusCode,
+                        r.Note,
+                        r.Office != null ? r.Office.Name : null))
+                    .ToListAsync();
+
+                return Ok(new PagedResultDto<ReservationSearchRowDto>
+                {
+                    Items = items,
+                    PageNumber = pagination.PageNumber,
+                    PageSize = pagination.PageSize,
+                    TotalCount = totalCount,
+                    TotalPages = totalPages,
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Error searching reservations", error = ex.Message });
+            }
+        }
+
+        private IQueryable<Reservation> ApplyFilterCondition(IQueryable<Reservation> query, FilterConditionDto condition)
+        {
+            var field = condition.Field.ToLower();
+            var op = condition.Operator.ToLower();
+
+            // Handle free text search
+            if (field == "freetext" && op == "contains" && condition.Value.HasValue)
+            {
+                var searchTerm = condition.Value.Value.GetString() ?? "";
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    if (int.TryParse(searchTerm, out var reservationNr))
+                    {
+                        query = query.Where(r =>
+                            r.CustomerName.Contains(searchTerm) ||
+                            r.Note.Contains(searchTerm) ||
+                            (r.ReservationNr.HasValue && r.ReservationNr.Value == reservationNr));
+                    }
+                    else
+                    {
+                        query = query.Where(r =>
+                            r.CustomerName.Contains(searchTerm) ||
+                            r.Note.Contains(searchTerm));
+                    }
+                }
+            }
+
+            // Handle standard searches
+            if (field == "standardsearch" && op == "eq" && condition.Value.HasValue)
+            {
+                var searchValue = condition.Value.Value.GetString() ?? "";
+                if (searchValue == "last-100-created")
+                {
+                    // Return last 100 created (no additional filter needed, handled in sorting)
+                }
+                else if (searchValue == "active-reservations")
+                {
+                    query = query.Where(r => r.StatusCode == "ACTIVE" || r.StatusCode == "BOOKED");
+                }
+            }
+
+            if (field == "itemperiod" && op == "overlaps" && condition.Value.HasValue)
+            {
+                var periodFrom = TryReadDateProperty(condition.Value.Value, "from");
+                var periodTo = TryReadDateProperty(condition.Value.Value, "to");
+                var periodEndExclusive = periodTo?.Date.AddDays(1);
+
+                if (periodFrom.HasValue || periodEndExclusive.HasValue)
+                {
+                    query = query.Where(r => r.ReservationItems.Any(item =>
+                        ((item.BookedFrom.HasValue || item.BookedTo.HasValue)
+                            && (!periodFrom.HasValue || (item.BookedTo ?? item.BookedFrom ?? DateTime.MinValue) >= periodFrom.Value)
+                            && (!periodEndExclusive.HasValue || (item.BookedFrom ?? item.BookedTo ?? DateTime.MaxValue) < periodEndExclusive.Value))
+                        ||
+                        ((item.ActualFrom.HasValue || item.ActualTo.HasValue)
+                            && (!periodFrom.HasValue || (item.ActualTo ?? item.ActualFrom ?? DateTime.MinValue) >= periodFrom.Value)
+                            && (!periodEndExclusive.HasValue || (item.ActualFrom ?? item.ActualTo ?? DateTime.MaxValue) < periodEndExclusive.Value))));
+                }
+            }
+
+            return query;
+        }
+
+        private static DateTime? TryReadDateProperty(JsonElement value, string propertyName)
+        {
+            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(propertyName, out var property))
+            {
+                return null;
+            }
+
+            if (property.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            return DateTime.TryParse(property.GetString(), out var parsedDate)
+                ? parsedDate.Date
+                : null;
+        }
+
+        private IQueryable<Reservation> ApplySorting(IQueryable<Reservation> query, string field, bool isDescending)
+        {
+            var fieldLower = field.ToLower();
+
+            var parameter = Expression.Parameter(typeof(Reservation), "r");
+            Expression property = parameter;
+
+            // Handle nested properties with dot notation
+            if (fieldLower.Contains("."))
+            {
+                var parts = fieldLower.Split('.');
+                foreach (var part in parts)
+                {
+                    property = Expression.Property(property, part);
+                }
+            }
+            else
+            {
+                // Handle known fields
+                property = fieldLower switch
+                {
+                    "id" => Expression.Property(parameter, nameof(Reservation.Id)),
+                    "reservationnr" => Expression.Property(parameter, nameof(Reservation.ReservationNr)),
+                    "customername" => Expression.Property(parameter, nameof(Reservation.CustomerName)),
+                    "createddate" => Expression.Property(parameter, nameof(Reservation.CreatedDate)),
+                    "statuscode" => Expression.Property(parameter, nameof(Reservation.StatusCode)),
+                    "note" => Expression.Property(parameter, nameof(Reservation.Note)),
+                    _ => Expression.Property(parameter, "Id"),
+                };
+            }
+
+            var lambda = Expression.Lambda(property, parameter);
+
+            var methodName = isDescending ? "OrderByDescending" : "OrderBy";
+            var method = typeof(Queryable).GetMethods()
+                .Single(m =>
+                    m.Name == methodName &&
+                    m.IsGenericMethodDefinition &&
+                    m.GetGenericArguments().Length == 2 &&
+                    m.GetParameters().Length == 2);
+
+            var genericMethod = method.MakeGenericMethod(typeof(Reservation), property.Type);
+            var result = genericMethod.Invoke(null, [query, lambda]);
+
+            return (IQueryable<Reservation>)result!;
         }
 
         [HttpGet("{id}")]

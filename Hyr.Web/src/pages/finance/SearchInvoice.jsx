@@ -115,11 +115,10 @@ const SearchInvoice = () => {
 
     return (
         <div className="flex h-full flex-col py-2">
-            <div className='ml-5 text-sm text-gray-500'>Sök fakturor</div>
+            <div className='ml-10 text-sm text-gray-500'>Sök fakturor</div>
 
-            <div className={`mt-3 mx-5 flex flex-wrap items-center gap-5 ${loading ? 'pointer-events-none opacity-70' : ''}`}>
+            <div className={`mt-3 mx-8 flex flex-wrap items-center gap-5 ${loading ? 'pointer-events-none opacity-70' : ''}`}>
                 <div className='flex items-center'>
-                    <label className="mr-5 text-xs text-gray-700">Period</label>
                     <DateRangePicker
                         presets={['this-month', 'last-month', 'last-3-months', 'last-12-months', 'last-year', 'year-to-date']}
                         placeholder="Välj period"
@@ -178,12 +177,12 @@ const SearchInvoice = () => {
             </div>
 
             {error && (
-                <div className="mt-4 w-fit rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+                <div className="mt-4 mx-8 w-fit rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
                     {error}
                 </div>
             )}
 
-            <div className='mt-4 mx-3 flex-1 overflow-auto border-t border-gray-300 py-1'>
+            <div className='mt-4 mx-8 flex-1 overflow-auto border-t border-gray-300 py-1'>
                 <table className="w-full min-w-full border-collapse text-xs" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
                             <thead>
                                 <tr>

@@ -18,6 +18,9 @@ import Overview from './pages/Overview'
 
 import OperationsOverview from './pages/operations/Overview'
 import Reservation from './pages/operations/Reservation';
+import ReservationSearch from './pages/operations/ReservationSearch';
+import CustomerSearch from './pages/operations/CustomerSearch';
+import Customer from './pages/operations/Customer';
 
 import FinanceOverview from './pages/finance/FinanceOverview'
 import Invoice from './pages/finance/Invoice';
@@ -39,7 +42,13 @@ const router = createBrowserRouter(
         <Route index element={<ProtectedRoute>< OperationsOverview /></ProtectedRoute>} />
         <Route path="reservation" element={<ProtectedRoute>< Reservation /></ProtectedRoute>} />
         <Route path="reservation/:id" element={<ProtectedRoute>< Reservation /></ProtectedRoute>} />
+        <Route path="searchreservation" element={<ProtectedRoute>< ReservationSearch /></ProtectedRoute>} />
+        <Route path="searchcustomer" element={<ProtectedRoute>< CustomerSearch /></ProtectedRoute>} />
         <Route path="invoicestoaccount" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
+      </Route>
+      <Route path="customer" element={< OperationsLayout />}>
+        <Route path="new" element={<ProtectedRoute>< Customer /></ProtectedRoute>} />
+        <Route path=":id" element={<ProtectedRoute>< Customer /></ProtectedRoute>} />
       </Route>
       <Route path="finance" element={< FinanceLayout />}>
         <Route index element={<ProtectedRoute>< FinanceOverview /></ProtectedRoute>} />

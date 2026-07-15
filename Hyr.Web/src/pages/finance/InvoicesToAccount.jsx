@@ -7,6 +7,40 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import apiClient from '../../lib/apiClient';
 import DateRangePicker from '../../components/DaterangePicker';
 
+function SelectCircleCheckbox({ checked, onChange, ariaLabel }) {
+    function handleKeyDown(event) {
+        if (event.key === ' ' || event.key === 'Enter') {
+            event.preventDefault();
+            onChange();
+        }
+    }
+
+    return (
+        <button
+            type="button"
+            role="checkbox"
+            aria-checked={checked}
+            aria-label={ariaLabel}
+            onClick={onChange}
+            onKeyDown={handleKeyDown}
+            className="inline-flex h-[15px] w-[15px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#f1f3f2] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-700"
+        >
+            <span
+                className={`inline-flex h-[15px] w-[15px] items-center justify-center rounded-full border shadow-[inset_0_0px_0_rgba(255,255,255,0.95)] transition-all ${checked ? 'border-[#368b3f] bg-[#3f9848]' : 'border-[#c8cfcb] bg-white'
+                    }`}
+            >
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                    className={`h-2.5 w-2.5 text-white transition-opacity ${checked ? 'opacity-100' : 'opacity-0'}`}
+                >
+                    <path d="M3 8.5 6.3 11.6 13 4.9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </span>
+        </button>
+    );
+}
+
 function formatDateForQuery(value) {
     if (!value) {
         return '';
@@ -25,7 +59,6 @@ const InvoicesToAccount = () => {
     const [error, setError] = useState(null);
     const [invoices, setInvoices] = useState([]);
     const [totalPages, setTotalPages] = useState(1);
-    const [selectedRowId, setSelectedRowId] = useState(null);
     const [processing, setProcessing] = useState(false);
     const [processingResults, setProcessingResults] = useState({});
 
@@ -201,10 +234,9 @@ const InvoicesToAccount = () => {
 
     return (
         <div className="flex flex-col h-full py-2">
-            <div className='ml-5 text-sm text-gray-500'>Bokför fakturor</div>
-            <div className={`mt-3 mx-5 flex flex-wrap items-center gap-5 ${loading ? 'pointer-events-none opacity-70' : ''}`}>
+            <div className='ml-10 text-sm text-gray-500'>Bokför fakturor</div>
+            <div className={`mt-3 mx-8 flex flex-wrap items-center gap-5 ${loading ? 'pointer-events-none opacity-70' : ''}`}>
                 <div className='flex items-center'>
-                    <label className="mr-5 text-xs text-gray-700">Period</label>
                     <DateRangePicker
                         presets={['this-month', 'last-month', 'last-3-months', 'last-12-months', 'last-year', 'year-to-date']}
                         placeholder="Välj period"
@@ -284,12 +316,12 @@ const InvoicesToAccount = () => {
             </div>
 
             {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                <div className="mx-8 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                     Error: {error}
                 </div>
             )}
 
-            <div className='mx-3 border-t border-gray-300 rounded-sm py-1 mt-4 h-full overflow-y-auto'>
+            <div className='mx-8 border-t border-gray-300 rounded-sm py-1 mt-4 h-full overflow-y-auto'>
                 {loading || !invoices ? (
                     <div className='skeleton-content'><Skeleton count={3} className="h-5 m-0" /></div>
                 ) :
@@ -297,17 +329,17 @@ const InvoicesToAccount = () => {
                         <table className="min-w-full divide-y divide-gray-100" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
                             <thead>
                                 <tr>
-                                    <th className='w-10'>
-                                        <input
-                                            type="checkbox"
+                                    <th className='w-10 px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider'>
+                                        <SelectCircleCheckbox
                                             checked={invoices.length > 0 && invoices.every(inv => inv.selected)}
-                                            onChange={(e) => {
+                                            onChange={() => {
+                                                const shouldSelectAll = !(invoices.length > 0 && invoices.every(inv => inv.selected));
                                                 setInvoices(prev => prev.map(invoice => ({
                                                     ...invoice,
-                                                    selected: e.target.checked
+                                                    selected: shouldSelectAll
                                                 })));
                                             }}
-                                            className="h-3 w-3.5 text-green-600 focus:outline-none focus:ring-1 focus:ring-green-500 border-gray-300"
+                                            ariaLabel="Markera alla fakturor"
                                         />
                                     </th>
                                     <th className="px-2 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider">Fakturanr</th>
@@ -318,7 +350,7 @@ const InvoicesToAccount = () => {
                                     <th className="pl-10 py-1.5 text-left text-tiny font-medium text-gray-400 tracking-wider w-150">Status</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
+                            <tbody className={`divide-y divide-gray-100 ${!loading && invoices.length > 0 ? 'bg-white' : 'bg-transparent'}`}>
                                 {!invoices || invoices.length === 0 ? (
                                     <tr>
                                         <td colSpan="7" className="px-6 py-14 whitespace-nowrap text-sm text-gray-500 text-center">Inga fakturor att visa</td>
@@ -329,18 +361,17 @@ const InvoicesToAccount = () => {
                                         return (
                                             <tr
                                                 key={invoice.id}
-                                                className={selectedRowId === invoice.id ? 'bg-lime-100' : 'bg-transparent hover:bg-lime-50'}
-                                                onClick={() => setSelectedRowId((prev) => (prev === invoice.id ? null : invoice.id))}
+                                                className={invoice.selected ? 'bg-lime-100' : 'bg-transparent hover:bg-lime-50'}
+                                                onClick={() => handleCheckboxChange(invoice.id)}
                                             >
-                                                <td className="px-6 py-0 whitespace-nowrap">
-                                                    <input
-                                                        key={invoice.id}
-                                                        type="checkbox"
-                                                        checked={invoice.selected}
-                                                        onChange={() => handleCheckboxChange(invoice.id)}
-                                                        onClick={(event) => event.stopPropagation()}
-                                                        className="mt-2 py-0 h-3 w-3.5 text-green-600 focus:outline-none focus:ring-1 focus:ring-green-500 border-gray-300"
-                                                    />
+                                                <td className="px-2 py-[4px] text-xs text-gray-800 align-middle whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                                                    <div className="flex h-full items-center">
+                                                        <SelectCircleCheckbox
+                                                            checked={Boolean(invoice.selected)}
+                                                            onChange={() => handleCheckboxChange(invoice.id)}
+                                                            ariaLabel={`Markera faktura ${invoice.invoiceNr}`}
+                                                        />
+                                                    </div>
                                                 </td>
                                                 <td className="pl-2 pt-[6px] pb-[4px] whitespace-nowrap text-xs text-gray-800">
                                                     <NavLink

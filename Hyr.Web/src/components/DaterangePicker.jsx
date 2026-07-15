@@ -155,34 +155,58 @@ const CalIcon = () => (
  *                         Default: all. Pass [] to hide sidebar.
  *   onApply   {fn}        called with { startDate, endDate }
  *   placeholder {string}  trigger button label when nothing selected
+ *   widthClassName {string} Tailwind width utility for the component, e.g. "w-full"
  */
 export default function DateRangePicker({
   presets = DEFAULT_PRESET_KEYS,
   onApply,
   placeholder = "Select date range",
   initialPresetKey = null,
+  initialStartDate = null,
+  initialEndDate = null,
   triggerClassName = "",
   openTriggerClassName = "",
   closedTriggerClassName = "",
+  widthClassName = "",
   triggerRadius = "sm",
   showClearPreset = false,
 }) {
   const today = new Date(); today.setHours(0,0,0,0);
+  const fallbackLeftMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
+  const parseInitialDate = value => {
+    if (!value) return null;
+    const parsed = value instanceof Date ? new Date(value) : new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  };
+  const initialStart = parseInitialDate(initialStartDate);
+  const initialEnd = parseInitialDate(initialEndDate);
+  const initialRange = initialStart && initialEnd
+    ? { start: initialStart, end: initialEnd }
+    : initialPresetKey
+      ? getPresetRange(initialPresetKey)
+      : null;
+  const initialAnchors = getCalendarAnchors(
+    initialRange?.start ?? null,
+    initialRange?.end ?? null,
+    today.getFullYear(),
+    fallbackLeftMonth
+  );
 
   const [open,        setOpen]        = useState(false);
-  const [leftYear,    setLeftYear]    = useState(today.getFullYear());
-  const [leftMonth,   setLeftMonth]   = useState(today.getMonth() === 0 ? 11 : today.getMonth() - 1);
-  const initialRight = addMonths(today.getFullYear(), today.getMonth() === 0 ? 11 : today.getMonth() - 1, 1);
-  const [rightYear,   setRightYear]   = useState(initialRight.year);
-  const [rightMonth,  setRightMonth]  = useState(initialRight.month);
-  const [startDate,   setStartDate]   = useState(null);
-  const [endDate,     setEndDate]     = useState(null);
+  const [leftYear,    setLeftYear]    = useState(initialAnchors.leftYear);
+  const [leftMonth,   setLeftMonth]   = useState(initialAnchors.leftMonth);
+  const [rightYear,   setRightYear]   = useState(initialAnchors.rightYear);
+  const [rightMonth,  setRightMonth]  = useState(initialAnchors.rightMonth);
+  const [startDate,   setStartDate]   = useState(initialRange?.start ?? null);
+  const [endDate,     setEndDate]     = useState(initialRange?.end ?? null);
   const [hoverDate,   setHoverDate]   = useState(null);
   const [selecting,   setSelecting]   = useState(false);
-  const [activeKey,   setActiveKey]   = useState(null);
+  const [activeKey,   setActiveKey]   = useState(initialStart && initialEnd ? null : initialPresetKey);
 
   /* committed values shown in trigger */
-  const [committed, setCommitted] = useState({ start: null, end: null });
+  const [committed, setCommitted] = useState({ start: initialRange?.start ?? null, end: initialRange?.end ?? null });
 
   const findMatchingPresetKey = useCallback((start, end) => {
     if (!start || !end) return null;
@@ -194,29 +218,6 @@ export default function DateRangePicker({
     }
     return null;
   }, [presets]);
-
-  useEffect(() => {
-    if (!initialPresetKey) return;
-    const initialRange = getPresetRange(initialPresetKey);
-    if (!initialRange) return;
-
-    setStartDate(initialRange.start);
-    setEndDate(initialRange.end);
-    setCommitted({ start: initialRange.start, end: initialRange.end });
-    setActiveKey(initialPresetKey);
-    setSelecting(false);
-    setHoverDate(null);
-    const anchors = getCalendarAnchors(
-      initialRange.start,
-      initialRange.end,
-      leftYear,
-      leftMonth
-    );
-    setLeftMonth(anchors.leftMonth);
-    setLeftYear(anchors.leftYear);
-    setRightMonth(anchors.rightMonth);
-    setRightYear(anchors.rightYear);
-  }, [initialPresetKey]);
 
   const wrapRef = useRef(null);
 
@@ -279,9 +280,12 @@ export default function DateRangePicker({
   };
 
   const handleClear = e => {
+    e.preventDefault();
     e.stopPropagation();
     setStartDate(null); setEndDate(null); setCommitted({ start: null, end: null });
     setActiveKey(null); setSelecting(false);
+    setHoverDate(null);
+    onApply?.({ startDate: null, endDate: null });
   };
 
   const handleClearPreset = () => {
@@ -313,17 +317,22 @@ export default function DateRangePicker({
 
   const showSidebar = presets.length > 0;
   const triggerRadiusClass = triggerRadius === "full" ? "rounded-full" : "rounded-sm";
+  const triggerWidthClass = widthClassName ? "w-full" : "w-60";
 
   return (
     <div
       ref={wrapRef}
-      className="relative inline-block"
+      className={[
+        "relative inline-block",
+        widthClassName,
+      ].join(" ")}
     >
       {/* ── Trigger button ── */}
       <button
         onClick={handleOpen}
         className={[
-          "flex items-center gap-2 px-2.5 border border-gray-300 px-2 py-1 w-60 text-xs transition-all duration-150 outline-none bg-white",
+          "flex items-center gap-2 px-2.5 border border-gray-300 px-2 py-1 text-xs transition-all duration-150 outline-none bg-white",
+          triggerWidthClass,
           triggerRadiusClass,
           open
             ? "border-gray-400 ring-2 ring-gray-200"
@@ -333,7 +342,7 @@ export default function DateRangePicker({
         ].join(" ")}
       >
         <span className="text-gray-500 shrink-0"><CalIcon /></span>
-        <span className={hasCommitted ? "text-gray-800" : "text-gray-400"}>
+        <span className={hasCommitted ? "text-gray-800" : "text-gray-700"}>
           {hasCommitted
             ? `${fmtShort(committed.start)} – ${fmtShort(committed.end)}`
             : placeholder}

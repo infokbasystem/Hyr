@@ -91,9 +91,9 @@ const LabeledTextArea = ({
     }
 
     return (
-        <div className={`flex items-center space-x-1 w-full pb-[1px] mt-${margintop}`} ref={wrapperRef}>
-            <div className={`relative flex items-center flex-none justify-between`}>
-                <label className={`text-xs text-gray-700 ${labelWidth || ''}`}>{label}</label>
+        <div className={`flex items-center space-x-1 w-full pt-[1px] mt-${margintop}`} ref={wrapperRef}>
+            <div className={`relative flex items-center flex-none justify-between ${labelWidth}`}>
+                <label className="text-xs leading-none text-gray-700 mt-1">{label}</label>
                 {popupItems && Array.isArray(popupItems) && (
                     <button
                         type="button"
@@ -135,15 +135,19 @@ const LabeledTextArea = ({
                 )}
             </div>
 
-            <textarea
-                name={name}
-                value={displayValue}
-                disabled={disabled}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`text-xs ${inputWidth || 'w-full'} ${height} border border-gray-300 rounded-sm px-2 py-1 focus:outline-none ${!disabled ? 'bg-white' : ''}`}
-                {...props}
-            />
+            <div className="flex flex-row items-center w-full">
+                <div className="relative w-full">
+                    <textarea
+                        name={name}
+                        value={displayValue}
+                        disabled={disabled}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        className={`text-xs ${inputWidth || 'w-full'} ${height} border border-gray-300 rounded-sm px-2 pt-1 pb-[calc(0.25rem-1px)] focus:outline-none ${!disabled ? 'bg-white' : ''}`}
+                        {...props}
+                    />
+                </div>
+            </div>
         </div>
     );
 };

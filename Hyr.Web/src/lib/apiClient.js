@@ -30,6 +30,28 @@ apiClient.interceptors.response.use(
   }
 );
 
+export async function requestJson(path, options = {}) {
+  try {
+    const response = await apiClient.request({
+      url: path,
+      method: (options.method ?? 'GET').toLowerCase(),
+      headers: options.headers,
+      data: options.body,
+    });
+
+    return response.data;
+  } catch (error) {
+    const response = error?.response;
+    const payload = response?.data;
+    const errorMessage = payload?.message ?? response?.statusText ?? error?.message ?? 'Request failed';
+    const requestError = new Error(errorMessage);
+    requestError.status = response?.status;
+    requestError.payload = payload;
+
+    throw requestError;
+  }
+}
+
 export default apiClient;
 
 function normalizeApiBaseUrl(baseUrl) {
