@@ -22,8 +22,8 @@ const Header = ({ user, onSignOut }) => {
 
     return (
         <div id='header' className='flex items-center' style={{ backgroundImage: `url(${bg})` }}>
-            <div className="flex-2 basis-0">
-                <p className='place-self-center mt-1'><img src={logo} alt="Hyr logo" /></p>
+            <div className="flex-3 basis-0">
+                <p className='place-self-end mt-1 pr-20'><img src={logo} alt="Hyr logo" /></p>
             </div>
             <div className="">
                 <div className='grow place-self-center text-left pt-1 ml-0 mr-40'>
@@ -39,8 +39,8 @@ const Header = ({ user, onSignOut }) => {
                     </p>
                 </div>
             </div>
-            <div className="flex-2 basis-0">
-                <div className='place-self-center'>
+            <div className="flex-3 basis-0">
+                <div className='place-self-start pl-20'>
                     <div className="relative text-gray-600 mr-9">
                         <input type="search" name="serch" placeholder="Sök" className="bg-gray-200 h-7 px-5 pr-10 rounded text-xs focus:outline-none" />
                         <button type="submit" className="absolute right-0 top-0 mt-1.5 mr-4">

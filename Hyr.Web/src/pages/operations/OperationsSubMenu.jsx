@@ -1,25 +1,27 @@
 import { NavLink } from "react-router-dom";
 import bg from "../../assets/content.png";
-import overviewIcon from "../../assets/appbar.list.two.svg";
+import overviewIcon from "../../assets/appbar.page.powerpoint.svg";
 import searchReservationIcon from "../../assets/appbar.page.search.svg";
 import smsIcon from "../../assets/appbar.iphone.svg";
-import newReservationIcon from "../../assets/appbar.transit.car.svg";
-import inboxIcon from "../../assets/appbar.cart.svg";
-import checkInOutIcon from "../../assets/appbar.clock.svg";
-import customerIcon from "../../assets/appbar.user.svg";
+import newReservationIcon from "../../assets/appbar.draw.pen.black.svg";
+import inboxIcon from "../../assets/appbar.cabinet.files.svg";
+import checkInOutIcon from "../../assets/appbar.checkmark.pencil.top.svg";
+import customerIcon from "../../assets/appbar.man.suitcase.svg";
+import itemsIcon from "../../assets/appbar.barcode.svg";
 
-function IconImage({ src, className = "" }) {
-    return <img src={src} alt="" className={["h-6 w-6", className].filter(Boolean).join(" ")} />;
+function IconImage({ src, className = "", width = "w-6", height = "h-6" }) {
+    return <img src={src} alt="" className={[height, width, className].filter(Boolean).join(" ")} />;
 }
 
 const items = [
     { to: "/operations", label: "Översikt", icon: overviewIcon, end: true },
-    { to: "/operations/searchreservation", label: "Sök bokning", icon: searchReservationIcon },
+    { to: "/operations/reservations", label: "Sök bokning", icon: searchReservationIcon, leftMargin: "ml-10" },
     { to: "/operations", label: "SMS-listor", icon: smsIcon, disabled: true },
-    { to: "/operations/reservation", label: "Ny bokning", icon: newReservationIcon },
-    { to: "/operations", label: "Inbox", icon: inboxIcon, disabled: true },
-    { to: "/operations", label: "In- och utcheckning", icon: checkInOutIcon, disabled: true },
-    { to: "/operations/searchcustomer", label: "Kunder", icon: customerIcon, leftMargin: "ml-16" },
+    { to: "/operations", label: "Inbox", icon: inboxIcon, disabled: true, leftMargin: "ml-2" },
+    { to: "/operations/reservation", label: "Ny bokning", icon: newReservationIcon, leftMargin: "ml-10" },
+    { to: "/operations", label: "In/Ut-checkning", icon: checkInOutIcon, iconWidth: "w-10", disabled: true },
+    { to: "/operations/customers", label: "Kunder", icon: customerIcon, leftMargin: "ml-10" },
+    { to: "/operations/items", label: "Hyresobjekt", icon: itemsIcon },
 ];
 
 export default function OperationsSubMenu({ activeOverridePath = "" }) {
@@ -55,6 +57,8 @@ export default function OperationsSubMenu({ activeOverridePath = "" }) {
                                     <>
                                         <IconImage
                                             src={item.icon}
+                                            width={item.iconWidth}
+                                            height={item.iconHeight}
                                             className={
                                                 resolvedActive
                                                     ? "opacity-100"

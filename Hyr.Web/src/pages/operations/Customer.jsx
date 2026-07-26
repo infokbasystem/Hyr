@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Clock3, Save, Trash2 } from 'lucide-react'
 
 import ActionButton from '../../components/ActionButton'
+import ConfirmationModal from '../../components/ConfirmationModal'
 import LabeledInput from '../../components/LabeledInput'
 import LabeledSwitch from '../../components/LabeledSwitch'
 import LabeledTextArea from '../../components/LabeledTextArea'
 import Input from '../../components/Input'
 import { formatUserName } from '../../utils/nameFormatters'
 import { createCustomer, getCustomerById, updateCustomer } from '../../lib/customerApi'
+import { getSharedRequest } from '../../lib/sharedRequest'
+import Skeleton from 'react-loading-skeleton'
+import 'react-loading-skeleton/dist/skeleton.css'
+import { useDelayedSkeleton } from '../../hooks/useDelayedSkeleton'
 
 const EMPTY_CUSTOMER = {
     id: 0,
@@ -41,24 +46,91 @@ function cloneCustomer(value) {
     return JSON.parse(JSON.stringify(value))
 }
 
+function formatDateTime(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+        return ''
+    }
+
+    return date.toLocaleString('sv-SE', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    })
+}
+
 export default function Customer() {
     const navigate = useNavigate()
     const params = useParams()
+    const routeCustomerId = params.id ?? 'new'
 
     const [customer, setCustomer] = useState(null)
     const [originalCustomer, setOriginalCustomer] = useState(null)
     const [messages, setMessages] = useState([])
+    const [isLoadingCustomer, setIsLoadingCustomer] = useState(false)
+    const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
+    const showCustomerSkeleton = useDelayedSkeleton(isLoadingCustomer, 250)
+    const skipUnsavedGuardRef = useRef(false)
 
     function hasUnsavedChanges() {
-        if (!originalCustomer) {
-            return true
+        if (skipUnsavedGuardRef.current) {
+            return false
         }
 
         if (!customer) {
             return false
         }
 
+        if (!originalCustomer) {
+            return false
+        }
+
         return JSON.stringify(customer) !== JSON.stringify(originalCustomer)
+    }
+
+    const navigationBlocker = useBlocker(({ currentLocation, nextLocation }) => {
+        return hasUnsavedChanges() && currentLocation.pathname !== nextLocation.pathname
+    })
+
+    useEffect(() => {
+        if (navigationBlocker.state === 'blocked') {
+            setShowUnsavedWarning(true)
+        }
+    }, [navigationBlocker.state])
+
+    useEffect(() => {
+        function handleBeforeUnload(event) {
+            if (!hasUnsavedChanges()) {
+                return
+            }
+
+            event.preventDefault()
+            event.returnValue = ''
+        }
+
+        window.addEventListener('beforeunload', handleBeforeUnload)
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+        }
+    }, [customer, originalCustomer])
+
+    function handleUnsavedWarningClose() {
+        setShowUnsavedWarning(false)
+
+        if (navigationBlocker.state === 'blocked') {
+            navigationBlocker.reset()
+        }
+    }
+
+    function handleUnsavedWarningConfirm() {
+        setShowUnsavedWarning(false)
+
+        if (navigationBlocker.state === 'blocked') {
+            navigationBlocker.proceed()
+        }
     }
 
     function handleChange(field, value) {
@@ -69,26 +141,69 @@ export default function Customer() {
         }))
     }
 
-    async function loadCustomer(customerId) {
-        if (customerId === 'new') {
-            setCustomer(cloneCustomer(EMPTY_CUSTOMER))
-            setOriginalCustomer(null)
-            return
-        }
+    async function loadCustomer(customerId, { dedupe = false, isActive = () => true } = {}) {
+        setIsLoadingCustomer(true)
 
         try {
-            const data = await getCustomerById(customerId)
+            if (customerId === 'new') {
+                if (!isActive()) {
+                    return
+                }
+
+                const emptyCustomer = cloneCustomer(EMPTY_CUSTOMER)
+                setCustomer(emptyCustomer)
+                setOriginalCustomer(cloneCustomer(emptyCustomer))
+                return
+            }
+
+            const fetchCustomer = () => getCustomerById(customerId)
+            const data = dedupe
+                ? await getSharedRequest(`customer:${customerId}`, fetchCustomer)
+                : await fetchCustomer()
+
+            if (!isActive()) {
+                return
+            }
+
             setCustomer(data)
             setOriginalCustomer(cloneCustomer(data))
         } catch (error) {
+            if (!isActive()) {
+                return
+            }
+
             const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte hämta kund.'
             setMessages([{ type: 'error', text: errorText }])
+        } finally {
+            if (isActive()) {
+                setIsLoadingCustomer(false)
+            }
         }
     }
 
+    function handleBackClick() {
+        if (window.history.length > 1) {
+            navigate(-1)
+            return
+        }
+
+        window.close()
+    }
+
     useEffect(() => {
-        loadCustomer(params.id)
-    }, [params.id])
+        let isActive = true
+
+        skipUnsavedGuardRef.current = false
+
+        loadCustomer(routeCustomerId, {
+            dedupe: true,
+            isActive: () => isActive,
+        })
+
+        return () => {
+            isActive = false
+        }
+    }, [routeCustomerId])
 
     async function submitCustomer(event) {
         event.preventDefault()
@@ -121,7 +236,7 @@ export default function Customer() {
         try {
             let customerId = customer.id
 
-            if (params.id === 'new' || !customer.id) {
+            if (routeCustomerId === 'new' || !customer.id) {
                 customerId = await createCustomer(payload)
             } else {
                 customerId = await updateCustomer(customer.id, payload)
@@ -132,7 +247,8 @@ export default function Customer() {
             setOriginalCustomer(cloneCustomer(refreshedCustomer))
             setMessages([{ type: 'success', text: 'Kunden sparad' }])
 
-            if (`${params.id}` !== `${customerId}`) {
+            if (`${routeCustomerId}` !== `${customerId}`) {
+                skipUnsavedGuardRef.current = true
                 navigate(`/customer/${customerId}`, { replace: true, state: { originModule: 'operations' } })
             }
         } catch (error) {
@@ -161,28 +277,148 @@ export default function Customer() {
     }
 
     if (!customer) {
+        if (showCustomerSkeleton) {
+            return (
+                <div className="flex h-full min-h-full w-full flex-1 flex-col px-0 py-0 md:px-[clamp(8px,5vw,10vw)]">
+                    <div className="mt-1 flex min-h-0 flex-1 flex-col">
+                        <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-stretch">
+                            <aside className="text-gray-700 mt-6 pr-3 border-b border-gray-300 lg:border-b-0 lg:border-r mb-8">
+                                <div className="space-y-4 pr-0 pb-4 ml-2">
+                                    <h2 className="text-4 text-center text-gray-700 text-sm">Info</h2>
+                                    <div className="space-y-2 text-xs text-gray-600">
+                                        <Skeleton height={14} width="92%" />
+                                        <Skeleton height={14} width="88%" />
+                                    </div>
+                                </div>
+                                <div className="border-b border-gray-300" />
+
+                                <div className="space-y-4 pr-0 py-4 ml-2">
+                                    <h2 className="text-4 text-center text-gray-700 text-sm">Meddelanden</h2>
+                                    <div className="space-y-2 text-xs text-gray-600">
+                                        <Skeleton height={30} />
+                                        <Skeleton height={30} width="92%" />
+                                    </div>
+                                </div>
+
+                                <div className="border-b border-gray-300" />
+                            </aside>
+
+                            <section className="lg:pl-2">
+                                <div className="pb-3">
+                                    <Skeleton height={14} width={220} />
+                                </div>
+
+                                <div className="mb-4 flex w-full justify-between space-x-4">
+                                    <div className="flex items-center space-x-6">
+                                        <Skeleton height={30} width={92} />
+                                        <Skeleton height={30} width={92} />
+                                        <Skeleton height={30} width={92} />
+                                        <Skeleton height={30} width={92} />
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-15 md:grid-cols-[360px_380px_200px] overflow-auto">
+                                    <div className="space-y-2">
+                                        <Skeleton height={24} count={8} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Skeleton height={24} count={8} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Skeleton height={24} count={6} />
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
         return (
-            <div className="relative flex h-full flex-col p-2">
-                <h2 className="ml-5 pb-2 text-sm text-gray-700">Laddar kund...</h2>
-            </div>
+            null
         )
     }
 
-    return (
-        <div className="relative flex h-full flex-col py-2">
-            <h2 className="ml-10 pb-2 text-sm text-gray-700">{customer?.customerName || 'Ny kund'}</h2>
+    const renderMetaRow = (label, value, userName) => {
+        return (
+            <div className="grid grid-cols-21 gap-1">
+                <div className="col-span-5"><span className="font-medium">{label}</span></div>
+                <div className="col-span-8">{value && formatDateTime(value)}</div>
+                <div className="col-span-8 text-gray-500">{userName && `av ${userName}`}</div>
+            </div>
+        );
+    };
 
-            <div className="mt-1 mx-8 flex h-full items-stretch">
-                <div className="flex-grow pe-10">
-                    <form onSubmit={submitCustomer} autoComplete="off" className="flex h-full flex-col">
-                        <div className="mb-3 flex items-center gap-5">
-                            <ActionButton label="Tillbaka" icon={ArrowLeft} accent="slate" onClick={() => navigate('/operations/searchcustomer')} />
-                            <ActionButton label="Spara" icon={Save} accent="lime" onClick={submitCustomer} />
-                            <ActionButton label="Logg" icon={Clock3} accent="sky" onClick={showLogPlaceholder} />
-                            <ActionButton label="Radera" icon={Trash2} accent="rose" onClick={showDeletePlaceholder} disabled={!customer?.id} />
+    return (
+        <div className="flex h-full min-h-full w-full flex-1 flex-col px-0 py-0 md:px-[clamp(8px,5vw,10vw)]">
+            <ConfirmationModal
+                isOpen={showUnsavedWarning}
+                onClose={handleUnsavedWarningClose}
+                onConfirm={handleUnsavedWarningConfirm}
+                title="OSPARADE ÄNDRINGAR"
+                message="Du har osparade ändringar. Vill du fortsätta utan att spara?"
+                confirmText="Fortsätt"
+                cancelText="Stanna kvar"
+                isDestructive
+            />
+
+            <div className="mt-1 flex min-h-0 flex-1 flex-col">
+
+                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-stretch">
+
+                    <aside className="mt-6 pr-3 border-b border-gray-300 lg:border-b-0 lg:border-r mb-8">
+                        <div className="space-y-4 pr-0 pb-4 ml-2">
+                            <h2 className="text-4 text-center text-gray-500 text-sm">Info</h2>
+                            <div className="space-y-2 text-xs text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                {renderMetaRow('Skapad:', customer.createdAt, customer.createdByName)}
+                                {renderMetaRow('Redigerad:', customer.updatedAt, customer.updatedByName)}
+                            </div>
+                        </div>
+                        
+                        <div className="border-b border-gray-300" />
+
+                        <div className="space-y-4 pr-0 py-4 ml-2">
+                            <h2 className="text-4 text-center text-gray-500 text-sm">Meddelanden</h2>
+                            <div className="space-y-2 text-xs text-gray-600">
+                                {messages.length === 0 && (
+                                    <></>
+                                )}
+
+                                {messages.map((message, index) => (
+                                    <div
+                                        key={message.id ?? `${message.type}-${message.text}-${index}`}
+                                        className={`rounded-sm border px-3 py-2 text-xs text-center ${message.type === 'error'
+                                            ? 'border-rose-200 bg-rose-50 text-rose-800'
+                                            : 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                            }`}
+                                    >
+                                        {message.text}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
-                        <div className="grid flex-1 grid-cols-[1.05fr_1.05fr_0.75fr] gap-15 overflow-auto pb-5 pr-30">
+                        <div className="border-b border-gray-300" />
+                    </aside>
+
+                    <section className="lg:pl-2">
+                        <h2 className="text-sm pb-3 text-gray-500 uppercase tracking-[0.10em] font-semibold">{customer.customerName}</h2>
+                        <div className="mb-4 flex w-full justify-between space-x-4">
+                            <div className="flex items-center space-x-6">
+                                <ActionButton label="Tillbaka" icon={ArrowLeft} onClick={handleBackClick} accent="sky" />
+                                <ActionButton label="Spara" icon={Save} onClick={submitCustomer} accent="lime" />
+                                <ActionButton label="Logg" icon={Clock3} onClick={showLogPlaceholder} accent="violet" disabled={!customer?.id} />
+                                <ActionButton label="Radera" icon={Trash2} onClick={showDeletePlaceholder} accent="rose" disabled={!customer?.id} />
+                            </div>
+                            {/* <div className="flex items-center space-x-4">
+                                {isLoadingCustomer && <span className="text-xs text-gray-500">Laddar kund...</span>}
+                                {saveStatus === 'saved' && <span className="text-xs text-lime-700">Sparad</span>}
+                                {saveStatus === 'error' && <span className="text-xs text-rose-700">{saveError || 'Kunde inte spara.'}</span>}
+                            </div> */}
+                        </div>
+
+                        <form autoComplete="off" className="grid gap-15 md:grid-cols-[360px_380px_200px] overflow-auto">
                             <div>
                                 <LabeledInput
                                     name="customerName"
@@ -254,7 +490,7 @@ export default function Customer() {
                                     name="isActive"
                                     label="Aktiv"
                                     value={Boolean(customer.isActive)}
-                                    onClick={(checked) => handleChange('isActive', checked)}
+                                    onChange={(checked) => handleChange('isActive', checked)}
                                     labelWidth="w-22"
                                     margintop="2"
                                 />
@@ -264,7 +500,7 @@ export default function Customer() {
                                 <div className="flex space-x-1 w-full pb-[1px]">
                                     <p className="w-22 text-xs pt-2 text-gray-700">Besöksadress</p>
                                     <div className="">
-                                        <Input name="invoiceStreet1" value={customer.street1} onChange={(e) => handleChange('street1', value)} autoComplete="section-invoice billing address-line1" />
+                                        <Input name="invoiceStreet1" value={customer.street1} onChange={(e) => handleChange('street1', e.target.value)} autoComplete="section-invoice billing address-line1" />
                                         <Input name="invoiceStreet2" value={customer.street2} onChange={(e) => handleChange('street2', e.target.value)} className="mt-[1px]" autoComplete="section-invoice billing address-line2" />
                                         <div className="flex space-x-1 w-full mt-[1px]">
                                             <Input name="invoiceZip" value={customer.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} className="w-1/3" autoComplete="section-invoice billing postal-code" />
@@ -272,44 +508,7 @@ export default function Customer() {
                                         </div>
                                     </div>
                                 </div>
-                                {/* <LabeledInput
-                                    name="street1"
-                                    label="Besöksadress"
-                                    value={customer.street1 ?? ''}
-                                    onChange={(value) => handleChange('street1', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="address-line1"
-                                />
-                                <LabeledInput
-                                    name="street2"
-                                    label=""
-                                    value={customer.street2 ?? ''}
-                                    onChange={(value) => handleChange('street2', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="address-line2"
-                                />
-                                <div className="mt-0 grid grid-cols-[1fr_2fr] gap-1 pl-[93px]">
-                                    <LabeledInput
-                                        name="zipCode"
-                                        label=""
-                                        value={customer.zipCode ?? ''}
-                                        onChange={(value) => handleChange('zipCode', value)}
-                                        labelWidth="w-0"
-                                        margintop="0"
-                                        autoComplete="postal-code"
-                                    />
-                                    <LabeledInput
-                                        name="city"
-                                        label=""
-                                        value={customer.city ?? ''}
-                                        onChange={(value) => handleChange('city', value)}
-                                        labelWidth="w-0"
-                                        margintop="0"
-                                        autoComplete="address-level2"
-                                    />
-                                </div> */}
+
 
                                 <LabeledTextArea
                                     name="note"
@@ -327,7 +526,7 @@ export default function Customer() {
                                     name="vatRegisterd"
                                     label="Momspliktig"
                                     value={Boolean(customer.vatRegisterd)}
-                                    onClick={(checked) => handleChange('vatRegisterd', checked)}
+                                    onChange={(checked) => handleChange('vatRegisterd', checked)}
                                     labelWidth="w-28"
                                     margintop="0"
                                 />
@@ -335,7 +534,7 @@ export default function Customer() {
                                     name="isCompany"
                                     label="Är försäkringsbolag"
                                     value={Boolean(customer.isCompany)}
-                                    onClick={(checked) => handleChange('isCompany', checked)}
+                                    onChange={(checked) => handleChange('isCompany', checked)}
                                     labelWidth="w-28"
                                     margintop="0"
                                 />
@@ -423,65 +622,14 @@ export default function Customer() {
                                     />
                                 </div>
                             </div>
-                        </div>
-                    </form>
+
+                        </form>
+                    </section>
+
                 </div>
 
-                <div className="flex flex-col w-70 border-l border-gray-300 px-4 py-2 mb-20">
-                    <div className="space-y-3">
-                        <h2 className="text-sm text-center text-gray-500">Info</h2>
-                        <div className="space-y-2 text-xs">
-                            <div className="grid grid-cols-[65px_110px_1fr] mx-2">
-                                {customer?.createdDate && (
-                                    <>
-                                        <div className="text-gray-500">
-                                            <span className="font-medium">Skapad:</span>
-                                        </div>
-                                        <div className="text-gray-700">
-                                            {new Date(customer.createdDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                        <div className="text-gray-500">
-                                            {customer?.createdByUserName && `av ${formatUserName(customer.createdByUserName)}`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-[65px_110px_1fr] mx-2">
-                                {customer?.modifiedDate && (
-                                    <>
-                                        <div className="text-gray-500">
-                                            <span className="font-medium">Redigerad:</span>
-                                        </div>
-                                        <div className="text-gray-700">
-                                            {new Date(customer.modifiedDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                        <div className="text-gray-500">
-                                            {customer?.modifiedByUserName && `av ${formatUserName(customer.modifiedByUserName)}`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <hr className="mt-7 border-gray-300 dark:border-white" />
-                    <h2 className="text-sm text-center text-gray-500 mt-5">Meddelanden</h2>
-                    {messages.length === 0 ? (
-                        <p className="text-xs text-center font-light mt-5">Inga meddelanden</p>
-                    ) : (
-                        <ul className="mt-2 space-y-2">
-                            {messages.map((message, index) => (
-                                <li
-                                    key={index}
-                                    className={`text-center text-xs p-2 rounded border border-gray-200 ${message.type === 'error' ? 'bg-red-100 text-red-700' : message.type === 'info' ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'}`}
-                                >
-                                    {message.text}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                    <hr className="mt-7 border-gray-300 dark:border-white" />
-                </div>
             </div>
+
         </div>
     )
 }

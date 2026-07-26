@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using Hyr.Api.Data;
+using Hyr.Api.Dtos;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
+using Hyr.Api.Services;
 using Hyr.Api.Utils;
 
 namespace Hyr.Api.Controllers
@@ -14,22 +16,19 @@ namespace Hyr.Api.Controllers
     public class ItemModelController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
 
-        public ItemModelController(ApplicationDbContext context)
+        public ItemModelController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
         }
 
         [HttpGet]
         [Authorize]
-        public async Task<ActionResult<PagedResult<ItemModel>>> GetItemModels([FromQuery] ItemModelFilter filter)
+        public async Task<ActionResult<PagedResult<ItemModelDto>>> GetItemModels([FromQuery] ItemModelFilter filter)
         {
-            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                             ?? User?.FindFirst("sub")?.Value
-                             ?? User?.FindFirst("id")?.Value;
-            _ = int.TryParse(userIdClaim, out int userId);
-
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });
@@ -37,7 +36,6 @@ namespace Hyr.Api.Controllers
 
             var query = _context.ItemModels
                 .Where(im => im.OfficeId == user.OfficeId)
-                .Include(im => im.Office)
                 .AsQueryable();
 
             if (filter.Id.HasValue)
@@ -52,22 +50,25 @@ namespace Hyr.Api.Controllers
 
             var totalRecords = await query.CountAsync();
 
-            // Apply sorting (default to Name:asc if not specified)
-            var sortBy = filter.SortBy ?? new[] { "Name:asc" };
+            // Apply sorting (default to Name:asc, then Id:desc for deterministic ties)
+            var sortBy = filter.SortBy ?? new[] { "Name:asc", "Id:desc" };
             query = query.ApplyMultiSort(sortBy);
 
             var pagedQuery = query
                 .Skip((filter.Page - 1) * filter.PageSize)
                 .Take(filter.PageSize);
 
-            var itemModels = await pagedQuery.Select(im => new ItemModel
-            {
-                Id = im.Id,
-                OfficeId = im.OfficeId,
-                Name = im.Name,
-            }).ToListAsync();
+            var itemModels = await pagedQuery
+                .AsNoTracking()
+                .Select(im => new ItemModelDto
+                {
+                    Id = im.Id,
+                    OfficeId = im.OfficeId,
+                    Name = im.Name,
+                })
+                .ToListAsync();
 
-            return Ok(new PagedResult<ItemModel>
+            return Ok(new PagedResult<ItemModelDto>
             {
                 Data = itemModels,
                 TotalRecords = totalRecords,
@@ -81,11 +82,24 @@ namespace Hyr.Api.Controllers
 
         [HttpGet("{id}")]
         [Authorize]
-        public async Task<ActionResult<ItemModel>> GetItemModel(int id)
+        public async Task<ActionResult<ItemModelDto>> GetItemModel(int id)
         {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
             var itemModel = await _context.ItemModels
-                .Include(im => im.Office)
-                .FirstOrDefaultAsync(im => im.Id == id);
+                .AsNoTracking()
+                .Where(im => im.Id == id && im.OfficeId == user.OfficeId)
+                .Select(im => new ItemModelDto
+                {
+                    Id = im.Id,
+                    OfficeId = im.OfficeId,
+                    Name = im.Name,
+                })
+                .FirstOrDefaultAsync();
 
             if (itemModel == null)
             {
@@ -99,7 +113,15 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<IActionResult> DeleteItemModel(int id)
         {
-            var itemModel = await _context.ItemModels.FindAsync(id);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            var itemModel = await _context.ItemModels
+                .FirstOrDefaultAsync(im => im.Id == id && im.OfficeId == user.OfficeId);
+
             if (itemModel == null)
             {
                 return NotFound();
@@ -113,19 +135,14 @@ namespace Hyr.Api.Controllers
 
         [HttpPost]
         [Authorize]
-        public async Task<ActionResult<ItemModel>> PostItemModel([FromBody] ItemModel itemModel)
+        public async Task<ActionResult<ItemModelDto>> PostItemModel([FromBody] ItemModelUpsertDto itemModel)
         {
             try
             {
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                                 ?? User?.FindFirst("sub")?.Value
-                                 ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });
@@ -141,17 +158,19 @@ namespace Hyr.Api.Controllers
                 }
                 else
                 {
-                    itemModelInDb = await _context.ItemModels.FindAsync(itemModel.Id);
+                    itemModelInDb = await _context.ItemModels
+                        .FirstOrDefaultAsync(im => im.Id == itemModel.Id && im.OfficeId == user.OfficeId);
+
                     if (itemModelInDb == null)
                     {
                         return NotFound(new { message = "ItemModel not found" });
                     }
                 }
 
-                itemModelInDb.Name = itemModel.Name;
+                ApplyItemModelChanges(itemModelInDb, itemModel);
 
                 await _context.SaveChangesAsync();
-                return Ok(itemModelInDb);
+                return Ok(MapItemModel(itemModelInDb));
             }
             catch (Exception ex)
             {
@@ -159,9 +178,19 @@ namespace Hyr.Api.Controllers
             }
         }
 
-        private async Task<bool> ItemModelExists(int id)
+        private static ItemModelDto MapItemModel(ItemModel model)
         {
-            return await _context.ItemModels.AnyAsync(im => im.Id == id);
+            return new ItemModelDto
+            {
+                Id = model.Id,
+                OfficeId = model.OfficeId,
+                Name = model.Name,
+            };
+        }
+
+        private static void ApplyItemModelChanges(ItemModel target, ItemModelUpsertDto source)
+        {
+            target.Name = source.Name?.Trim() ?? string.Empty;
         }
     }
 }

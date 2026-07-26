@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Hyr.Api.Models;
 using Hyr.Api.Services;
-using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Hyr.Api.Controllers
 {

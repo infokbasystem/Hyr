@@ -12,6 +12,7 @@ using Telerik.Reporting.XmlSerialization;
 
 
 using Hyr.Api.Data;
+using Hyr.Api.Services;
 
 namespace Hyr.Api.Controllers
 {
@@ -20,20 +21,18 @@ namespace Hyr.Api.Controllers
     public class PdfController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-        public PdfController(ApplicationDbContext context)
+        private readonly ICurrentUserService _currentUserService;
+
+        public PdfController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
         }
 
         [HttpGet("invoice/{id:int}")]
         public async Task<IActionResult> GetPdfById(int id)
         {
-            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                             ?? User?.FindFirst("sub")?.Value
-                             ?? User?.FindFirst("id")?.Value;
-            _ = int.TryParse(userIdClaim, out int userId);
-
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });

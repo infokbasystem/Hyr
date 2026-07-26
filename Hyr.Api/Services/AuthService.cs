@@ -14,20 +14,38 @@ namespace Hyr.Api.Services
         private readonly ApplicationDbContext _context;
         private readonly IPasswordHasher _passwordHasher;
         private readonly JwtSettings _jwtSettings;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(ApplicationDbContext context, IPasswordHasher passwordHasher, IOptions<JwtSettings> jwtSettings)
+        public AuthService(
+            ApplicationDbContext context,
+            IPasswordHasher passwordHasher,
+            IOptions<JwtSettings> jwtSettings,
+            ILogger<AuthService> logger)
         {
             _context = context;
             _passwordHasher = passwordHasher;
             _jwtSettings = jwtSettings.Value;
+            _logger = logger;
         }
 
         public async Task<AuthResponse?> LoginAsync(Login login)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == login.Email);
 
-            if (user == null || !_passwordHasher.VerifyPassword(login.Password, user.PasswordHash))
+            if (user == null)
             {
+                return null;
+            }
+
+            var isPasswordValid = _passwordHasher.VerifyPassword(login.Password, user.PasswordHash);
+            if (!isPasswordValid)
+            {
+                var computedHash = _passwordHasher.HashPassword(login.Password);
+                _logger.LogWarning(
+                    "Login failed due to password mismatch for user {Email}. Computed hash: {ComputedHash}. Stored hash: {StoredHash}.",
+                    login.Email,
+                    computedHash,
+                    user.PasswordHash);
                 return null;
             }
 
@@ -38,6 +56,7 @@ namespace Hyr.Api.Services
                 User = new User
                 {
                     Id = user.Id,
+                    Role = user.Role,
                     Name = user.Name,
                     Email = user.Email
                 }
@@ -55,7 +74,8 @@ namespace Hyr.Api.Services
             {
                 Name = register.Name,
                 Email = register.Email,
-                PasswordHash = _passwordHasher.HashPassword(register.Password)
+                PasswordHash = _passwordHasher.HashPassword(register.Password),
+                Role = "User"
             };
 
             _context.Users.Add(user);
@@ -68,6 +88,7 @@ namespace Hyr.Api.Services
                 User = new User
                 {
                     Id = user.Id,
+                    Role = user.Role,
                     Name = user.Name,
                     Email = user.Email
                 }
@@ -102,6 +123,7 @@ namespace Hyr.Api.Services
                         return new User
                         {
                             Id = user.Id,
+                            Role = user.Role,
                             Name = user.Name,
                             Email = user.Email
                         };
@@ -126,7 +148,8 @@ namespace Hyr.Api.Services
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Name, user.Name),
-                    new Claim(ClaimTypes.Email, user.Email)
+                    new Claim(ClaimTypes.Email, user.Email),
+                    new Claim(ClaimTypes.Role, user.Role)
                 }),
                 Expires = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes),
                 Issuer = _jwtSettings.Issuer,

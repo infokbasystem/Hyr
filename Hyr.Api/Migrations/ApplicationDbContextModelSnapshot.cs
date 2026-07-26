@@ -22,7 +22,7 @@ namespace Hyr.Api.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("Api.Models.Account", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Account", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -52,7 +52,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Account", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.Article", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Article", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -96,7 +96,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Article", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.Customer", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Customer", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -113,6 +113,12 @@ namespace Hyr.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
 
                     b.Property<int?>("CrediflowPartyId")
                         .HasColumnType("int");
@@ -251,6 +257,12 @@ namespace Hyr.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
                     b.Property<string>("VatNr")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -266,12 +278,42 @@ namespace Hyr.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedBy");
+
                     b.HasIndex("OfficeId");
+
+                    b.HasIndex("UpdatedBy");
 
                     b.ToTable("Customer", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.Invoice", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Department", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OfficeId");
+
+                    b.ToTable("Department", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.Invoice", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -458,7 +500,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Invoice", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.InvoiceRow", b =>
+            modelBuilder.Entity("Hyr.Api.Models.InvoiceRow", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -541,7 +583,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("InvoiceRow", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.Item", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Item", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -554,13 +596,43 @@ namespace Hyr.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("ArticleNr")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<decimal?>("BasePrice")
                         .HasColumnType("decimal(10,5)");
+
+                    b.Property<bool>("CalculatePriceFromPartPrices")
+                        .HasColumnType("bit");
 
                     b.Property<string>("CostCenterNr")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Equipment")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Fuel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("FuelConsumptionLitresPerHour")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("FuelConsumptionLitresPerKm")
+                        .HasColumnType("decimal(10,5)");
 
                     b.Property<decimal?>("HourMeter")
                         .HasColumnType("decimal(10,5)");
@@ -574,6 +646,9 @@ namespace Hyr.Api.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPartOfPackage")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsStorageItem")
@@ -591,7 +666,6 @@ namespace Hyr.Api.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("ItemTypeCode")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
@@ -653,6 +727,17 @@ namespace Hyr.Api.Migrations
                     b.Property<decimal?>("ReplacementCost")
                         .HasColumnType("decimal(10,5)");
 
+                    b.Property<string>("SerialNr")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("ShowInPlanning")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("SortNr")
+                        .HasColumnType("int");
+
                     b.Property<bool>("UnavailableForReservation")
                         .HasColumnType("bit");
 
@@ -667,6 +752,12 @@ namespace Hyr.Api.Migrations
                     b.Property<DateTime?>("UnavailableTo")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("WeightKg")
                         .HasColumnType("decimal(10,5)");
 
@@ -677,16 +768,22 @@ namespace Hyr.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedBy");
+
                     b.HasIndex("ItemCategoryId");
 
                     b.HasIndex("ItemModelId");
 
+                    b.HasIndex("ItemTypeCode");
+
                     b.HasIndex("OfficeId");
+
+                    b.HasIndex("UpdatedBy");
 
                     b.ToTable("Item", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.ItemCategory", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemCategory", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -709,7 +806,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ItemCategory", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.ItemModel", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemModel", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -732,13 +829,107 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ItemModel", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.Office", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemPackageItem", b =>
+                {
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PackageItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,5)");
+
+                    b.HasKey("ItemId", "PackageItemId");
+
+                    b.HasIndex("PackageItemId");
+
+                    b.ToTable("ItemPackageItem", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.ItemType", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ItemType", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.Office", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Bank")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("BankAccountNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("BgNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CrediflowId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DeductibleReductionText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("DefaultPaymentDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("EmergencyNumber")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FaxNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("FortnoxAccessToken")
                         .IsRequired()
@@ -755,7 +946,86 @@ namespace Hyr.Api.Migrations
                     b.Property<int?>("FortnoxTokenExpiresInSeconds")
                         .HasColumnType("int");
 
+                    b.Property<string>("GeneralContractText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("GlnNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Iban")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("InvoiceFee")
+                        .HasColumnType("decimal(18,5)");
+
+                    b.Property<decimal?>("LatePaymentInterest")
+                        .HasColumnType("decimal(18,5)");
+
+                    b.Property<string>("MobilePhone")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OrganizationNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PgNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Street")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SwiftBic")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Telephone")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("VatNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("VatRegCity")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("VatRegText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("ViewContractPricesOnPrint")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Web")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ZipCode")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -765,7 +1035,22 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Office", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.PriceList", b =>
+            modelBuilder.Entity("Hyr.Api.Models.OfficeItemType", b =>
+                {
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("OfficeId", "ItemTypeId");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.ToTable("OfficeItemType", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceList", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -782,7 +1067,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("PriceList");
                 });
 
-            modelBuilder.Entity("Api.Models.Reservation", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Reservation", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -804,10 +1089,20 @@ namespace Hyr.Api.Migrations
                     b.Property<int?>("CustomerId")
                         .HasColumnType("int");
 
+                    b.Property<string>("CustomerMarking")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("CustomerName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DeliveryPlace")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("DeliveryPlaceNote")
                         .IsRequired()
@@ -826,6 +1121,11 @@ namespace Hyr.Api.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("DriverMobilePhone")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DriverName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -872,6 +1172,11 @@ namespace Hyr.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("PickUpBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("PickupPlaceNote")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -889,6 +1194,11 @@ namespace Hyr.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TelephoneWorkplace")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("ZipCode")
                         .IsRequired()
@@ -908,7 +1218,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Reservation", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationCalc", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationCalc", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -937,7 +1247,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ReservationCalc", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationCalcItem", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationCalcItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -984,7 +1294,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ReservationCalcItem", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationItem", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1129,7 +1439,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ReservationItem", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.User", b =>
+            modelBuilder.Entity("Hyr.Api.Models.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1160,6 +1470,13 @@ namespace Hyr.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("User");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
@@ -1170,7 +1487,7 @@ namespace Hyr.Api.Migrations
                     b.ToTable("User", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.VatRate", b =>
+            modelBuilder.Entity("Hyr.Api.Models.VatRate", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1206,9 +1523,9 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Vat", (string)null);
                 });
 
-            modelBuilder.Entity("Api.Models.Account", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Account", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Accounts")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1216,19 +1533,19 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.Article", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Article", b =>
                 {
-                    b.HasOne("Api.Models.Account", "Account")
+                    b.HasOne("Hyr.Api.Models.Account", "Account")
                         .WithMany("Articles")
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Articles")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.VatRate", "VatRate")
+                    b.HasOne("Hyr.Api.Models.VatRate", "VatRate")
                         .WithMany("Articles")
                         .HasForeignKey("VatRateId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1240,34 +1557,59 @@ namespace Hyr.Api.Migrations
                     b.Navigation("VatRate");
                 });
 
-            modelBuilder.Entity("Api.Models.Customer", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Customer", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Customers")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Hyr.Api.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Office");
+
+                    b.Navigation("UpdatedByUser");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.Department", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("Departments")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.Invoice", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Invoice", b =>
                 {
-                    b.HasOne("Api.Models.User", "CreatedByUser")
+                    b.HasOne("Hyr.Api.Models.User", "CreatedByUser")
                         .WithMany("CreatedInvoices")
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Customer", "Customer")
+                    b.HasOne("Hyr.Api.Models.Customer", "Customer")
                         .WithMany("Invoices")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.User", "ModifiedByUser")
+                    b.HasOne("Hyr.Api.Models.User", "ModifiedByUser")
                         .WithMany("ModifiedInvoices")
                         .HasForeignKey("ModifiedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Invoices")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1281,29 +1623,29 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.InvoiceRow", b =>
+            modelBuilder.Entity("Hyr.Api.Models.InvoiceRow", b =>
                 {
-                    b.HasOne("Api.Models.Article", "Article")
+                    b.HasOne("Hyr.Api.Models.Article", "Article")
                         .WithMany("InvoiceRows")
                         .HasForeignKey("ArticleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Invoice", "Invoice")
+                    b.HasOne("Hyr.Api.Models.Invoice", "Invoice")
                         .WithMany("InvoiceRows")
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Item", "Item")
+                    b.HasOne("Hyr.Api.Models.Item", "Item")
                         .WithMany("InvoiceRows")
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("InvoiceRows")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.ReservationCalcItem", "ReservationCalcItem")
+                    b.HasOne("Hyr.Api.Models.ReservationCalcItem", "ReservationCalcItem")
                         .WithMany("InvoiceRows")
                         .HasForeignKey("ReservationCalcItemId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1319,34 +1661,56 @@ namespace Hyr.Api.Migrations
                     b.Navigation("ReservationCalcItem");
                 });
 
-            modelBuilder.Entity("Api.Models.Item", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Item", b =>
                 {
-                    b.HasOne("Api.Models.ItemCategory", "ItemCategory")
+                    b.HasOne("Hyr.Api.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
                         .WithMany("Items")
                         .HasForeignKey("ItemCategoryId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.ItemModel", "ItemModel")
+                    b.HasOne("Hyr.Api.Models.ItemModel", "ItemModel")
                         .WithMany("Items")
                         .HasForeignKey("ItemModelId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.ItemType", "ItemType")
+                        .WithMany("Items")
+                        .HasForeignKey("ItemTypeCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Items")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Hyr.Api.Models.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
                     b.Navigation("ItemCategory");
 
                     b.Navigation("ItemModel");
 
+                    b.Navigation("ItemType");
+
                     b.Navigation("Office");
+
+                    b.Navigation("UpdatedByUser");
                 });
 
-            modelBuilder.Entity("Api.Models.ItemCategory", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemCategory", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("ItemCategories")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1354,9 +1718,9 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.ItemModel", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemModel", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("ItemModels")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1364,24 +1728,62 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.Reservation", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemPackageItem", b =>
                 {
-                    b.HasOne("Api.Models.User", "CreatedByUser")
+                    b.HasOne("Hyr.Api.Models.Item", "Item")
+                        .WithMany("PackageItems")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Hyr.Api.Models.Item", "PackageItem")
+                        .WithMany("IncludedInItems")
+                        .HasForeignKey("PackageItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("PackageItem");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.OfficeItemType", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemType", "ItemType")
+                        .WithMany("OfficeItemTypes")
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("OfficeItemTypes")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ItemType");
+
+                    b.Navigation("Office");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.Reservation", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.User", "CreatedByUser")
                         .WithMany("CreatedReservations")
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Customer", "Customer")
+                    b.HasOne("Hyr.Api.Models.Customer", "Customer")
                         .WithMany("Reservations")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.User", "ModifiedByUser")
+                    b.HasOne("Hyr.Api.Models.User", "ModifiedByUser")
                         .WithMany("ModifiedReservations")
                         .HasForeignKey("ModifiedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Reservations")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1395,14 +1797,14 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationCalc", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationCalc", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("ReservationCalcs")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Reservation", "Reservation")
+                    b.HasOne("Hyr.Api.Models.Reservation", "Reservation")
                         .WithMany("ReservationCalcs")
                         .HasForeignKey("ReservationId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1412,22 +1814,22 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Reservation");
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationCalcItem", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationCalcItem", b =>
                 {
-                    b.HasOne("Api.Models.Item", "Item")
+                    b.HasOne("Hyr.Api.Models.Item", "Item")
                         .WithMany("ReservationCalcItems")
                         .HasForeignKey("ItemId");
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("ReservationCalcItems")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.PriceList", "PriceList")
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
                         .WithMany("ReservationCalcItems")
                         .HasForeignKey("PriceListId");
 
-                    b.HasOne("Api.Models.ReservationCalc", "ReservationCalc")
+                    b.HasOne("Hyr.Api.Models.ReservationCalc", "ReservationCalc")
                         .WithMany("ReservationCalcItems")
                         .HasForeignKey("ReservationCalcId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1441,19 +1843,19 @@ namespace Hyr.Api.Migrations
                     b.Navigation("ReservationCalc");
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationItem", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationItem", b =>
                 {
-                    b.HasOne("Api.Models.Item", "Item")
+                    b.HasOne("Hyr.Api.Models.Item", "Item")
                         .WithMany("ReservationItems")
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("ReservationItems")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Api.Models.Reservation", "Reservation")
+                    b.HasOne("Hyr.Api.Models.Reservation", "Reservation")
                         .WithMany("ReservationItems")
                         .HasForeignKey("ReservationId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1465,9 +1867,9 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Reservation");
                 });
 
-            modelBuilder.Entity("Api.Models.User", b =>
+            modelBuilder.Entity("Hyr.Api.Models.User", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("Users")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1475,9 +1877,9 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.VatRate", b =>
+            modelBuilder.Entity("Hyr.Api.Models.VatRate", b =>
                 {
-                    b.HasOne("Api.Models.Office", "Office")
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("VatRates")
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1485,54 +1887,67 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
-            modelBuilder.Entity("Api.Models.Account", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Account", b =>
                 {
                     b.Navigation("Articles");
                 });
 
-            modelBuilder.Entity("Api.Models.Article", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Article", b =>
                 {
                     b.Navigation("InvoiceRows");
                 });
 
-            modelBuilder.Entity("Api.Models.Customer", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Customer", b =>
                 {
                     b.Navigation("Invoices");
 
                     b.Navigation("Reservations");
                 });
 
-            modelBuilder.Entity("Api.Models.Invoice", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Invoice", b =>
                 {
                     b.Navigation("InvoiceRows");
                 });
 
-            modelBuilder.Entity("Api.Models.Item", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Item", b =>
                 {
+                    b.Navigation("IncludedInItems");
+
                     b.Navigation("InvoiceRows");
+
+                    b.Navigation("PackageItems");
 
                     b.Navigation("ReservationCalcItems");
 
                     b.Navigation("ReservationItems");
                 });
 
-            modelBuilder.Entity("Api.Models.ItemCategory", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemCategory", b =>
                 {
                     b.Navigation("Items");
                 });
 
-            modelBuilder.Entity("Api.Models.ItemModel", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemModel", b =>
                 {
                     b.Navigation("Items");
                 });
 
-            modelBuilder.Entity("Api.Models.Office", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ItemType", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("OfficeItemTypes");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.Office", b =>
                 {
                     b.Navigation("Accounts");
 
                     b.Navigation("Articles");
 
                     b.Navigation("Customers");
+
+                    b.Navigation("Departments");
 
                     b.Navigation("InvoiceRows");
 
@@ -1543,6 +1958,8 @@ namespace Hyr.Api.Migrations
                     b.Navigation("ItemModels");
 
                     b.Navigation("Items");
+
+                    b.Navigation("OfficeItemTypes");
 
                     b.Navigation("ReservationCalcItems");
 
@@ -1557,29 +1974,29 @@ namespace Hyr.Api.Migrations
                     b.Navigation("VatRates");
                 });
 
-            modelBuilder.Entity("Api.Models.PriceList", b =>
+            modelBuilder.Entity("Hyr.Api.Models.PriceList", b =>
                 {
                     b.Navigation("ReservationCalcItems");
                 });
 
-            modelBuilder.Entity("Api.Models.Reservation", b =>
+            modelBuilder.Entity("Hyr.Api.Models.Reservation", b =>
                 {
                     b.Navigation("ReservationCalcs");
 
                     b.Navigation("ReservationItems");
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationCalc", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationCalc", b =>
                 {
                     b.Navigation("ReservationCalcItems");
                 });
 
-            modelBuilder.Entity("Api.Models.ReservationCalcItem", b =>
+            modelBuilder.Entity("Hyr.Api.Models.ReservationCalcItem", b =>
                 {
                     b.Navigation("InvoiceRows");
                 });
 
-            modelBuilder.Entity("Api.Models.User", b =>
+            modelBuilder.Entity("Hyr.Api.Models.User", b =>
                 {
                     b.Navigation("CreatedInvoices");
 
@@ -1590,7 +2007,7 @@ namespace Hyr.Api.Migrations
                     b.Navigation("ModifiedReservations");
                 });
 
-            modelBuilder.Entity("Api.Models.VatRate", b =>
+            modelBuilder.Entity("Hyr.Api.Models.VatRate", b =>
                 {
                     b.Navigation("Articles");
                 });

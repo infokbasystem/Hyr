@@ -10,6 +10,18 @@ const accentClasses = {
     orange: 'group-hover:border-orange-300 group-hover:bg-orange-200 group-focus:border-orange-300 group-focus:bg-orange-200 group-focus-visible:border-orange-300 group-focus-visible:bg-orange-200 group-active:border-orange-300 group-active:bg-orange-300',
 }
 
+const accentBaseClasses = {
+    sky: 'border-sky-200 bg-sky-50 text-sky-700',
+    lime: 'border-lime-200 bg-lime-50 text-lime-700',
+    rose: 'border-rose-200 bg-rose-50 text-rose-700',
+    yellow: 'border-amber-200 bg-amber-50 text-amber-700',
+    teal: 'border-teal-200 bg-teal-50 text-teal-700',
+    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    violet: 'border-violet-200 bg-violet-50 text-violet-700',
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+    orange: 'border-orange-200 bg-orange-50 text-orange-700',
+}
+
 export default function ActionButton({
     label,
     icon: Icon,
@@ -19,15 +31,16 @@ export default function ActionButton({
     accent = 'sky',
 }) {
     const iconAccentClassName = accentClasses[accent] ?? accentClasses.sky
+    const iconBaseClassName = accentBaseClasses[accent] ?? accentBaseClasses.sky
 
     return (
         <button
             type={type}
             onClick={onClick}
             disabled={disabled}
-            className="group inline-flex items-center gap-2 py-1 text-xs font-medium tracking-[0.10em] text-[#4b5563] transition enabled:focus:underline enabled:focus:outline-none enabled:focus:text-[#111827] enabled:focus:decoration-[#4b5563] enabled:hover:text-[#111827] enabled:hover:underline enabled:active:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
+            className="group inline-flex items-center gap-2 py-0 text-xs font-medium tracking-[0.10em] text-[#4b5563] transition enabled:focus:underline enabled:focus:outline-none enabled:focus:text-[#111827] enabled:focus:decoration-[#4b5563] enabled:hover:text-[#111827] enabled:hover:underline enabled:active:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
         >
-            <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#cfd4cc] bg-[#f2f3f1] text-[#5a5f59] transition-colors ${iconAccentClassName}`}>
+            <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${iconBaseClassName} ${iconAccentClassName}`}>
                 {Icon && <Icon className="h-4 w-4" strokeWidth={2.2} />}
             </span>
             <span className="pr-1 uppercase">{label}</span>

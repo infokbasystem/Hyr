@@ -16,6 +16,8 @@ const LabeledInput = ({
     popupItems,
     popupOnSelect,
     popupLabelField = 'name',
+    prefix = '',
+    suffix = '',
     ...props
 }) => {
 
@@ -92,7 +94,7 @@ const LabeledInput = ({
 
 
     return (
-        <div className={`flex items-center space-x-1 w-full pb-[1px] mt-${margintop}`} ref={wrapperRef}>
+        <div className={`flex items-center space-x-1 ${!inputWidth ? 'w-full' : ''} pb-[1px] mt-${margintop}`} ref={wrapperRef}>
             <div className={`relative flex items-center flex-none justify-between`}>
                 <label className={`text-xs text-gray-700 ${labelWidth || ''}`}>{label}</label>
                 {popupItems && Array.isArray(popupItems) && (
@@ -112,6 +114,7 @@ const LabeledInput = ({
                             className="w-full border border-gray-400 bg-white rounded px-2 py-1 text-xs mb-2"
                             placeholder="Sök..."
                             value={filter}
+                            autoComplete="off"
                             onChange={(e) => setFilter(e.target.value)}
                         />
                         <div className="max-h-40 overflow-auto space-y-1">
@@ -136,15 +139,28 @@ const LabeledInput = ({
                 )}
             </div>
 
-            <input
-                name={name}
-                value={displayValue}
-                disabled={disabled}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className={`text-xs ${inputWidth || 'w-full'} border border-gray-300 rounded-sm px-2 py-1 focus:outline-none ${!disabled ? 'bg-white' : ''}`}
-                {...props}
-            />
+            <div className={`relative flex items-center ${inputWidth || 'w-full'}`}>
+                {prefix && (
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-600 pointer-events-none">
+                        {prefix}
+                    </span>
+                )}
+                <input
+                    name={name}
+                    value={displayValue}
+                    disabled={disabled}
+                    autoComplete="off"
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    className={`text-xs w-full border border-gray-300 rounded-sm px-2 py-1 focus:outline-none ${!disabled ? 'bg-white' : ''} ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
+                    {...props}
+                />
+                {suffix && (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600 pointer-events-none">
+                        {suffix}
+                    </span>
+                )}
+            </div>
         </div>
     );
 };

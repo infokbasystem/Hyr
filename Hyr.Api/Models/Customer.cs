@@ -24,6 +24,10 @@ namespace Hyr.Api.Models
         public decimal? CreditLimit { get; set; }
         public int? ImportId { get; set; }
         public string ImportSource { get; set; } = string.Empty;
+        public DateTime? CreatedAt { get; set; }
+        public int? CreatedBy { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+        public int? UpdatedBy { get; set; }
         public string KeySpcs { get; set; } = string.Empty;
         public string KeyFortnox { get; set; } = string.Empty;
         public string KeyWinassist { get; set; } = string.Empty;
@@ -45,8 +49,22 @@ namespace Hyr.Api.Models
         public int? GLNnr { get; set; }
 
         public virtual Office? Office { get; set; }
+        public virtual User? CreatedByUser { get; set; }
+        public virtual User? UpdatedByUser { get; set; }
         public virtual ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
         public virtual ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
+
+        [NotMapped]
+        public string CreatedByName
+        {
+            get => CreatedByUser != null ? CreatedByUser.Name : string.Empty;
+        }
+
+        [NotMapped]
+        public string UpdatedByName
+        {
+            get => UpdatedByUser != null ? UpdatedByUser.Name : string.Empty;
+        }
 
 
 

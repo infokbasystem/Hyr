@@ -20,8 +20,12 @@ namespace Hyr.Api.Data
         public DbSet<Account> Accounts { get; set; } = null!;
         public DbSet<Article> Articles { get; set; } = null!;
         public DbSet<VatRate> VatRates { get; set; } = null!;
+        public DbSet<ItemType> ItemTypes { get; set; } = null!;
         public DbSet<ItemCategory> ItemCategories { get; set; } = null!;
         public DbSet<ItemModel> ItemModels { get; set; } = null!;
+        public DbSet<Department> Departments { get; set; } = null!;
+        public DbSet<OfficeItemType> OfficeItemTypes { get; set; } = null!;
+        public DbSet<ItemPackageItem> ItemPackageItems { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -32,6 +36,34 @@ namespace Hyr.Api.Data
                 entity.ToTable("Office");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Street).HasMaxLength(200);
+                entity.Property(e => e.ZipCode).HasMaxLength(200);
+                entity.Property(e => e.City).HasMaxLength(200);
+                entity.Property(e => e.Country).HasMaxLength(200);
+                entity.Property(e => e.InvoiceFee).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.GeneralContractText).HasMaxLength(2000);
+                entity.Property(e => e.DeductibleReductionText).HasMaxLength(2000);
+                entity.Property(e => e.LatePaymentInterest).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.Telephone).HasMaxLength(200);
+                entity.Property(e => e.MobilePhone).HasMaxLength(200);
+                entity.Property(e => e.EmergencyNumber).HasMaxLength(200);
+                entity.Property(e => e.FaxNr).HasMaxLength(200);
+                entity.Property(e => e.Email).HasMaxLength(200);
+                entity.Property(e => e.Web).HasMaxLength(200);
+                entity.Property(e => e.OrganizationNr).HasMaxLength(200);
+                entity.Property(e => e.VatNr).HasMaxLength(200);
+                entity.Property(e => e.Bank).HasMaxLength(200);
+                entity.Property(e => e.SwiftBic).HasMaxLength(200);
+                entity.Property(e => e.BankAccountNr).HasMaxLength(200);
+                entity.Property(e => e.BgNr).HasMaxLength(200);
+                entity.Property(e => e.PgNr).HasMaxLength(200);
+                entity.Property(e => e.DefaultPaymentDays).IsRequired(false);
+                entity.Property(e => e.ViewContractPricesOnPrint).IsRequired();
+                entity.Property(e => e.VatRegCity).HasMaxLength(200);
+                entity.Property(e => e.VatRegText).HasMaxLength(2000);
+                entity.Property(e => e.Iban).HasMaxLength(200);
+                entity.Property(e => e.CrediflowId).HasMaxLength(200);
+                entity.Property(e => e.GlnNr).HasMaxLength(200);
                 entity.Property(e => e.FortnoxRefreshToken).IsRequired().HasMaxLength(500);
             });
 
@@ -39,6 +71,7 @@ namespace Hyr.Api.Data
             {
                 entity.ToTable("User");
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.Role).IsRequired().HasMaxLength(50).HasDefaultValue("User");
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.PasswordHash).IsRequired();
@@ -84,6 +117,14 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.Customers)
                     .HasForeignKey(e => e.OfficeId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.UpdatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.UpdatedBy)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<Item>(entity =>
@@ -96,12 +137,18 @@ namespace Hyr.Api.Data
                 entity.Property(e => e.ItemModelId).IsRequired(false);
                 entity.Property(e => e.RegNr).HasMaxLength(100);
                 entity.Property(e => e.MachineNr).HasMaxLength(100);
+                entity.Property(e => e.SerialNr).HasMaxLength(100);
                 entity.Property(e => e.YearModel).HasMaxLength(50);
+                entity.Property(e => e.Fuel).HasMaxLength(200);
+                entity.Property(e => e.Equipment).HasMaxLength(500);
                 entity.Property(e => e.Note).HasMaxLength(500);
                 entity.Property(e => e.ItemNr).HasMaxLength(100);
                 entity.Property(e => e.PopupText).HasMaxLength(500);
                 entity.Property(e => e.IsActive).IsRequired();
                 entity.Property(e => e.Manufacturer).HasMaxLength(200);
+                entity.Property(e => e.ArticleNr).HasMaxLength(100);
+                entity.Property(e => e.ShowInPlanning).IsRequired();
+                entity.Property(e => e.SortNr).IsRequired(false);
                 entity.Property(e => e.ImportId).IsRequired(false);
                 entity.Property(e => e.ImportSource).HasMaxLength(200);
                 entity.Property(e => e.PlatformHeightMm).IsRequired(false);
@@ -115,9 +162,13 @@ namespace Hyr.Api.Data
                 entity.Property(e => e.PricePerWeek).IsRequired(false).HasColumnType("decimal(10,5)");
                 entity.Property(e => e.PricePerMonth).IsRequired(false).HasColumnType("decimal(10,5)");
                 entity.Property(e => e.PricePerKm).IsRequired(false).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.FuelConsumptionLitresPerKm).IsRequired(false).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.FuelConsumptionLitresPerHour).IsRequired(false).HasColumnType("decimal(10,5)");
                 entity.Property(e => e.ReplacementCost).IsRequired(false).HasColumnType("decimal(10,5)");
                 entity.Property(e => e.NrOfItemsTotal).IsRequired(false);
                 entity.Property(e => e.IsStorageItem).IsRequired();
+                entity.Property(e => e.IsPartOfPackage).IsRequired();
+                entity.Property(e => e.CalculatePriceFromPartPrices).IsRequired();
                 entity.Property(e => e.UnavailableForReservation).IsRequired();
                 entity.Property(e => e.UnavailableReason).HasMaxLength(2000);
                 entity.Property(e => e.UnavailableFrom).IsRequired(false);
@@ -136,13 +187,79 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.Items)
                     .HasForeignKey(e => e.ItemModelId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemType)
+                    .WithMany(e => e.Items)
+                    .HasForeignKey(e => e.ItemTypeCode)
+                    .HasPrincipalKey(e => e.Code)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedBy)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.UpdatedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.UpdatedBy)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<ItemPackageItem>(entity =>
+            {
+                entity.ToTable("ItemPackageItem");
+                entity.HasKey(e => new { e.ItemId, e.PackageItemId });
+                entity.Property(e => e.Quantity).HasColumnType("decimal(18,5)");
+
+                entity.HasOne(e => e.Item)
+                    .WithMany(e => e.PackageItems)
+                    .HasForeignKey(e => e.ItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.PackageItem)
+                    .WithMany(e => e.IncludedInItems)
+                    .HasForeignKey(e => e.PackageItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<OfficeItemType>(entity =>
+            {
+                entity.ToTable("OfficeItemType");
+                entity.HasKey(e => new { e.OfficeId, e.ItemTypeId });
+                entity.HasIndex(e => e.ItemTypeId);
+
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.OfficeItemTypes)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.ItemType)
+                    .WithMany(e => e.OfficeItemTypes)
+                    .HasForeignKey(e => e.ItemTypeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+                    modelBuilder.Entity<Department>(entity =>
+                    {
+                    entity.ToTable("Department");
+                    entity.HasKey(e => e.Id);
+                    entity.Property(e => e.OfficeId).IsRequired();
+                    entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                    entity.Property(e => e.IsActive).IsRequired();
+                    entity.HasOne(e => e.Office)
+                        .WithMany(e => e.Departments)
+                        .HasForeignKey(e => e.OfficeId)
+                        .OnDelete(DeleteBehavior.Restrict);
+                    });
 
             modelBuilder.Entity<Reservation>(entity =>
             {
                 entity.ToTable("Reservation");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.StatusCode).HasMaxLength(50);
+                entity.Property(e => e.DriverName).HasMaxLength(200);
+                entity.Property(e => e.PickUpBy).HasMaxLength(200);
+                entity.Property(e => e.TelephoneWorkplace).HasMaxLength(200);
+                entity.Property(e => e.DeliveryPlace).HasMaxLength(500);
+                entity.Property(e => e.CustomerMarking).HasMaxLength(500);
                 entity.Property(e => e.DriverMobilePhone).HasMaxLength(200);
                 entity.Property(e => e.DriverNote).HasMaxLength(2000);
                 entity.Property(e => e.DriverLicenceNr).HasMaxLength(200);
@@ -362,6 +479,15 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.Articles)
                     .HasForeignKey(e => e.VatRateId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ItemType>(entity =>
+            {
+                entity.ToTable("ItemType");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Code).HasMaxLength(50);
+                entity.Property(e => e.Name).HasMaxLength(200);
+                entity.HasAlternateKey(e => e.Code);
             });
 
             modelBuilder.Entity<ItemCategory>(entity =>

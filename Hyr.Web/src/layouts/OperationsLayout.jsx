@@ -9,22 +9,26 @@ import OperationsSubMenu from "../pages/operations/OperationsSubMenu";
 
 const OperationsLayout = () => {
     const location = useLocation();
-    const activeOverridePath = location.pathname.startsWith("/customer/") ? "/operations/searchcustomer" : "";
+    const activeOverridePath = location.pathname.startsWith("/customer/")
+        ? "/operations/customers"
+        : location.pathname.startsWith("/item/")
+            ? "/operations/items"
+            : "";
 
     return (
         <PdfProvider>
-            <div className="flex flex-col min-h-screen">
+            <div className="relative flex flex-col min-h-screen">
                 <Header />
                 <div className="sticky top-0 z-50">
                     <Navbar />
                 </div>
                 <OperationsSubMenu activeOverridePath={activeOverridePath} />
                 <div className="relative flex grow items-stretch bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50" style={{ backgroundImage: `url(${bg})` }}>
-                    <div className="relative flex-grow min-w-0 overflow-hidden pt-4 px-0">
+                    <div className="relative flex-grow min-w-0 overflow-hidden">
                         <Outlet />
-                        <PdfPanel />
                     </div>
                 </div>
+                <PdfPanel topOffset="107px" />
             </div>
 
         </PdfProvider>

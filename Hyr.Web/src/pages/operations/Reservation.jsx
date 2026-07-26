@@ -1,10 +1,10 @@
 import React, { useContext, useLayoutEffect } from 'react'
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from "react-router";
+import { useParams, useBlocker } from "react-router";
 import { useNavigate } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Printer, Search, Save, Trash2, RotateCcw } from 'lucide-react';
 
+import ActionButton from '../../components/ActionButton';
 import { usePdf } from '../../contexts/PdfContext';
 import { formatUserName } from '../../utils/nameFormatters';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -19,7 +19,7 @@ import ReservationItemHaki from './ReservationItemHaki';
 import ReservationItemAlu from './ReservationItemAlu';
 import ReservationItemEquipment from './ReservationItemEquipment';
 import apiClient from '../../lib/apiClient';
-
+import { getSharedRequest } from '../../lib/sharedRequest';
 
 const Reservation = () => {
     // const { user, setUser } = useContext(AuthContext);
@@ -31,18 +31,29 @@ const Reservation = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
     const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [listsLoaded, setListsLoaded] = useState(false);
     const [itemCategories, setItemCategories] = useState([]);
+    const [reservationFormOptions, setReservationFormOptions] = useState({ itemTypes: [] });
 
     const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
+
+    const skipUnsavedGuardRef = useRef(false);
 
     const defaultBadges = [
         { text: 'Epostadress finns', color: '#56983cff' }
     ];
 
+    const isVehicleEnabledForOffice = (reservationFormOptions.itemTypes || [])
+        .some(itemType => (itemType?.code || '').toUpperCase() === 'VEHICLE');
+
 
     const hasUnsavedChanges = () => {
-        if (!originalReservation) return true; // if we haven't loaded original data yet, consider it as having unsaved changes to prevent accidental navigation
+        if (skipUnsavedGuardRef.current) {
+            return false;
+        }
+        
+        if (!originalReservation) return true;
         if (!reservation) return false;
         const isSame = JSON.stringify(reservation) !== JSON.stringify(originalReservation);
         console.log('hasUnsavedChanges:', isSame);
@@ -52,7 +63,46 @@ const Reservation = () => {
 
     const handleUnsavedWarningConfirm = () => {
         setShowUnsavedWarning(false);
+
+        if (navigationBlocker.state === 'blocked') {
+            navigationBlocker.proceed();
+        }
     };
+
+    const handleUnsavedWarningClose = () => {
+        setShowUnsavedWarning(false);
+
+        if (navigationBlocker.state === 'blocked') {
+            navigationBlocker.reset();
+        }
+    };
+
+    const navigationBlocker = useBlocker(({ currentLocation, nextLocation }) => {
+        return hasUnsavedChanges() && currentLocation.pathname !== nextLocation.pathname;
+    });
+
+    useEffect(() => {
+        if (navigationBlocker.state === 'blocked') {
+            setShowUnsavedWarning(true);
+        }
+    }, [navigationBlocker.state]);
+
+    useEffect(() => {
+        function handleBeforeUnload(event) {
+            if (!hasUnsavedChanges()) {
+                return;
+            }
+
+            event.preventDefault();
+            event.returnValue = '';
+        }
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [reservation, originalReservation]);
 
     const handleDeleteClick = () => {
         setShowDeleteConfirm(true);
@@ -125,21 +175,17 @@ const Reservation = () => {
         });
     };
 
-    const handleSaveOrClose = async (e) => {
-        e.preventDefault();
-        if (hasUnsavedChanges()) {
-            await submitReservation(e);
-        } else {
-            if (window.history.length > 1) {
-                window.history.back();
-            } else {
-                window.close();
-            }
+    const handleBackClick = () => {
+        if (window.history.length > 1) {
+            navigate(-1);
+            return;
         }
+
+        window.close();
     };
 
 
-    const getReservationById = async (id) => {
+    const getReservationById = async (id, { dedupe = false, isActive = () => true } = {}) => {
         console.log('getReservationById', id);
         if (id === 'new') {
             const newReservation = {
@@ -147,13 +193,21 @@ const Reservation = () => {
                 customerName: 'Allan',
                 customerOrgNr: '',
                 mobilePhone: '',
+                driverName: '',
+                pickUpBy: '',
+                telephoneWorkplace: '',
+                deliveryPlace: '',
+                customerMarking: '',
+                note: '',
                 reservationItems: []
             };
             setReservation(newReservation);
+            skipUnsavedGuardRef.current = false;
             return newReservation;
         }
-        try {
-            const queryParams = ''; //calculationId ? `?calculationId=${calculationId}` : '';
+        
+        const fetchReservation = async () => {
+            const queryParams = '';
             const response = await apiClient.get(`/reservation/${id}${queryParams}`);
             const data = response.data;
 
@@ -166,50 +220,100 @@ const Reservation = () => {
                 url: att.path ?? ''
             }));
 
-            const reservationData = { ...data, attachments };
+            return { ...data, attachments };
+        };
+
+        try {
+            const reservationData = dedupe
+                ? await getSharedRequest(`reservation:${id}`, fetchReservation)
+                : await fetchReservation();
+
+            if (!isActive()) {
+                return reservationData;
+            }
+
             setReservation(reservationData);
             setOriginalReservation(JSON.parse(JSON.stringify(reservationData)));
-            // pass the default badges into PdfContext (can be updated later)
+            skipUnsavedGuardRef.current = false;
             try { setBadges && setBadges(defaultBadges); } catch (e) { /* ignore if unavailable */ }
-            // setAttachedFiles(attachments.map(f => ({ ...f })));
             return reservationData;
         }
         catch (error) {
+            if (!isActive()) {
+                return null;
+            }
+            
             console.error('Error getting reservation by ID:', error);
             navigate('/something-went-wrong');
-            // setMessages([{ type: 'error', text: 'Ett fel uppstod vid hämtning av bokningen' }]);
             return null;
         }
     }
 
+    const getReservationFormOptions = async ({ dedupe = false, isActive = () => true } = {}) => {
+        const fetchFormOptions = async () => {
+            const response = await apiClient.get('/reservation/form-options');
+            return response?.data || { itemTypes: [] };
+        };
+
+        try {
+            const formOptions = dedupe
+                ? await getSharedRequest('reservation-form-options', fetchFormOptions)
+                : await fetchFormOptions();
+
+            if (!isActive()) {
+                return formOptions;
+            }
+
+            setReservationFormOptions(formOptions);
+            return formOptions;
+        } catch (error) {
+            if (!isActive()) {
+                return { itemTypes: [] };
+            }
+
+            console.error('Error getting reservation form options:', error);
+            setReservationFormOptions({ itemTypes: [] });
+            return { itemTypes: [] };
+        }
+    }
+
     const submitReservation = async (e) => {
-        e.preventDefault();
-        console.log('Form submitted');
+        e?.preventDefault?.();
+
         if (!reservation) {
-            console.error('No reservation data to submit');
             return;
         }
-        console.log('reservation:', reservation);
 
         const reservationData = { ...reservation };
-        let res;
+
         try {
-            res = await apiClient.post('/reservation', reservationData);
+            let reservationId = reservation.id;
+
+            // POST to create/update reservation
+            const res = await apiClient.post('/reservation', reservationData);
+            reservationId = res.data;
+
+            // Refresh the reservation data from API
+            const refreshedReservation = await getReservationById(reservationId, { dedupe: false });
+            setReservation(refreshedReservation);
+            setOriginalReservation(JSON.parse(JSON.stringify(refreshedReservation)));
+            setMessages([{ type: 'success', text: 'Bokningen sparad' }]);
+
+            // Navigate if ID changed (from new → ID)
+            if (`${params.id}` !== `${reservationId}`) {
+                skipUnsavedGuardRef.current = true;
+                navigate(`/operations/reservation/${reservationId}`, { replace: true });
+            }
+
+            clearStale?.();
+            // Reload the PDF after successful save without triggering unsaved warning
+            if (showPdfPanel) {
+                await getPdf({ ignoreUnsaved: true });
+            }
         } catch (error) {
             const errorText = error?.response?.data ?? error?.message;
             setMessages([{ type: 'error', text: errorText }]);
-            return;
         }
-        const data = res.data;
-        console.log('reservation updated:', data);
-        await getReservationById(data);
-        window.history.replaceState({}, '', `/operations/reservation/${data}`);
-        clearStale?.();
-        // Reload the PDF after successful save without triggering unsaved warning
-        if (showPdfPanel) {
-            await getPdf({ ignoreUnsaved: true });
-        }
-        setMessages([{ type: 'success', text: 'Bokningen sparad' }]);
     };
 
     const deleteReservation = async () => {
@@ -268,14 +372,26 @@ const Reservation = () => {
     };
 
 
-    // Initial data fetching - runs once on mount
+    // Initial data fetching - runs when ID changes
     useEffect(() => {
-        if (params.id === 'new') {
-            getReservationById('new');
-        } else {
-            getReservationById(params.id);
-        }
-    }, []);
+        let isActive = true;
+        const id = params.id === 'new' ? 'new' : params.id;
+        
+        setLoading(true);
+        Promise.all([
+            getReservationFormOptions({ dedupe: true, isActive: () => isActive }),
+            getReservationById(id, { dedupe: true, isActive: () => isActive })
+        ])
+            .finally(() => {
+                if (isActive) {
+                    setLoading(false);
+                }
+            });
+        
+        return () => {
+            isActive = false;
+        };
+    }, [params.id]);
 
     // Cleanup: close PDF panel when component unmounts (navigating away)
     useEffect(() => {
@@ -286,9 +402,61 @@ const Reservation = () => {
 
 
 
+    if (loading) {
+        return (
+            <div className="relative flex flex-col h-full md:px-[clamp(8px,5vw,10vw)] animate-pulse">
+                <div className="mt-1 flex h-full items-stretch">
+                    {/* Sidebar skeleton */}
+                    <aside className="mt-6 pr-3 flex flex-col w-70 border-r border-gray-300 mb-8">
+                        <div className="space-y-3 px-2 pb-4">
+                            <div className="h-3 bg-gray-200 rounded w-1/2 mx-auto" />
+                            <div className="h-3 bg-gray-200 rounded w-3/4" />
+                            <div className="h-3 bg-gray-200 rounded w-3/4" />
+                        </div>
+                        <hr className="border-gray-200" />
+                        <div className="space-y-3 px-2 pt-4">
+                            <div className="h-3 bg-gray-200 rounded w-1/2 mx-auto" />
+                            <div className="h-6 bg-gray-200 rounded" />
+                            <div className="h-6 bg-gray-200 rounded" />
+                        </div>
+                    </aside>
+                    {/* Main area skeleton */}
+                    <div className="flex-grow pl-10">
+                        <div className="h-4 bg-gray-200 rounded w-40 mb-6" />
+                        {/* Action buttons row */}
+                        <div className="flex gap-4 mb-8">
+                            <div className="h-8 bg-gray-200 rounded w-20" />
+                            <div className="h-8 bg-gray-200 rounded w-20" />
+                            <div className="h-8 bg-gray-200 rounded w-24" />
+                        </div>
+                        {/* Form fields */}
+                        <div className="grid grid-cols-[350px_300px_380px_1fr] gap-15 ml-3">
+                            <div className="space-y-3">
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                            </div>
+                            <div className="space-y-3">
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                            </div>
+                            <div className="space-y-3">
+                                <div className="h-15 bg-gray-200 rounded" />
+                                <div className="h-6 bg-gray-200 rounded" />
+                                <div className="h-15 bg-gray-200 rounded" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="relative flex flex-col h-full p-2">
-            <h2 className="ml-5 pb-2 text-sm text-gray-700">{reservation?.id ? (<>Bokning <span className="text-red-500">{reservation?.id}</span></>) : ("Ny bokning")}</h2>
+        <div className="relative flex flex-col h-full md:px-[clamp(8px,5vw,10vw)]">
 
             {/* Customer Search Modal */}
             <CustomerSearchModal
@@ -300,15 +468,12 @@ const Reservation = () => {
             {/* Unsaved Changes Warning Modal */}
             <ConfirmationModal
                 isOpen={showUnsavedWarning}
-                onClose={() => {
-                    setShowUnsavedWarning(false);
-                    setPendingAction(null);
-                }}
+                onClose={handleUnsavedWarningClose}
                 onConfirm={handleUnsavedWarningConfirm}
                 title="OSPARADE ÄNDRINGAR"
                 message="Du har osparade ändringar. Vänligen spara fakturan innan du fortsätter."
-                confirmText="Jag förstår"
-                cancelText="Avbryt"
+                confirmText="Fortsätt"
+                cancelText="Stanna kvar"
                 isDestructive={false}
             />
 
@@ -357,56 +522,139 @@ const Reservation = () => {
                 </div>
             )}
 
-            <div className='flex h-full items-stretch'>
+            <div className='mt-1 flex h-full items-stretch'>
 
-                <div className='flex-grow pe-10 py-2 ml-2'>
+                <aside className="mt-6 pr-3 flex flex-col w-70 border-r border-gray-300 mb-8">
+                    <div className="space-y-4 pr-0 pb-4 ml-2">
+                        <h2 className="text-sm text-center text-gray-500">Info</h2>
+                        <div className="space-y-2 text-xs">
+                            <div className="grid grid-cols-[65px_110px_1fr] mx-2">
+                                {reservation?.createdDate && (
+                                    <>
+                                        <div className="text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            <span>Skapad:</span>
+                                        </div>
+                                        <div className="text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            {new Date(reservation.createdDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                        <div className="text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            {reservation?.createdByUserName && `av ${formatUserName(reservation.createdByUserName)}`}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-[65px_110px_1fr] mx-2">
+                                {reservation?.modifiedDate && (
+                                    <>
+                                        <div className="text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            <span>Redigerad:</span>
+                                        </div>
+                                        <div className="text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            {new Date(reservation.modifiedDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                        <div className="text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            {reservation?.modifiedByUserName && `av ${formatUserName(reservation.modifiedByUserName)}`}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr className="border-gray-300 dark:border-white" />
+
+                    <h2 className="text-sm text-center text-gray-500 pt-4">Meddelanden</h2>
+                    {messages.length == 0 ? (
+                        <p className='text-xs text-center font-light mt-4'>Inga meddelanden</p>
+                    ) : (
+                        <ul className="mt-2 space-y-2">
+                            {messages.map((message, index) => (
+                                <li key={index} className={`text-center text-xs p-2 rounded border border-gray-200 ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                    {message.text}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    <hr className="mt-7 border-gray-300 dark:border-white" />
+                    {/* {inquiry && attachedFiles && (
+                        <FileList
+                            files={attachedFiles}
+                            onRemove={handleRemoveFile}
+                            onAdd={handleAddFile}
+                            onEdit={handleEditFile}
+                            paths={[
+                                { id: 'docs', name: 'Dokument' },
+                                { id: 'specs', name: 'Specifikationer' },
+                                { id: 'designs', name: 'Design' }
+                            ]}
+                            entityId={inquiry?.id}
+                            entityType="inquiry"
+                        />
+                    )} */}
+                </aside>
+
+                <div className='flex-grow pl-10'>
+                    <h2 className="pb-3 text-sm text-gray-500 tracking-[0.10em] font-semibold">{reservation?.id ? (<>BOKNING <span className="ml-2">Nr. {reservation?.id}</span></>) : ("Ny bokning")}</h2>
+
                     <form onSubmit={submitReservation} autoComplete='off'>
                         <div className="flex justify-between w-full mb-6">
-                            <div className='flex items-center space-x-4'>
-                                <button
-                                    type='button'
-                                    onClick={handleSaveOrClose}
-                                    className={`w-25 shadow-md/30 text-xs text-white ${hasUnsavedChanges() ? 'bg-lime-700 hover:bg-lime-900' : 'bg-orange-400 hover:bg-orange-500'} px-5 p-[5px]`}>
-                                    {hasUnsavedChanges() ? 'Spara' : 'Stäng'}
-                                </button>
+                            <div className='flex items-center gap-5 flex-wrap'>
+                                <ActionButton
+                                    label="Tillbaka"
+                                    icon={ArrowLeft}
+                                    onClick={handleBackClick}
+                                    accent="sky"
+                                />
+                                <ActionButton
+                                    label="Spara"
+                                    icon={Save}
+                                    onClick={submitReservation}
+                                    accent="lime"
+                                />
                                 {reservation?.id != 0 && (
-                                    <button
-                                        type="button"
+                                    <ActionButton
+                                        label="Skriv ut"
+                                        icon={Printer}
                                         onClick={getPdf}
-                                        className="w-25 ml-5 shadow-md/30 text-xs text-gray bg-blue-200 hover:bg-blue-300 px-4 py-[5px]">
-                                        Skriv ut
-                                    </button>
+                                        accent="sky"
+                                    />
                                 )}
-                                <button
-                                    type='button'
-                                    className="w-30 ml-5 shadow-md/30 text-xs text-gray bg-lime-300 hover:bg-lime-400 px-4 py-[5px]"
-                                    onClick={() => setShowCustomerSearch(true)}>
-                                    Välj kund
-                                </button>
-                                <button
-                                    type='button'
-                                    className="W-23 ml-20 shadow-md/30 text-xs text-gray bg-amber-200 hover:bg-amber-300 px-4 py-[5px]">
-                                    Lämna ut
-                                </button>
-                                <button
-                                    type='button'
-                                    className="W-23 shadow-md/30 text-xs text-gray bg-amber-200 hover:bg-amber-300 px-4 py-[5px]">
-                                    Återlämna
-                                </button>
-                                <button
-                                    type='button'
-                                    className="w-23 shadow-md/30 text-xs text-gray bg-amber-200 hover:bg-amber-300 px-4 py-[5px]">
-                                    Checka in
-                                </button>
+                                <ActionButton
+                                    label="Välj kund"
+                                    icon={Search}
+                                    onClick={() => setShowCustomerSearch(true)}
+                                    accent="teal"
+                                />
+                                <div className='ml-20 flex items-center flex-wrap gap-3'>
+                                    <ActionButton
+                                        label="Lämna ut"
+                                        icon={ArrowRight}
+                                        onClick={() => { }}
+                                        accent="yellow"
+                                    />
+                                    <ActionButton
+                                        label="Återlämna"
+                                        icon={RotateCcw}
+                                        onClick={() => { }}
+                                        accent="yellow"
+                                    />
+                                    <ActionButton
+                                        label="Checka in"
+                                        icon={CheckCircle2}
+                                        onClick={() => { }}
+                                        accent="yellow"
+                                    />
+                                </div>
+
                             </div>
-                            <div className='flex items-center space-x-4'>
+                            <div className='flex items-center gap-5'>
                                 {reservation?.id != 0 && (
-                                    <button
-                                        type="button"
+                                    <ActionButton
+                                        label="Radera"
+                                        icon={Trash2}
                                         onClick={handleDeleteClick}
-                                        className="shadow-md/30 text-xs text-white bg-red-700 hover:bg-red-800 px-5 p-[5px] ml-5">
-                                        Radera
-                                    </button>
+                                        accent="rose"
+                                    />
                                 )}
                             </div>
                         </div>
@@ -434,43 +682,56 @@ const Reservation = () => {
                                     onChange={(e) => handleChange('email', e)}
                                     labelWidth="w-20" />
                             </span>
-                            <span>
-                                <LabeledInput
-                                    label="Förare"
-                                    value={reservation?.driverName || ''}
-                                    onChange={(e) => handleChange('driverName', e)}
-                                    labelWidth="w-20" />
-                                <LabeledInput
-                                    label="Förare, tfn"
-                                    value={reservation?.driverTelephone || ''}
-                                    onChange={(e) => handleChange('driverTelephone', e)}
-                                    labelWidth="w-20" />
-                                <LabeledInput
-                                    label="Körkortsnr."
-                                    value={reservation?.driverLicenceNr || ''}
-                                    onChange={(e) => handleChange('driverLicenceNr', e)}
-                                    labelWidth="w-20" />
-                                <LabeledInput
-                                    label="Referens"
-                                    value={reservation?.reference || ''}
-                                    onChange={(e) => handleChange('reference', e)}
-                                    labelWidth="w-20" />
-                            </span>
+                            {isVehicleEnabledForOffice && (
+                                <span id="driver-info">
+                                    <LabeledInput
+                                        label="Förare"
+                                        value={reservation?.driverName || ''}
+                                        onChange={(e) => handleChange('driverName', e)}
+                                        labelWidth="w-20" />
+                                    <LabeledInput
+                                        label="Förare, tfn"
+                                        value={reservation?.telephoneWorkplace || ''}
+                                        onChange={(e) => handleChange('telephoneWorkplace', e)}
+                                        labelWidth="w-20" />
+                                    <LabeledInput
+                                        label="Hämtas av"
+                                        value={reservation?.pickUpBy || ''}
+                                        onChange={(e) => handleChange('pickUpBy', e)}
+                                        labelWidth="w-20" />
+                                    <LabeledInput
+                                        label="Körkortsnr."
+                                        value={reservation?.driverLicenceNr || ''}
+                                        onChange={(e) => handleChange('driverLicenceNr', e)}
+                                        labelWidth="w-20" />
+                                    <LabeledInput
+                                        label="Referens"
+                                        value={reservation?.reference || ''}
+                                        onChange={(e) => handleChange('reference', e)}
+                                        labelWidth="w-20" />
+                                </span>
+                            )}
                             <span>
                                 <LabeledTextArea
                                     name='internalNote'
                                     label='Notering, intern'
-                                    value={reservation?.internalNote || ''}
-                                    onChange={(e) => handleChange('internalNote', e)}
+                                    value={reservation?.note || ''}
+                                    onChange={(e) => handleChange('note', e)}
                                     labelWidth="w-18"
                                     margintop="0"
                                     height='h-15'
                                     placeholder="" />
+                                <LabeledInput
+                                    label="Leveransplats"
+                                    value={reservation?.deliveryPlace || ''}
+                                    onChange={(e) => handleChange('deliveryPlace', e)}
+                                    labelWidth="w-18"
+                                />
                                 <LabeledTextArea
                                     name='externalNote'
-                                    label='Notering, kund'
-                                    value={reservation?.externalNote || ''}
-                                    onChange={(e) => handleChange('externalNote', e)}
+                                    label='Kundmärkning'
+                                    value={reservation?.customerMarking || ''}
+                                    onChange={(e) => handleChange('customerMarking', e)}
                                     labelWidth="w-18"
                                     margintop="0"
                                     height='h-15'
@@ -600,74 +861,6 @@ const Reservation = () => {
                         </div>
 
                     </form>
-                </div>
-
-                {/* Right bar */}
-                <div className="flex flex-col w-70 border-l border-gray-300 px-4 py-2 mb-20">
-                    <div className="space-y-3">
-                        <h2 className="text-sm text-center text-gray-500">Info</h2>
-                        <div className="space-y-2 text-xs">
-                            <div className="grid grid-cols-[65px_110px_1fr] mx-2">
-                                {reservation?.createdDate && (
-                                    <>
-                                        <div className="text-gray-500">
-                                            <span className="font-medium">Skapad:</span>
-                                        </div>
-                                        <div className="text-gray-700">
-                                            {new Date(reservation.createdDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                        <div className="text-gray-500">
-                                            {reservation?.createdByUserName && `av ${formatUserName(reservation.createdByUserName)}`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-[65px_110px_1fr] mx-2">
-                                {reservation?.modifiedDate && (
-                                    <>
-                                        <div className="text-gray-500">
-                                            <span className="font-medium">Redigerad:</span>
-                                        </div>
-                                        <div className="text-gray-700">
-                                            {new Date(reservation.modifiedDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                        <div className="text-gray-500">
-                                            {reservation?.modifiedByUserName && `av ${formatUserName(reservation.modifiedByUserName)}`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <hr className="mt-7 border-gray-300 dark:border-white" />
-                    <h2 className="text-sm text-center text-gray-500 mt-5">Meddelanden</h2>
-                    {messages.length == 0 ? (
-                        <p className='text-xs text-center font-light mt-5'>Inga meddelanden</p>
-                    ) : (
-                        <ul className="mt-2 space-y-2">
-                            {messages.map((message, index) => (
-                                <li key={index} className={`text-center text-xs p-2 rounded border border-gray-200 ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                    {message.text}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                    <hr className="mt-7 border-gray-300 dark:border-white" />
-                    {/* {inquiry && attachedFiles && (
-                        <FileList
-                            files={attachedFiles}
-                            onRemove={handleRemoveFile}
-                            onAdd={handleAddFile}
-                            onEdit={handleEditFile}
-                            paths={[
-                                { id: 'docs', name: 'Dokument' },
-                                { id: 'specs', name: 'Specifikationer' },
-                                { id: 'designs', name: 'Design' }
-                            ]}
-                            entityId={inquiry?.id}
-                            entityType="inquiry"
-                        />
-                    )} */}
                 </div>
 
             </div>

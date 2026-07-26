@@ -12,9 +12,19 @@ import bgsettings from '../assets/appbar.settings.svg'
 const Navbar = () => {
 
     const location = useLocation();
+    const getActiveRootPath = () => {
+        const rootPath = location.pathname.split('/')[1] || '';
+
+        if (rootPath === 'customer' || rootPath === 'item') {
+            return 'operations';
+        }
+
+        return rootPath;
+    };
+
     const getNavLinkClass = (path) => {
-        // console.log(location.pathname.split('/')[1], path);
-        const isActivePart = (location.pathname.split('/')[1] === path) ? ((path === '' ? 'overview' : path) + '-backcolor') : '';
+        const activeRootPath = getActiveRootPath();
+        const isActivePart = (activeRootPath === path) ? ((path === '' ? 'overview' : path) + '-backcolor') : '';
         const className = (path === '' ? 'overview' : '') + path + ' ' + isActivePart;
         return className;
     };
@@ -61,7 +71,7 @@ const Navbar = () => {
                         <NavLink to='/settings'>
                             <div className={'div-general relative'}>
                                 <img src={bgsettings} alt="" className='pointer-events-none absolute left-1/2 top-[9px] h-5 w-auto -translate-x-1/2' />
-                                INSTÄLLNINGAR
+                                REGISTER
                             </div>
                         </NavLink>
                     </li>

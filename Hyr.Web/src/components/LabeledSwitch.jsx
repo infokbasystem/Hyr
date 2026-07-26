@@ -7,6 +7,7 @@ const LabeledSwitch = ({
     field,
     value,
     onChange,
+    onClick,
     label,
     labelWidth,
     marginTop,
@@ -32,7 +33,7 @@ const LabeledSwitch = ({
                 id={resolvedId}
                 name={name}
                 checked={value}
-                onChange={(rowId, field, checked) => onChange(rowId, field, checked)}
+                onChange={(checked) => (onChange || onClick)?.(checked)}
                 disabled={disabled}
             />
             {/* <input type="checkbox" value={value} onClick={(e) => onClick(e)} className="sr-only peer" />

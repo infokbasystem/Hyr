@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
                 },
             });
             const data = res.data;
-            localStorage.setItem("user", data.user);
+            localStorage.setItem("user", JSON.stringify(data.user));
             localStorage.setItem("token", data.token);
             setUser(data.user);
         } catch (error) {
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
             throw new Error("Invalid credentials");
         }
         const data = res.data;
-        localStorage.setItem("user", data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
         localStorage.setItem("token", data.token);
         setUser(data.user);
     };

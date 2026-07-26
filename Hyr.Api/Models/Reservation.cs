@@ -13,6 +13,11 @@ namespace Hyr.Api.Models
         public int? ReservationNr { get; set; }
         public int? CustomerId { get; set; }
         public string StatusCode { get; set; } = string.Empty;
+        public string DriverName { get; set; } = string.Empty;
+        public string PickUpBy { get; set; } = string.Empty;
+        public string TelephoneWorkplace { get; set; } = string.Empty;
+        public string DeliveryPlace { get; set; } = string.Empty;
+        public string CustomerMarking { get; set; } = string.Empty;
         public string DriverMobilePhone { get; set; } = string.Empty;
         public string DriverNote { get; set; } = string.Empty;
         public string DriverLicenceNr { get; set; } = string.Empty;

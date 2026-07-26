@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeftCircle, ArrowRightCircle, ChevronDown, ChevronUp, ChevronsUpDown, Printer } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import Select from 'react-select'
@@ -208,7 +208,7 @@ function exportRowsAsCsv(rows) {
   URL.revokeObjectURL(url)
 }
 
-export default function ReservationSearch() {
+export default function Reservations() {
   const navigate = useNavigate()
   const cachedState = readCachedSearchState()
   const skeletonTimerRef = useRef(null)
@@ -439,9 +439,8 @@ export default function ReservationSearch() {
   }
 
   return (
-    <div className="flex flex-col h-full py-2">
-      <div className='ml-10 text-sm text-gray-500'>Sök bokningar</div>
-      <div className={`mt-3 mx-8 flex flex-wrap items-center gap-5 ${loading && !hasSearchSnapshot ? 'pointer-events-none opacity-70' : ''}`}>
+    <div className="flex h-full flex-col px-0 py-2 md:px-[clamp(8px,10vw,20vw)]">
+      <div className={`mt-3 flex flex-wrap items-center gap-5 ${loading && !hasSearchSnapshot ? 'pointer-events-none opacity-70' : ''}`}>
 
         <DateRangePicker
           presets={['this-month', 'last-month', 'last-3-months', 'last-12-months', 'last-year', 'year-to-date']}
@@ -473,7 +472,7 @@ export default function ReservationSearch() {
             value={filters.freeText}
             onChange={(event) => handleFilterChange(event.target.value)}
             placeholder="Sök"
-            className="h-7 w-full rounded-full border border-lime-600 bg-white px-4 text-xs text-gray-700 outline-none transition placeholder:text-gray-500 focus:border-lime-700"
+            className="h-7 w-full rounded-full border border-[#84cc16] bg-white px-4 text-xs text-gray-700 outline-none transition placeholder:text-gray-500 focus:border-[#65a30d]"
           />
         </div>
 
@@ -545,12 +544,12 @@ export default function ReservationSearch() {
 
 
       {error && (
-        <div className="mx-8 mt-3 w-fit rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+        <div className="mt-3 w-fit rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
           {error}
         </div>
       )}
 
-      <div className="mx-8 border-t border-gray-300 rounded-sm py-1 mt-4 h-full overflow-y-auto">
+      <div className="border-t border-gray-300 rounded-sm py-1 mt-4 h-full overflow-y-auto">
         <table className="table-fixed min-w-[1150px] w-full border-collapse text-xs" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
           <thead>
             <tr>
@@ -604,21 +603,17 @@ export default function ReservationSearch() {
                     onClick={() => toggleRow(row.id)}
                   >
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">
-                      <button
-                        type="button"
-                        className="font-medium text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
-                        onClick={(event) => {
-                          event.stopPropagation()
-
-                          if (!row.id) {
-                            return
-                          }
-
-                          navigate(`/operations/reservation/${row.id}`)
-                        }}
-                      >
-                        {row.reservationNr ?? ''}
-                      </button>
+                      {row.id ? (
+                        <Link
+                          to={`/operations/reservation/${row.id}`}
+                          className="font-medium text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {row.reservationNr ?? ''}
+                        </Link>
+                      ) : (
+                        row.reservationNr ?? ''
+                      )}
                     </td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">{row.customerName ?? ''}</td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">{row.startDate ?? ''}</td>

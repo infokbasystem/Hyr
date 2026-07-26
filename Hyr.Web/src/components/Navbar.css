@@ -17,7 +17,7 @@
 #menu li {
     float: left;
     height: 52px;
-    width: 120px;
+    width: 130px;
     display: inline;
     margin: 0px 0px;
     list-style: none;
@@ -71,5 +71,5 @@
 }
 
 #menu .settings:hover, .settings-backcolor {
-    background-color: #40AF77;
+    background-color: #80ada0;
 }

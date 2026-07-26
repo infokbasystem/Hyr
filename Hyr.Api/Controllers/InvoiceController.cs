@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Hyr.Api.Data;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
+using Hyr.Api.Services;
 using Hyr.Api.Utils;
 
 using Fortnox.SDK;
@@ -22,11 +23,13 @@ namespace Hyr.Api.Controllers
     public class InvoiceController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
         // private readonly OldApplicationDbContext _context;
 
-        public InvoiceController(ApplicationDbContext context)
+        public InvoiceController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
             // _context = oldContext;
         }
 
@@ -34,12 +37,7 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<ActionResult<PagedResult<Invoice>>> GetInvoices([FromQuery] InvoiceFilter filter)
         {
-            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                             ?? User?.FindFirst("sub")?.Value
-                             ?? User?.FindFirst("id")?.Value;
-            _ = int.TryParse(userIdClaim, out int userId);
-
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });
@@ -153,12 +151,7 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<ActionResult<Invoice>> GetInvoice(int id)
         {
-            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                     ?? User?.FindFirst("sub")?.Value
-                     ?? User?.FindFirst("id")?.Value;
-            _ = int.TryParse(userIdClaim, out int userId);
-
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });
@@ -260,12 +253,7 @@ namespace Hyr.Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                                 ?? User?.FindFirst("sub")?.Value
-                                 ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });

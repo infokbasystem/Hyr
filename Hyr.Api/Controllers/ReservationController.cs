@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Hyr.Api.Data;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
+using Hyr.Api.Services;
 using Hyr.Api.Utils;
 using Hyr.Api.Dtos;
 using System.Linq.Expressions;
@@ -19,102 +20,12 @@ namespace Hyr.Api.Controllers
     public class ReservationController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
 
-        public ReservationController(ApplicationDbContext context)
+        public ReservationController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
-        }
-
-        [HttpGet]
-        [Authorize]
-        public async Task<ActionResult<PagedResult<Reservation>>> GetReservations([FromQuery] ReservationFilter filter)
-        {
-            try
-            {
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                         ?? User?.FindFirst("sub")?.Value
-                         ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
-                if (user == null)
-                {
-                    return Unauthorized(new { message = "User not found" });
-                }
-
-                var query = _context.Reservations
-                    .Where(r => r.OfficeId == user.OfficeId);
-
-                if (filter.ReservationNr.HasValue)
-                {
-                    query = query.Where(r => r.ReservationNr == filter.ReservationNr.Value);
-                }
-
-                var totalCount = await query.CountAsync();
-
-                var totalRecords = await query.CountAsync();
-
-                // Apply sorting (default to CreatedDate:desc if not specified)
-                var sortBy = filter.SortBy ?? new[] { "CreatedDate:desc" };
-                query = query.ApplyMultiSort(sortBy);
-
-                var pagedQuery = await query
-                    .Skip((filter.Page - 1) * filter.PageSize)
-                    .Take(filter.PageSize)
-                    .ToListAsync();
-
-                var result = new List<Reservation>();
-                foreach (var r in pagedQuery)
-                {
-                    var reservation = new Reservation
-                    {
-                        Id = r.Id,
-                        OfficeId = r.OfficeId,
-                        CreatedByUserId = r.CreatedByUserId,
-                        CreatedDate = r.CreatedDate,
-                        ModifiedByUserId = r.ModifiedByUserId,
-                        ModifiedDate = r.ModifiedDate,
-                        ReservationNr = r.ReservationNr,
-                        CustomerId = r.CustomerId,
-                        StatusCode = r.StatusCode,
-                        DriverMobilePhone = r.DriverMobilePhone,
-                        DriverNote = r.DriverNote,
-                        DriverLicenceNr = r.DriverLicenceNr,
-                        DriverLicenceExpireDate = r.DriverLicenceExpireDate,
-                        Orderer = r.Orderer,
-                        CustomerName = r.CustomerName,
-                        Address = r.Address,
-                        ZipCode = r.ZipCode,
-                        Email = r.Email,
-                        MobilePhone = r.MobilePhone,
-                        Reference = r.Reference,
-                        Deposition = r.Deposition,
-                        Note = r.Note,
-                        DeliveryPlaceNote = r.DeliveryPlaceNote,
-                        PickupPlaceNote = r.PickupPlaceNote,
-                        IsOngoingInvoicing = r.IsOngoingInvoicing,
-                        OngoingInvoicingInterval = r.OngoingInvoicingInterval
-                    };
-                    result.Add(reservation);
-                }
-
-                var totalPages = (int)Math.Ceiling((double)totalRecords / filter.PageSize);
-
-                return new PagedResult<Reservation>
-                {
-                    Data = result,
-                    TotalRecords = totalRecords,
-                    Page = filter.Page,
-                    PageSize = filter.PageSize,
-                    TotalPages = totalPages,
-                    HasNextPage = filter.Page < totalPages,
-                    HasPreviousPage = filter.Page > 1
-                };
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Error retrieving reservations", error = ex.Message });
-            }
+            _currentUserService = currentUserService;
         }
 
         [HttpPost("search")]
@@ -123,12 +34,7 @@ namespace Hyr.Api.Controllers
         {
             try
             {
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                         ?? User?.FindFirst("sub")?.Value
-                         ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });
@@ -195,6 +101,40 @@ namespace Hyr.Api.Controllers
             {
                 return BadRequest(new { message = "Error searching reservations", error = ex.Message });
             }
+        }
+
+        [HttpGet("form-options")]
+        [Authorize]
+        public async Task<ActionResult<ReservationFormOptionsDto>> GetFormOptions()
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            if (!user.OfficeId.HasValue)
+            {
+                return BadRequest(new { message = "User has no office" });
+            }
+
+            var officeId = user.OfficeId.Value;
+
+            var itemTypes = await _context.ItemTypes
+                .Where(itemType => itemType.OfficeItemTypes.Any(officeItemType => officeItemType.OfficeId == officeId))
+                .OrderBy(itemType => itemType.Name)
+                .Select(itemType => new ItemTypeOptionDto
+                {
+                    Id = itemType.Id,
+                    Code = itemType.Code,
+                    Name = itemType.Name,
+                })
+                .ToListAsync();
+
+            return Ok(new ReservationFormOptionsDto
+            {
+                ItemTypes = itemTypes,
+            });
         }
 
         private IQueryable<Reservation> ApplyFilterCondition(IQueryable<Reservation> query, FilterConditionDto condition)
@@ -330,12 +270,7 @@ namespace Hyr.Api.Controllers
         {
             try
             {
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                         ?? User?.FindFirst("sub")?.Value
-                         ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });
@@ -372,6 +307,11 @@ namespace Hyr.Api.Controllers
                     CustomerName = reservationInDb.CustomerName,
                     DeliveryPlaceNote = reservationInDb.DeliveryPlaceNote,
                     Deposition = reservationInDb.Deposition,
+                    DeliveryPlace = reservationInDb.DeliveryPlace,
+                    CustomerMarking = reservationInDb.CustomerMarking,
+                    DriverName = reservationInDb.DriverName,
+                    PickUpBy = reservationInDb.PickUpBy,
+                    TelephoneWorkplace = reservationInDb.TelephoneWorkplace,
                     DriverMobilePhone = reservationInDb.DriverMobilePhone,
                     DriverNote = reservationInDb.DriverNote,
                     DriverLicenceNr = reservationInDb.DriverLicenceNr,
@@ -477,16 +417,11 @@ namespace Hyr.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Reservation>> PostReservation(Reservation reservation)
+        public async Task<ActionResult<Reservation>> PostReservation(ReservationUpsertDto reservation)
         {
             try
             {
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                                 ?? User?.FindFirst("sub")?.Value
-                                 ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });
@@ -526,6 +461,11 @@ namespace Hyr.Api.Controllers
                 reservationInDb.ModifiedDate = DateTime.UtcNow;
                 reservationInDb.CustomerId = reservation.CustomerId;
                 reservationInDb.StatusCode = reservation.StatusCode;
+                reservationInDb.DriverName = reservation.DriverName;
+                reservationInDb.PickUpBy = reservation.PickUpBy;
+                reservationInDb.TelephoneWorkplace = reservation.TelephoneWorkplace;
+                reservationInDb.DeliveryPlace = reservation.DeliveryPlace;
+                reservationInDb.CustomerMarking = reservation.CustomerMarking;
                 reservationInDb.DriverMobilePhone = reservation.DriverMobilePhone;
                 reservationInDb.DriverNote = reservation.DriverNote;
                 reservationInDb.DriverLicenceNr = reservation.DriverLicenceNr;

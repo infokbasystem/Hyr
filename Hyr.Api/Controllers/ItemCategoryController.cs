@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using Hyr.Api.Data;
+using Hyr.Api.Dtos;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
+using Hyr.Api.Services;
 using Hyr.Api.Utils;
 
 namespace Hyr.Api.Controllers
@@ -14,22 +16,19 @@ namespace Hyr.Api.Controllers
     public class ItemCategoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
 
-        public ItemCategoryController(ApplicationDbContext context)
+        public ItemCategoryController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
         }
 
         [HttpGet]
         [Authorize]
-        public async Task<ActionResult<PagedResult<ItemCategory>>> GetItemCategories([FromQuery] ItemCategoryFilter filter)
+        public async Task<ActionResult<PagedResult<ItemCategoryDto>>> GetItemCategories([FromQuery] ItemCategoryFilter filter)
         {
-            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                             ?? User?.FindFirst("sub")?.Value
-                             ?? User?.FindFirst("id")?.Value;
-            _ = int.TryParse(userIdClaim, out int userId);
-
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });
@@ -37,7 +36,6 @@ namespace Hyr.Api.Controllers
 
             var query = _context.ItemCategories
                 .Where(ic => ic.OfficeId == user.OfficeId)
-                .Include(ic => ic.Office)
                 .AsQueryable();
 
             if (filter.Id.HasValue)
@@ -52,22 +50,25 @@ namespace Hyr.Api.Controllers
 
             var totalRecords = await query.CountAsync();
 
-            // Apply sorting (default to Name:asc if not specified)
-            var sortBy = filter.SortBy ?? new[] { "Name:asc" };
+            // Apply sorting (default to Name:asc, then Id:desc for deterministic ties)
+            var sortBy = filter.SortBy ?? new[] { "Name:asc", "Id:desc" };
             query = query.ApplyMultiSort(sortBy);
 
             var pagedQuery = query
                 .Skip((filter.Page - 1) * filter.PageSize)
                 .Take(filter.PageSize);
 
-            var itemCategories = await pagedQuery.Select(ic => new ItemCategory
-            {
-                Id = ic.Id,
-                OfficeId = ic.OfficeId,
-                Name = ic.Name,
-            }).ToListAsync();
+            var itemCategories = await pagedQuery
+                .AsNoTracking()
+                .Select(ic => new ItemCategoryDto
+                {
+                    Id = ic.Id,
+                    OfficeId = ic.OfficeId,
+                    Name = ic.Name,
+                })
+                .ToListAsync();
 
-            return Ok(new PagedResult<ItemCategory>
+            return Ok(new PagedResult<ItemCategoryDto>
             {
                 Data = itemCategories,
                 TotalRecords = totalRecords,
@@ -81,11 +82,24 @@ namespace Hyr.Api.Controllers
 
         [HttpGet("{id}")]
         [Authorize]
-        public async Task<ActionResult<ItemCategory>> GetItemCategory(int id)
+        public async Task<ActionResult<ItemCategoryDto>> GetItemCategory(int id)
         {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
             var itemCategory = await _context.ItemCategories
-                .Include(ic => ic.Office)
-                .FirstOrDefaultAsync(ic => ic.Id == id);
+                .AsNoTracking()
+                .Where(ic => ic.Id == id && ic.OfficeId == user.OfficeId)
+                .Select(ic => new ItemCategoryDto
+                {
+                    Id = ic.Id,
+                    OfficeId = ic.OfficeId,
+                    Name = ic.Name,
+                })
+                .FirstOrDefaultAsync();
 
             if (itemCategory == null)
             {
@@ -99,7 +113,15 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<IActionResult> DeleteItemCategory(int id)
         {
-            var itemCategory = await _context.ItemCategories.FindAsync(id);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            var itemCategory = await _context.ItemCategories
+                .FirstOrDefaultAsync(ic => ic.Id == id && ic.OfficeId == user.OfficeId);
+
             if (itemCategory == null)
             {
                 return NotFound();
@@ -113,19 +135,14 @@ namespace Hyr.Api.Controllers
 
         [HttpPost]
         [Authorize]
-        public async Task<ActionResult<ItemCategory>> PostItemCategory([FromBody] ItemCategory itemCategory)
+        public async Task<ActionResult<ItemCategoryDto>> PostItemCategory([FromBody] ItemCategoryUpsertDto itemCategory)
         {
             try
             {
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                                 ?? User?.FindFirst("sub")?.Value
-                                 ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });
@@ -141,17 +158,18 @@ namespace Hyr.Api.Controllers
                 }
                 else
                 {
-                    itemCategoryInDb = await _context.ItemCategories.FindAsync(itemCategory.Id);
+                    itemCategoryInDb = await _context.ItemCategories
+                        .FirstOrDefaultAsync(ic => ic.Id == itemCategory.Id && ic.OfficeId == user.OfficeId);
                     if (itemCategoryInDb == null)
                     {
                         return NotFound(new { message = "ItemCategory not found" });
                     }
                 }
 
-                itemCategoryInDb.Name = itemCategory.Name;
+                ApplyItemCategoryChanges(itemCategoryInDb, itemCategory);
 
                 await _context.SaveChangesAsync();
-                return Ok(itemCategoryInDb);
+                return Ok(MapItemCategory(itemCategoryInDb));
             }
             catch (Exception ex)
             {
@@ -159,9 +177,19 @@ namespace Hyr.Api.Controllers
             }
         }
 
-        private async Task<bool> ItemCategoryExists(int id)
+        private static ItemCategoryDto MapItemCategory(ItemCategory category)
         {
-            return await _context.ItemCategories.AnyAsync(ic => ic.Id == id);
+            return new ItemCategoryDto
+            {
+                Id = category.Id,
+                OfficeId = category.OfficeId,
+                Name = category.Name,
+            };
+        }
+
+        private static void ApplyItemCategoryChanges(ItemCategory target, ItemCategoryUpsertDto source)
+        {
+            target.Name = source.Name?.Trim() ?? string.Empty;
         }
     }
 }

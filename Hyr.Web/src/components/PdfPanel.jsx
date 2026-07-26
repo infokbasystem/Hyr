@@ -6,7 +6,7 @@ import { usePdf } from '../contexts/PdfContext';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-export default function PdfPanel({ onOpenFileModal = null }) {
+export default function PdfPanel({ onOpenFileModal = null, topOffset = '0px' }) {
     const {
         showPdfPanel,
         pdfUrl,
@@ -138,7 +138,7 @@ export default function PdfPanel({ onOpenFileModal = null }) {
                 className={`absolute right-0 w-[560px] bg-yellow-50 shadow-xl/30 z-50 pt-3 pl-3
                     transform transition-transform duration-300
                     ${visible ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-full opacity-0 pointer-events-none'}`}
-                style={{ top: 0, bottom: 0 }}
+                style={{ top: topOffset, bottom: 0 }}
             >
                 <div className="flex items-center p-3">
                     <button

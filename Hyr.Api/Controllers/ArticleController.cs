@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Hyr.Api.Data;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
+using Hyr.Api.Services;
 using Hyr.Api.Utils;
 
 namespace Hyr.Api.Controllers
@@ -14,22 +15,19 @@ namespace Hyr.Api.Controllers
     public class ArticleController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
 
-        public ArticleController(ApplicationDbContext context)
+        public ArticleController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
         }
 
         [HttpGet]
         [Authorize]
         public async Task<ActionResult<PagedResult<Article>>> GetArticles([FromQuery] ArticleFilter filter)
         {
-            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                             ?? User?.FindFirst("sub")?.Value
-                             ?? User?.FindFirst("id")?.Value;
-            _ = int.TryParse(userIdClaim, out int userId);
-
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });
@@ -136,12 +134,7 @@ namespace Hyr.Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                                 ?? User?.FindFirst("sub")?.Value
-                                 ?? User?.FindFirst("id")?.Value;
-                _ = int.TryParse(userIdClaim, out int userId);
-
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _currentUserService.GetCurrentUserAsync(User);
                 if (user == null)
                 {
                     return Unauthorized(new { message = "User not found" });

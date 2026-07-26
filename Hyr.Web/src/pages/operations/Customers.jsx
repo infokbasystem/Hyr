@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeftCircle, ArrowRightCircle, ChevronDown, ChevronUp, ChevronsUpDown, Printer } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import Select from 'react-select'
@@ -208,7 +208,7 @@ function exportRowsAsCsv(rows) {
   URL.revokeObjectURL(url)
 }
 
-export default function CustomerSearch() {
+export default function Customers() {
   const navigate = useNavigate()
   const cachedState = readCachedSearchState()
   const skeletonTimerRef = useRef(null)
@@ -463,10 +463,9 @@ export default function CustomerSearch() {
   }
 
   return (
-    <div className="flex flex-col h-full py-2">
-      <div className="ml-10 text-sm text-gray-500">Sök kunder</div>
-      
+    <div className="flex h-full flex-col px-0 py-2 md:px-[clamp(8px,10vw,20vw)]">      
       <div className={`mt-3 mx-8 flex flex-wrap items-center gap-5 ${loading && !hasSearchSnapshot ? 'pointer-events-none opacity-70' : ''}`}>
+
         <div className="w-[200px]">
           <input
             value={filters.freeText}
@@ -629,45 +628,39 @@ export default function CustomerSearch() {
                       </div>
                     </td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">
-                      <button
-                        type="button"
-                        className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
-                        onClick={(event) => {
-                          event.stopPropagation()
-
-                          if (!row.id) {
-                            return
-                          }
-
-                          navigate(`/customer/${row.id}`, { state: { originModule: 'operations' } })
-                        }}
-                      >
-                        {row.customerNr ?? ''}
-                      </button>
+                      {row.id ? (
+                        <Link
+                          to={`/customer/${row.id}`}
+                          state={{ originModule: 'operations' }}
+                          className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {row.customerNr ?? ''}
+                        </Link>
+                      ) : (
+                        row.customerNr ?? ''
+                      )}
                     </td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">
-                      <button
-                        type="button"
-                        className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
-                        onClick={(event) => {
-                          event.stopPropagation()
-
-                          if (!row.id) {
-                            return
-                          }
-
-                          navigate(`/customer/${row.id}`, { state: { originModule: 'operations' } })
-                        }}
-                      >
-                        {row.customerName ?? ''}
-                      </button>
+                      {row.id ? (
+                        <Link
+                          to={`/customer/${row.id}`}
+                          state={{ originModule: 'operations' }}
+                          className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {row.customerName ?? ''}
+                        </Link>
+                      ) : (
+                        row.customerName ?? ''
+                      )}
                     </td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">{row.postalAddress ?? ''}</td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">{row.mobilePhone ?? ''}</td>
                     <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">{row.email ?? ''}</td>
-                    <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800 text-center">
+                    <td className="px-2 pb-[2px] pt-[3px] text-xs text-gray-800 text-center">
                       {!row.isActive && (
-                        <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.03em] text-rose-700">
+                        <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.25 text-[9px] font-medium uppercase tracking-[0.03em] text-rose-700">
                           Inaktiv
                         </span>
                       )}

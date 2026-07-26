@@ -3,6 +3,7 @@ import { ArrowDownToLine } from 'lucide-react';
 
 const LabeledTextArea = ({
     label,
+    labelPosition = 'left',
     labelWidth,
     inputWidth,
     margintop,
@@ -91,29 +92,29 @@ const LabeledTextArea = ({
     }
 
     return (
-        <div className={`flex items-center space-x-1 w-full pt-[1px] mt-${margintop}`} ref={wrapperRef}>
-            <div className={`relative flex items-center flex-none justify-between ${labelWidth}`}>
-                <label className="text-xs leading-none text-gray-700 mt-1">{label}</label>
+        <div className={`w-full pb-[1px] mt-${margintop} ${labelPosition === 'top' ? 'flex flex-col gap-1' : 'flex items-start space-x-1'}`} ref={wrapperRef}>
+            <div className={`relative flex flex-none justify-between ${labelPosition === 'top' ? 'w-full items-start' : `items-center ${labelWidth}`}`}>
+                <label className={`text-xs text-gray-700 ${labelPosition === 'top' ? 'ml-1' : 'mt-1'}`}>{label}</label>
                 {popupItems && Array.isArray(popupItems) && (
                     <button
                         type="button"
                         onClick={() => { setShowPopup(s => !s); setFilter(''); }}
-                        className="ml-2 text-xs text-gray-600 px-1 rounded hover:bg-gray-100 text-right"
+                        className="ml-2 rounded px-1 text-right text-xs text-gray-600 hover:bg-gray-100"
                         aria-expanded={showPopup}
                     >
-                        <ArrowDownToLine size={12} className='text-red-700 hover:text-red scale-110' />
+                        <ArrowDownToLine size={12} className='scale-110 text-red-700 hover:text-red' />
                     </button>
                 )}
 
                 {showPopup && popupItems && (
-                    <div className="absolute left-0 top-full z-30 mt-1 w-72 bg-yellow-50 border border-gray-400 rounded shadow-md p-2">
+                    <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded border border-gray-400 bg-yellow-50 p-2 shadow-md">
                         <input
-                            className="w-full border border-gray-400 bg-white rounded px-2 py-1 text-xs mb-2"
+                            className="mb-2 w-full rounded border border-gray-400 bg-white px-2 py-1 text-xs"
                             placeholder="Sök..."
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
                         />
-                        <div className="max-h-40 overflow-auto space-y-1">
+                        <div className="max-h-40 space-y-1 overflow-auto">
                             {popupItems
                                 .filter(it => {
                                     if (!filter) return true;
@@ -124,7 +125,7 @@ const LabeledTextArea = ({
                                     <button
                                         key={it.id ?? (it[popupLabelField] ?? Math.random())}
                                         type="button"
-                                        className="w-full text-left text-xs px-2 py-1 hover:bg-gray-100 rounded"
+                                        className="w-full rounded px-2 py-1 text-left text-xs hover:bg-gray-100"
                                         onClick={() => handleSelect(it)}
                                     >
                                         {it[popupLabelField] ?? ''}
@@ -135,18 +136,16 @@ const LabeledTextArea = ({
                 )}
             </div>
 
-            <div className="flex flex-row items-center w-full">
-                <div className="relative w-full">
+            <div className="flex w-full flex-row items-center">
                     <textarea
                         name={name}
                         value={displayValue}
                         disabled={disabled}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        className={`text-xs ${inputWidth || 'w-full'} ${height} border border-gray-300 rounded-sm px-2 pt-1 pb-[calc(0.25rem-1px)] focus:outline-none ${!disabled ? 'bg-white' : ''}`}
+                        className={`text-xs ${inputWidth || 'w-full'} ${height} rounded-sm border border-gray-300 px-2 pt-1 pb-[calc(0.25rem-1px)] focus:outline-none ${!disabled ? 'bg-white' : ''}`}
                         {...props}
                     />
-                </div>
             </div>
         </div>
     );
