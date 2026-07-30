@@ -23,7 +23,11 @@ namespace Hyr.Api.Data
         public DbSet<ItemType> ItemTypes { get; set; } = null!;
         public DbSet<ItemCategory> ItemCategories { get; set; } = null!;
         public DbSet<ItemModel> ItemModels { get; set; } = null!;
+        public DbSet<ServiceType> ServiceTypes { get; set; } = null!;
+        public DbSet<InsuranceCompany> InsuranceCompanies { get; set; } = null!;
         public DbSet<Department> Departments { get; set; } = null!;
+        public DbSet<MailText> MailTexts { get; set; } = null!;
+        public DbSet<SmsText> SmsTexts { get; set; } = null!;
         public DbSet<OfficeItemType> OfficeItemTypes { get; set; } = null!;
         public DbSet<ItemPackageItem> ItemPackageItems { get; set; } = null!;
 
@@ -65,6 +69,8 @@ namespace Hyr.Api.Data
                 entity.Property(e => e.CrediflowId).HasMaxLength(200);
                 entity.Property(e => e.GlnNr).HasMaxLength(200);
                 entity.Property(e => e.FortnoxRefreshToken).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.DefaultBookedFromTime).HasMaxLength(5);
+                entity.Property(e => e.DefaultBookedToTime).HasMaxLength(5);
             });
 
             modelBuilder.Entity<User>(entity =>
@@ -249,6 +255,36 @@ namespace Hyr.Api.Data
                         .HasForeignKey(e => e.OfficeId)
                         .OnDelete(DeleteBehavior.Restrict);
                     });
+
+            modelBuilder.Entity<MailText>(entity =>
+            {
+                entity.ToTable("MailText");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.OfficeId).IsRequired();
+                entity.Property(e => e.Item).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Subject).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.BodyHtml).IsRequired().HasMaxLength(4000);
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.MailTexts)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => new { e.OfficeId, e.Item }).IsUnique();
+            });
+
+            modelBuilder.Entity<SmsText>(entity =>
+            {
+                entity.ToTable("SmsText");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.OfficeId).IsRequired();
+                entity.Property(e => e.Item).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Titel).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Text).IsRequired().HasMaxLength(4000);
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.SmsTexts)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => new { e.OfficeId, e.Item }).IsUnique();
+            });
 
             modelBuilder.Entity<Reservation>(entity =>
             {
@@ -508,6 +544,39 @@ namespace Hyr.Api.Data
                 entity.Property(e => e.Name).HasMaxLength(200);
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.ItemModels)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ServiceType>(entity =>
+            {
+                entity.ToTable("ServiceType");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.ServiceCode).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.ServiceTypes)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<InsuranceCompany>(entity =>
+            {
+                entity.ToTable("InsuranceCompany");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).HasMaxLength(200);
+                entity.Property(e => e.OrganizationNr).HasMaxLength(200);
+                entity.Property(e => e.ContactPerson).HasMaxLength(200);
+                entity.Property(e => e.Telephone).HasMaxLength(200);
+                entity.Property(e => e.Email).HasMaxLength(200);
+                entity.Property(e => e.Street).HasMaxLength(200);
+                entity.Property(e => e.ZipCode).HasMaxLength(200);
+                entity.Property(e => e.City).HasMaxLength(200);
+                entity.Property(e => e.Country).HasMaxLength(200);
+                entity.Property(e => e.PaymentDays).IsRequired(false);
+                entity.Property(e => e.KeyFortnox).HasMaxLength(200);
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.InsuranceCompanies)
                     .HasForeignKey(e => e.OfficeId)
                     .OnDelete(DeleteBehavior.Restrict);
             });

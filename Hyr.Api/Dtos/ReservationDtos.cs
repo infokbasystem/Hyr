@@ -14,6 +14,9 @@ public sealed record ReservationSearchRowDto(
 public sealed class ReservationFormOptionsDto
 {
     public List<ItemTypeOptionDto> ItemTypes { get; set; } = [];
+    public List<ItemCategoryOptionDto> ItemCategories { get; set; } = [];
+    public string DefaultBookedFromTime { get; set; } = string.Empty;
+    public string DefaultBookedToTime { get; set; } = string.Empty;
 }
 
 public sealed class ReservationUpsertDto

@@ -1,0 +1,77 @@
+# ==========================================
+# .NET Core / C# / Visual Studio
+# ==========================================
+# Bygg- och kompileringsfiler (Innehåller tung binaer/genererad kod)
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+
+# Pakethantering & Testresultat
+**/packages/
+**/TestResults/
+**/coverage/
+**/[Bb]in/
+**/[Oo]bj/
+
+# Publishing & Artifacts
+**/publish/
+**/out/
+**/appsettings*.Local.json
+
+# ==========================================
+# React / Node.js / Frontend
+# ==========================================
+# Stora beroendedirektorier
+**/node_modules/
+**/.npm/
+**/.yarn/
+**/.pnpm-store/
+
+# Build-output och cacher
+**/dist/
+**/build/
+**/.next/
+**/.vite/
+**/.cache/
+**/coverage/
+
+# Frontend Cacher & Loggar
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/.eslintcache
+
+# ==========================================
+# Git & Versionshantering
+# ==========================================
+**/.git/
+**/.gitignore
+**/.gitattributes
+
+# ==========================================
+# Media, Typsnitt & Statiska Filer
+# (Hindrar Cline från att läsa in binär/statiskt innehåll)
+# ==========================================
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.ico
+**/*.svg
+**/*.woff
+**/*.woff2
+**/*.ttf
+**/*.eot
+**/*.pdf
+**/*.zip
+**/*.tar.gz
+
+# ==========================================
+# Databaser, Dumps & Stora Loggar
+# ==========================================
+**/*.mdf
+**/*.ldf
+**/*.db
+**/*.sqlite
+**/*.log

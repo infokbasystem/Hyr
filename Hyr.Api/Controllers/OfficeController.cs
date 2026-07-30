@@ -5,6 +5,7 @@ using Hyr.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace Hyr.Api.Controllers;
 
@@ -15,6 +16,7 @@ public class OfficeController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private static readonly Regex TimeOfDayPattern = new("^(?:[01]\\d|2[0-3]):[0-5]\\d$", RegexOptions.Compiled);
 
     public OfficeController(ApplicationDbContext context, ICurrentUserService currentUserService)
     {
@@ -88,6 +90,8 @@ public class OfficeController : ControllerBase
         }
 
         var settings = await BuildOfficeItemTypeSettingsAsync(office.Id);
+        settings.DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty;
+        settings.DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty;
         return Ok(settings);
     }
 
@@ -114,6 +118,19 @@ public class OfficeController : ControllerBase
         if (validItemTypeIds.Count != requestedItemTypeIds.Count)
         {
             return BadRequest(new { message = "One or more item types are invalid." });
+        }
+
+        var normalizedDefaultBookedFromTime = NormalizeTimeOfDay(dto.DefaultBookedFromTime);
+        var normalizedDefaultBookedToTime = NormalizeTimeOfDay(dto.DefaultBookedToTime);
+
+        if (!string.IsNullOrEmpty(normalizedDefaultBookedFromTime) && !TimeOfDayPattern.IsMatch(normalizedDefaultBookedFromTime))
+        {
+            return BadRequest(new { message = "Default booked from time must be in format HH:mm." });
+        }
+
+        if (!string.IsNullOrEmpty(normalizedDefaultBookedToTime) && !TimeOfDayPattern.IsMatch(normalizedDefaultBookedToTime))
+        {
+            return BadRequest(new { message = "Default booked to time must be in format HH:mm." });
         }
 
         var existingLinks = await _context.OfficeItemTypes
@@ -146,13 +163,27 @@ public class OfficeController : ControllerBase
             _context.OfficeItemTypes.AddRange(linksToAdd);
         }
 
-        if (linksToRemove.Count > 0 || linksToAdd.Count > 0)
+        var hasDefaultBookedFromTimeChanged = (office.DefaultBookedFromTime ?? string.Empty) != normalizedDefaultBookedFromTime;
+        var hasDefaultBookedToTimeChanged = (office.DefaultBookedToTime ?? string.Empty) != normalizedDefaultBookedToTime;
+
+        office.DefaultBookedFromTime = normalizedDefaultBookedFromTime;
+        office.DefaultBookedToTime = normalizedDefaultBookedToTime;
+
+        if (linksToRemove.Count > 0 || linksToAdd.Count > 0 ||
+            hasDefaultBookedFromTimeChanged || hasDefaultBookedToTimeChanged)
         {
             await _context.SaveChangesAsync();
         }
 
         var settings = await BuildOfficeItemTypeSettingsAsync(office.Id);
+        settings.DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty;
+        settings.DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty;
         return Ok(settings);
+    }
+
+    private static string NormalizeTimeOfDay(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
     }
 
     private async Task<Office?> GetCurrentOfficeAsync()

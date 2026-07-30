@@ -1,5 +1,7 @@
 namespace Hyr.Api.Models
 {
+    using System.ComponentModel.DataAnnotations.Schema;
+
     public class ReservationItem
     {
         public int Id { get; set; }
@@ -41,6 +43,27 @@ namespace Hyr.Api.Models
         public decimal? InsuranceManualShareRent { get; set; }
         public int? InsuranceManualShareKm { get; set; }
         public decimal? InsuranceManualShareVat { get; set; }
+
+        [NotMapped]
+        public string RegNr { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string Category { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string Manufacturer { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string Model { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string ItemName { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string ItemNote { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string YearModel { get; set; } = string.Empty;
 
         public virtual Office? Office { get; set; }
         public virtual Reservation? Reservation { get; set; }

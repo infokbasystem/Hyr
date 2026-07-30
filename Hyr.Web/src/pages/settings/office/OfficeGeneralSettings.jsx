@@ -5,17 +5,22 @@ import { Save } from 'lucide-react'
 import ActionButton from '../../../components/ActionButton'
 import ConfirmationModal from '../../../components/ConfirmationModal'
 import LabeledSwitch from '../../../components/LabeledSwitch'
+import TimeDropdownInput from '../../../components/TimeDropdownInput'
 import { getSharedRequest } from '../../../lib/sharedRequest'
 import { getOfficeItemTypeSettings, updateOfficeItemTypeSettings } from '../../../lib/officeApi'
 
-function createSelectionSnapshot(itemTypes) {
+function createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBookedToTime) {
     const selectedIds = (itemTypes ?? [])
         .filter((itemType) => itemType?.isSelected)
         .map((itemType) => Number(itemType.id))
         .filter((itemTypeId) => Number.isInteger(itemTypeId) && itemTypeId > 0)
         .sort((a, b) => a - b)
 
-    return JSON.stringify(selectedIds)
+    return JSON.stringify({
+        selectedIds,
+        defaultBookedFromTime: String(defaultBookedFromTime ?? '').trim(),
+        defaultBookedToTime: String(defaultBookedToTime ?? '').trim(),
+    })
 }
 
 function mapMessage(type, text) {
@@ -29,9 +34,16 @@ export default function OfficeGeneralSettings() {
     const [isSaving, setIsSaving] = useState(false)
     const [messages, setMessages] = useState([])
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
+    const [defaultBookedFromTime, setDefaultBookedFromTime] = useState('')
+    const [defaultBookedToTime, setDefaultBookedToTime] = useState('')
 
-    const currentSnapshot = useMemo(() => createSelectionSnapshot(itemTypes), [itemTypes])
+    const currentSnapshot = useMemo(() => (
+        createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBookedToTime)
+    ), [itemTypes, defaultBookedFromTime, defaultBookedToTime])
     const isDirty = currentSnapshot !== initialSnapshot
+    const isVehicleEnabled = itemTypes.some((itemType) => (
+        Boolean(itemType?.isSelected) && String(itemType?.code ?? '').toUpperCase() === 'VEHICLE'
+    ))
 
     const navigationBlocker = useBlocker(({ currentLocation, nextLocation }) => {
         return isDirty && currentLocation.pathname !== nextLocation.pathname
@@ -74,8 +86,13 @@ export default function OfficeGeneralSettings() {
                 }
 
                 const nextItemTypes = Array.isArray(data?.itemTypes) ? data.itemTypes : []
+                const nextDefaultBookedFromTime = String(data?.defaultBookedFromTime ?? '').trim()
+                const nextDefaultBookedToTime = String(data?.defaultBookedToTime ?? '').trim()
+
                 setItemTypes(nextItemTypes)
-                setInitialSnapshot(createSelectionSnapshot(nextItemTypes))
+                setDefaultBookedFromTime(nextDefaultBookedFromTime)
+                setDefaultBookedToTime(nextDefaultBookedToTime)
+                setInitialSnapshot(createSelectionSnapshot(nextItemTypes, nextDefaultBookedFromTime, nextDefaultBookedToTime))
             } catch (error) {
                 if (!isActive) {
                     return
@@ -135,11 +152,20 @@ export default function OfficeGeneralSettings() {
                 .filter((itemType) => itemType.isSelected)
                 .map((itemType) => itemType.id)
 
-            const saved = await updateOfficeItemTypeSettings({ itemTypeIds: selectedIds })
+            const saved = await updateOfficeItemTypeSettings({
+                itemTypeIds: selectedIds,
+                defaultBookedFromTime,
+                defaultBookedToTime,
+            })
+
             const nextItemTypes = Array.isArray(saved?.itemTypes) ? saved.itemTypes : []
+            const nextDefaultBookedFromTime = String(saved?.defaultBookedFromTime ?? '').trim()
+            const nextDefaultBookedToTime = String(saved?.defaultBookedToTime ?? '').trim()
 
             setItemTypes(nextItemTypes)
-            setInitialSnapshot(createSelectionSnapshot(nextItemTypes))
+            setDefaultBookedFromTime(nextDefaultBookedFromTime)
+            setDefaultBookedToTime(nextDefaultBookedToTime)
+            setInitialSnapshot(createSelectionSnapshot(nextItemTypes, nextDefaultBookedFromTime, nextDefaultBookedToTime))
             setMessages([mapMessage('success', 'Objekttypsinställningar sparade.')])
         } catch (error) {
             const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte spara objekttypsinställningar.'
@@ -210,6 +236,39 @@ export default function OfficeGeneralSettings() {
                             />
                         ))}
                     </div>
+                )}
+
+                {isVehicleEnabled && (
+                    <>
+                        <h2 className="mt-6 text-xs uppercase tracking-[0.12em] text-gray-600">Standardtid för bokning</h2>
+                        <p className="mt-2 text-xs text-gray-500">Används som förvald tid när bil läggs till i bokning.</p>
+
+                        <div className="mt-3 space-y-2">
+                            <div className="flex items-center gap-3 text-xs text-gray-700">
+                                <span className="w-28">Bokad från</span>
+                                <TimeDropdownInput
+                                    value={defaultBookedFromTime}
+                                    onChange={(value) => {
+                                        setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+                                        setDefaultBookedFromTime(value)
+                                    }}
+                                    disabled={isLoading || isSaving}
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-3 text-xs text-gray-700">
+                                <span className="w-28">Bokad till</span>
+                                <TimeDropdownInput
+                                    value={defaultBookedToTime}
+                                    onChange={(value) => {
+                                        setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+                                        setDefaultBookedToTime(value)
+                                    }}
+                                    disabled={isLoading || isSaving}
+                                />
+                            </div>
+                        </div>
+                    </>
                 )}
             </div>
         </div>

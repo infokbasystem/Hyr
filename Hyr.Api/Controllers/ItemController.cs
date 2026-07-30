@@ -81,6 +81,7 @@ namespace Hyr.Api.Controllers
                     Id = i.Id,
                     ItemNr = i.ItemNr,
                     RegNr = i.RegNr,
+                    YearModel = i.YearModel,
                     MachineNr = i.MachineNr,
                     Manufacturer = i.Manufacturer,
                     ItemTypeCode = !string.IsNullOrWhiteSpace(i.ItemTypeCode) ? i.ItemTypeCode : (i.ItemType != null ? i.ItemType.Code : string.Empty),
@@ -89,6 +90,10 @@ namespace Hyr.Api.Controllers
                     ItemModelName = i.ItemModel != null ? i.ItemModel.Name : string.Empty,
                     IsActive = i.IsActive,
                     IsPartOfPackage = i.IsPartOfPackage,
+                    NrOfItemsTotal = i.NrOfItemsTotal,
+                    BasePrice = i.BasePrice,
+                    PricePerDay = i.PricePerDay,
+                    PricePerWeek = i.PricePerWeek,
                     Note = i.Note,
                 })
                 .ToListAsync();
@@ -121,19 +126,46 @@ namespace Hyr.Api.Controllers
                 return BadRequest(new { message = "User has no office" });
             }
 
-            var officeId = user.OfficeId.Value;
+            var formOptions = await BuildItemFormOptions(user.OfficeId.Value);
+            return Ok(formOptions);
+        }
 
+        [HttpGet("carsearch-form-options")]
+        public async Task<ActionResult<ItemFormOptionsDto>> GetCarSearchFormOptions()
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            if (!user.OfficeId.HasValue)
+            {
+                return BadRequest(new { message = "User has no office" });
+            }
+
+            var formOptions = await BuildItemFormOptions(user.OfficeId.Value);
+            return Ok(formOptions);
+        }
+
+        private async Task<ItemFormOptionsDto> BuildItemFormOptions(int officeId)
+        {
             var itemTypes = await _context.OfficeItemTypes
-                .Where(officeItemType => officeItemType.OfficeId == officeId)
-                .Select(officeItemType => officeItemType.ItemType)
-                .AsNoTracking()
-                .OrderBy(itemType => itemType.Name)
-                .Select(itemType => new ItemTypeOptionDto
+                .Where(officeItemType => officeItemType.OfficeId == officeId && officeItemType.ItemType != null)
+                .Select(officeItemType => new ItemTypeOptionDto
                 {
-                    Id = itemType!.Id,
-                    Code = itemType.Code,
-                    Name = itemType.Name,
+                    Id = officeItemType.ItemTypeId,
+                    Code = officeItemType.ItemType != null ? officeItemType.ItemType.Code : string.Empty,
+                    Name = officeItemType.ItemType != null ? officeItemType.ItemType.Name : string.Empty,
                 })
+                .GroupBy(itemType => new { itemType.Id, itemType.Code, itemType.Name })
+                .Select(group => new ItemTypeOptionDto
+                {
+                    Id = group.Key.Id,
+                    Code = group.Key.Code,
+                    Name = group.Key.Name,
+                })
+                .OrderBy(itemType => itemType.Name)
                 .ToListAsync();
 
             var itemCategories = await _context.ItemCategories
@@ -158,12 +190,12 @@ namespace Hyr.Api.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(new ItemFormOptionsDto
+            return new ItemFormOptionsDto
             {
                 ItemTypes = itemTypes,
                 ItemCategories = itemCategories,
                 ItemModels = itemModels,
-            });
+            };
         }
 
         [HttpGet("{id:int}")]

@@ -1,6 +1,7 @@
 import React from 'react';
 import LabeledInput from '../../components/LabeledInput';
 import LabeledSelect from '../../components/LabeledSelect';
+import ReservationItemDateTimeFields from './ReservationItemDateTimeFields';
 
 const ReservationItemTrailer = ({ item, index, onRemove, onChange, itemCategories }) => {
     const handleChange = (field, value) => {
@@ -37,38 +38,7 @@ const ReservationItemTrailer = ({ item, index, onRemove, onChange, itemCategorie
                 <div>
                     <h3 className="text-sm font-bold mb-2">Bokningsinfo</h3>
                     <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                            <label className="text-xs text-gray-700 w-20">Bokad från</label>
-                            <input
-                                type="datetime-local"
-                                value={item?.bookedFrom || ''}
-                                onChange={(e) => handleChange('bookedFrom', e.target.value)}
-                                className="text-xs w-40 border border-gray-300 rounded-sm px-2 py-1 focus:outline-none bg-white"
-                            />
-                            <label className="text-xs text-gray-700 w-16">utlämnad</label>
-                            <input
-                                type="datetime-local"
-                                value={item?.actualFrom || ''}
-                                onChange={(e) => handleChange('actualFrom', e.target.value)}
-                                className="text-xs w-40 border border-gray-300 rounded-sm px-2 py-1 focus:outline-none bg-white"
-                            />
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <label className="text-xs text-gray-700 w-20">Bokad till</label>
-                            <input
-                                type="datetime-local"
-                                value={item?.bookedTo || ''}
-                                onChange={(e) => handleChange('bookedTo', e.target.value)}
-                                className="text-xs w-40 border border-gray-300 rounded-sm px-2 py-1 focus:outline-none bg-white"
-                            />
-                            <label className="text-xs text-gray-700 w-16">åter</label>
-                            <input
-                                type="datetime-local"
-                                value={item?.actualTo || ''}
-                                onChange={(e) => handleChange('actualTo', e.target.value)}
-                                className="text-xs w-40 border border-gray-300 rounded-sm px-2 py-1 focus:outline-none bg-white"
-                            />
-                        </div>
+                        <ReservationItemDateTimeFields item={item} onFieldChange={handleChange} />
                         <LabeledInput
                             label="Lämningsplats"
                             value={item?.deliveryPlaceNote || ''}

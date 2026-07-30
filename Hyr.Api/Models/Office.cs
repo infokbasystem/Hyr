@@ -37,6 +37,8 @@ namespace Hyr.Api.Models
         public string FortnoxRefreshToken { get; set; } = string.Empty;
         public DateTime? FortnoxTokenCreated { get; set; }
         public int? FortnoxTokenExpiresInSeconds { get; set; }
+        public string DefaultBookedFromTime { get; set; } = string.Empty;
+        public string DefaultBookedToTime { get; set; } = string.Empty;
 
         public virtual ICollection<User> Users { get; set; } = new List<User>();
         public virtual ICollection<Customer> Customers { get; set; } = new List<Customer>();
@@ -52,7 +54,11 @@ namespace Hyr.Api.Models
         public virtual ICollection<VatRate> VatRates { get; set; } = new List<VatRate>();
         public virtual ICollection<ItemCategory> ItemCategories { get; set; } = new List<ItemCategory>();
         public virtual ICollection<ItemModel> ItemModels { get; set; } = new List<ItemModel>();
+        public virtual ICollection<ServiceType> ServiceTypes { get; set; } = new List<ServiceType>();
+        public virtual ICollection<InsuranceCompany> InsuranceCompanies { get; set; } = new List<InsuranceCompany>();
         public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
+        public virtual ICollection<MailText> MailTexts { get; set; } = new List<MailText>();
+        public virtual ICollection<SmsText> SmsTexts { get; set; } = new List<SmsText>();
         public virtual ICollection<OfficeItemType> OfficeItemTypes { get; set; } = new List<OfficeItemType>();
     }
 }

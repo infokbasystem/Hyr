@@ -5,6 +5,7 @@ public class ItemSearchDto
     public int Id { get; set; }
     public string ItemNr { get; set; } = string.Empty;
     public string RegNr { get; set; } = string.Empty;
+    public string YearModel { get; set; } = string.Empty;
     public string MachineNr { get; set; } = string.Empty;
     public string Manufacturer { get; set; } = string.Empty;
     public string ItemTypeCode { get; set; } = string.Empty;
@@ -13,6 +14,10 @@ public class ItemSearchDto
     public string ItemModelName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool IsPartOfPackage { get; set; }
+    public int? NrOfItemsTotal { get; set; }
+    public decimal? BasePrice { get; set; }
+    public decimal? PricePerDay { get; set; }
+    public decimal? PricePerWeek { get; set; }
     public string Note { get; set; } = string.Empty;
 }
 

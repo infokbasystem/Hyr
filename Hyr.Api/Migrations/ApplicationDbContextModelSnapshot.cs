@@ -313,6 +313,77 @@ namespace Hyr.Api.Migrations
                     b.ToTable("Department", (string)null);
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.InsuranceCompany", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ContactPerson")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("KeyFortnox")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OrganizationNr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("PaymentDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Street")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Telephone")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ZipCode")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OfficeId");
+
+                    b.ToTable("InsuranceCompany", (string)null);
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.Invoice", b =>
                 {
                     b.Property<int>("Id")
@@ -870,6 +941,40 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ItemType", (string)null);
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.MailText", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Item")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OfficeId", "Item")
+                        .IsUnique();
+
+                    b.ToTable("MailText", (string)null);
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.Office", b =>
                 {
                     b.Property<int>("Id")
@@ -912,6 +1017,16 @@ namespace Hyr.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DefaultBookedFromTime")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<string>("DefaultBookedToTime")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
 
                     b.Property<int?>("DefaultPaymentDays")
                         .HasColumnType("int");
@@ -1439,6 +1554,68 @@ namespace Hyr.Api.Migrations
                     b.ToTable("ReservationItem", (string)null);
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.ServiceType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ServiceCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OfficeId");
+
+                    b.ToTable("ServiceType", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.SmsText", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Item")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Titel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OfficeId", "Item")
+                        .IsUnique();
+
+                    b.ToTable("SmsText", (string)null);
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1588,6 +1765,16 @@ namespace Hyr.Api.Migrations
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Office");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.InsuranceCompany", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("InsuranceCompanies")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Office");
                 });
@@ -1747,6 +1934,17 @@ namespace Hyr.Api.Migrations
                     b.Navigation("PackageItem");
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.MailText", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("MailTexts")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Office");
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.OfficeItemType", b =>
                 {
                     b.HasOne("Hyr.Api.Models.ItemType", "ItemType")
@@ -1867,6 +2065,27 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Reservation");
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.ServiceType", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("ServiceTypes")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Office");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.SmsText", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("SmsTexts")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Office");
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.User", b =>
                 {
                     b.HasOne("Hyr.Api.Models.Office", "Office")
@@ -1949,6 +2168,8 @@ namespace Hyr.Api.Migrations
 
                     b.Navigation("Departments");
 
+                    b.Navigation("InsuranceCompanies");
+
                     b.Navigation("InvoiceRows");
 
                     b.Navigation("Invoices");
@@ -1959,6 +2180,8 @@ namespace Hyr.Api.Migrations
 
                     b.Navigation("Items");
 
+                    b.Navigation("MailTexts");
+
                     b.Navigation("OfficeItemTypes");
 
                     b.Navigation("ReservationCalcItems");
@@ -1968,6 +2191,10 @@ namespace Hyr.Api.Migrations
                     b.Navigation("ReservationItems");
 
                     b.Navigation("Reservations");
+
+                    b.Navigation("ServiceTypes");
+
+                    b.Navigation("SmsTexts");
 
                     b.Navigation("Users");
 

@@ -21,6 +21,8 @@ export async function updateOfficeItemTypeSettings(body) {
     method: 'PUT',
     body: {
       itemTypeIds: normalizeItemTypeIds(body?.itemTypeIds),
+      defaultBookedFromTime: normalizeTimeOfDay(body?.defaultBookedFromTime),
+      defaultBookedToTime: normalizeTimeOfDay(body?.defaultBookedToTime),
     },
   })
 
@@ -96,6 +98,8 @@ function mapOfficeItemTypeSettings(data) {
   const rows = Array.isArray(data?.itemTypes) ? data.itemTypes : []
 
   return {
+    defaultBookedFromTime: normalizeTimeOfDay(data?.defaultBookedFromTime),
+    defaultBookedToTime: normalizeTimeOfDay(data?.defaultBookedToTime),
     itemTypes: rows.map((itemType) => ({
       id: Number(itemType?.id),
       code: `${itemType?.code ?? ''}`,
@@ -103,4 +107,8 @@ function mapOfficeItemTypeSettings(data) {
       isSelected: Boolean(itemType?.isSelected),
     })).filter((itemType) => Number.isInteger(itemType.id) && itemType.id > 0),
   }
+}
+
+function normalizeTimeOfDay(value) {
+  return typeof value === 'string' ? value.trim() : ''
 }

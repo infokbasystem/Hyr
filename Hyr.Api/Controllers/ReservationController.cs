@@ -119,6 +119,20 @@ namespace Hyr.Api.Controllers
             }
 
             var officeId = user.OfficeId.Value;
+            var office = await _context.Offices
+                .AsNoTracking()
+                .Where(candidate => candidate.Id == officeId)
+                .Select(candidate => new
+                {
+                    candidate.DefaultBookedFromTime,
+                    candidate.DefaultBookedToTime,
+                })
+                .FirstOrDefaultAsync();
+
+            if (office == null)
+            {
+                return BadRequest(new { message = "Office not found" });
+            }
 
             var itemTypes = await _context.ItemTypes
                 .Where(itemType => itemType.OfficeItemTypes.Any(officeItemType => officeItemType.OfficeId == officeId))
@@ -131,9 +145,23 @@ namespace Hyr.Api.Controllers
                 })
                 .ToListAsync();
 
+            var itemCategories = await _context.ItemCategories
+                .Where(itemCategory => itemCategory.OfficeId == officeId)
+                .AsNoTracking()
+                .OrderBy(itemCategory => itemCategory.Name)
+                .Select(itemCategory => new ItemCategoryOptionDto
+                {
+                    Id = itemCategory.Id,
+                    Name = itemCategory.Name,
+                })
+                .ToListAsync();
+
             return Ok(new ReservationFormOptionsDto
             {
                 ItemTypes = itemTypes,
+                ItemCategories = itemCategories,
+                DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty,
+                DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty,
             });
         }
 
@@ -281,16 +309,32 @@ namespace Hyr.Api.Controllers
                     .Include(r => r.CreatedByUser)
                     .Include(r => r.ModifiedByUser)
                     .Include(r => r.Customer)
-                    .Include(r => r.ReservationItems)
-                        .ThenInclude(ri => ri.Item)
-                    .Include(r => r.ReservationCalcs)
-                        .ThenInclude(rc => rc.ReservationCalcItems)
                     .FirstOrDefaultAsync();
 
                 if (reservationInDb == null)
                 {
                     return NotFound(new { message = "Reservation not found" });
                 }
+
+                await _context.Entry(reservationInDb)
+                    .Collection(r => r.ReservationItems)
+                    .Query()
+                    .Include(ri => ri.Item)
+                    .LoadAsync();
+
+                await _context.Entry(reservationInDb)
+                    .Collection(r => r.ReservationCalcs)
+                    .Query()
+                    .Include(rc => rc.ReservationCalcItems)
+                    .LoadAsync();
+
+                var categoryNamesById = await _context.ItemCategories
+                    .Where(c => c.OfficeId == user.OfficeId)
+                    .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+                var modelNamesById = await _context.ItemModels
+                    .Where(m => m.OfficeId == user.OfficeId)
+                    .ToDictionaryAsync(m => m.Id, m => m.Name);
 
                 var reservation = new Reservation
                 {
@@ -331,6 +375,18 @@ namespace Hyr.Api.Controllers
 
                 foreach (var item in reservationInDb.ReservationItems)
                 {
+                    var categoryName = string.Empty;
+                    if (item.Item?.ItemCategoryId is int itemCategoryId && categoryNamesById.TryGetValue(itemCategoryId, out var resolvedCategoryName))
+                    {
+                        categoryName = resolvedCategoryName;
+                    }
+
+                    var modelName = string.Empty;
+                    if (item.Item?.ItemModelId is int itemModelId && modelNamesById.TryGetValue(itemModelId, out var resolvedModelName))
+                    {
+                        modelName = resolvedModelName;
+                    }
+
                     reservation.ReservationItems.Add(new ReservationItem
                     {
                         Id = item.Id,
@@ -370,12 +426,23 @@ namespace Hyr.Api.Controllers
                         KmOut = item.KmOut,
                         NotRebookable = item.NotRebookable,
                         PickupPlaceNote = item.PickupPlaceNote,
+                        RegNr = item.Item?.RegNr ?? string.Empty,
+                        Category = categoryName,
+                        ItemName = item.Item?.ItemNr ?? string.Empty,
+                        ItemNote = item.Item?.Note ?? string.Empty,
+                        Manufacturer = item.Item?.Manufacturer ?? string.Empty,
+                        Model = modelName,
+                        YearModel = item.Item?.YearModel ?? string.Empty,
                         ReservationId = item.ReservationId,
                         SortNr = item.SortNr,
                         Item = item.Item != null ? new Item
                         {
                             Id = item.Item.Id,
+                            ItemNr = item.Item.ItemNr,
+                            Note = item.Item.Note,
                             RegNr = item.Item.RegNr,
+                            Manufacturer = item.Item.Manufacturer,
+                            YearModel = item.Item.YearModel,
                             MachineNr = item.Item.MachineNr,
                         } : null
                     });
@@ -445,7 +512,11 @@ namespace Hyr.Api.Controllers
                 }
                 else
                 {
-                    reservationInDb = await _context.Reservations.FindAsync(reservation.Id);
+                    reservationInDb = await _context.Reservations
+                        .Include(r => r.ReservationItems)
+                        .Include(r => r.ReservationCalcs)
+                            .ThenInclude(rc => rc.ReservationCalcItems)
+                        .FirstOrDefaultAsync(r => r.Id == reservation.Id);
                     if (reservationInDb == null)
                     {
                         return NotFound(new { message = "Reservation not found" });

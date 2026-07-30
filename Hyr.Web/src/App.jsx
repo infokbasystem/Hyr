@@ -28,6 +28,7 @@ import FinanceOverview from './pages/finance/FinanceOverview'
 import Invoice from './pages/finance/Invoice';
 import InvoicesToAccount from './pages/finance/InvoicesToAccount';
 import SearchInvoice from './pages/finance/SearchInvoice';
+import FinanceSectionPlaceholder from './pages/finance/FinanceSectionPlaceholder';
 
 import OfficeSettingsLayout from './pages/settings/OfficeSettingsLayout';
 import OfficeCompanyInfo from './pages/settings/office/OfficeCompanyInfo';
@@ -42,6 +43,8 @@ import SettingsSection from './pages/settings/SettingsSection';
 import FortnoxRedirect from './pages/settings/FortnoxRedirect';
 import Categories from './pages/settings/Categories';
 import Models from './pages/settings/Models';
+import ServiceTypes from './pages/settings/ServiceTypes';
+import InsuranceCompanies from './pages/settings/InsuranceCompanies';
 import Users from './pages/settings/Users';
 
 const router = createBrowserRouter(
@@ -71,6 +74,14 @@ const router = createBrowserRouter(
       </Route>
       <Route path="finance" element={< FinanceLayout />}>
         <Route index element={<ProtectedRoute>< FinanceOverview /></ProtectedRoute>} />
+        <Route path="tobeinvoiced" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
+        <Route path="invoices" element={<ProtectedRoute>< SearchInvoice /></ProtectedRoute>} />
+        <Route path="newinvoice" element={<Navigate to="/finance/invoice/new" replace />} />
+        <Route path="exporttoaccounting" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
+        <Route path="stocktaking" element={<ProtectedRoute>< FinanceSectionPlaceholder title="StockTaking" /></ProtectedRoute>} />
+        <Route path="stockreport" element={<ProtectedRoute>< FinanceSectionPlaceholder title="StockReport" /></ProtectedRoute>} />
+        <Route path="accountsreceivable" element={<ProtectedRoute>< FinanceSectionPlaceholder title="AccountsReceivable" /></ProtectedRoute>} />
+        <Route path="invoice/new" element={<ProtectedRoute>< Invoice /></ProtectedRoute>} />
         <Route path="invoice/:id" element={<ProtectedRoute>< Invoice /></ProtectedRoute>} />  
         <Route path="invoicestoaccount" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
         <Route path="searchinvoice" element={<ProtectedRoute>< SearchInvoice /></ProtectedRoute>} />
@@ -91,8 +102,9 @@ const router = createBrowserRouter(
         <Route path='users' element={<ProtectedRoute><Users /></ProtectedRoute>} />
         <Route path='categories' element={<ProtectedRoute><Categories /></ProtectedRoute>} />
         <Route path='models' element={<ProtectedRoute><Models /></ProtectedRoute>} />
+        <Route path='insurancecompanies' element={<ProtectedRoute><InsuranceCompanies /></ProtectedRoute>} />
         <Route path='articles' element={<ProtectedRoute><SettingsSection title="Articles" /></ProtectedRoute>} />
-        <Route path='servicetypes' element={<ProtectedRoute><SettingsSection title="Servicetyper" /></ProtectedRoute>} />
+        <Route path='servicetypes' element={<ProtectedRoute><ServiceTypes /></ProtectedRoute>} />
         <Route path='pricing' element={<ProtectedRoute><SettingsSection title="Pricing" /></ProtectedRoute>} />
         <Route path='currencies' element={<ProtectedRoute><SettingsSection title="Valutor" /></ProtectedRoute>} />
         <Route path='vat' element={<ProtectedRoute><SettingsSection title="Moms" /></ProtectedRoute>} />

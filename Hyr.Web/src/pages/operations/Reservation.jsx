@@ -9,6 +9,8 @@ import { usePdf } from '../../contexts/PdfContext';
 import { formatUserName } from '../../utils/nameFormatters';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import CustomerSearchModal from '../../components/CustomerSearchModal';
+import AccessorySelectModal from '../../modals/AccessorySelectModal';
+import CarSearchModal from '../../modals/CarSearchModal';
 
 import LabeledInput from '../../components/LabeledInput';
 import LabeledTextArea from '../../components/LabeledTextArea';
@@ -17,9 +19,61 @@ import ReservationItemTrailer from './ReservationItemTrailer';
 import ReservationItemLift from './ReservationItemLift';
 import ReservationItemHaki from './ReservationItemHaki';
 import ReservationItemAlu from './ReservationItemAlu';
-import ReservationItemEquipment from './ReservationItemEquipment';
+import ReservationItemAccessory from './ReservationItemAccessory';
+import ReservationItemTool from './ReservationItemTool';
 import apiClient from '../../lib/apiClient';
 import { getSharedRequest } from '../../lib/sharedRequest';
+
+const TIME_OF_DAY_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const ITEM_PERIOD_FIELDS = ['bookedFrom', 'bookedTo', 'actualFrom', 'actualTo'];
+
+const normalizeItemTypeCode = (value) => String(value || '').trim().toUpperCase();
+
+const isVehicleItem = (item) => normalizeItemTypeCode(item?.itemTypeCode) === 'VEHICLE';
+const isAccessoryItem = (item) => normalizeItemTypeCode(item?.itemTypeCode) === 'ACCESSORY';
+
+const getPrimaryVehiclePeriod = (items) => {
+    const vehicle = (items || []).find(isVehicleItem);
+    if (!vehicle) {
+        return null;
+    }
+
+    return {
+        bookedFrom: vehicle?.bookedFrom || '',
+        bookedTo: vehicle?.bookedTo || '',
+        actualFrom: vehicle?.actualFrom || '',
+        actualTo: vehicle?.actualTo || '',
+    };
+};
+
+const syncAccessoryPeriodsWithVehicle = (items) => {
+    const normalizedItems = Array.isArray(items) ? items : [];
+    const vehiclePeriod = getPrimaryVehiclePeriod(normalizedItems);
+    if (!vehiclePeriod) {
+        return { items: normalizedItems, changed: false, hasVehicle: false, vehiclePeriod: null };
+    }
+
+    let changed = false;
+
+    const nextItems = normalizedItems.map((item) => {
+        if (!isAccessoryItem(item)) {
+            return item;
+        }
+
+        const hasDiff = ITEM_PERIOD_FIELDS.some((field) => (item?.[field] || '') !== vehiclePeriod[field]);
+        if (!hasDiff) {
+            return item;
+        }
+
+        changed = true;
+        return {
+            ...item,
+            ...vehiclePeriod,
+        };
+    });
+
+    return { items: nextItems, changed, hasVehicle: true, vehiclePeriod };
+};
 
 const Reservation = () => {
     // const { user, setUser } = useContext(AuthContext);
@@ -31,10 +85,16 @@ const Reservation = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
     const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+    const [showCarSearchModal, setShowCarSearchModal] = useState(false);
+    const [showAccessorySelectModal, setShowAccessorySelectModal] = useState(false);
     const [loading, setLoading] = useState(true);
     const [listsLoaded, setListsLoaded] = useState(false);
-    const [itemCategories, setItemCategories] = useState([]);
-    const [reservationFormOptions, setReservationFormOptions] = useState({ itemTypes: [] });
+    const [reservationFormOptions, setReservationFormOptions] = useState({
+        itemTypes: [],
+        itemCategories: [],
+        defaultBookedFromTime: '',
+        defaultBookedToTime: '',
+    });
 
     const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
 
@@ -44,8 +104,99 @@ const Reservation = () => {
         { text: 'Epostadress finns', color: '#56983cff' }
     ];
 
-    const isVehicleEnabledForOffice = (reservationFormOptions.itemTypes || [])
-        .some(itemType => (itemType?.code || '').toUpperCase() === 'VEHICLE');
+    const formatErrorMessage = (error) => {
+        const responseData = error?.response?.data ?? error?.payload ?? error?.message;
+
+        if (typeof responseData === 'string') {
+            return responseData;
+        }
+
+        if (responseData && typeof responseData === 'object') {
+            const fieldErrors = responseData.errors;
+            if (fieldErrors && typeof fieldErrors === 'object') {
+                const messages = Object.values(fieldErrors)
+                    .flat()
+                    .filter(Boolean)
+                    .map(String);
+
+                if (messages.length > 0) {
+                    return messages.join('\n');
+                }
+            }
+
+            return responseData.message || responseData.title || 'Ett fel uppstod vid sparande';
+        }
+
+        return 'Ett fel uppstod vid sparande';
+    };
+
+    const toNullIfBlank = (value) => {
+        if (typeof value !== 'string') {
+            return value;
+        }
+
+        return value.trim() === '' ? null : value;
+    };
+
+    const sanitizeReservationForSave = (reservationToSave) => {
+        const reservationItems = Array.isArray(reservationToSave?.reservationItems)
+            ? reservationToSave.reservationItems.map((item) => ({
+                ...item,
+                itemId: item?.itemId === '' ? null : item?.itemId,
+                debitCategoryId: item?.debitCategoryId === '' ? null : item?.debitCategoryId,
+                insuranceCompanyId: item?.insuranceCompanyId === '' ? null : item?.insuranceCompanyId,
+                bookedFrom: toNullIfBlank(item?.bookedFrom),
+                bookedTo: toNullIfBlank(item?.bookedTo),
+                actualFrom: toNullIfBlank(item?.actualFrom),
+                actualTo: toNullIfBlank(item?.actualTo),
+                kmOut: item?.kmOut === '' ? null : item?.kmOut,
+                kmIn: item?.kmIn === '' ? null : item?.kmIn,
+                fuelLitres: item?.fuelLitres === '' ? null : item?.fuelLitres,
+                fuelUnitPrice: item?.fuelUnitPrice === '' ? null : item?.fuelUnitPrice,
+            }))
+            : [];
+
+        const reservationCalcs = Array.isArray(reservationToSave?.reservationCalcs)
+            ? reservationToSave.reservationCalcs.map((calc) => ({
+                ...calc,
+                dateTimeFrom: toNullIfBlank(calc?.dateTimeFrom),
+                dateTimeTo: toNullIfBlank(calc?.dateTimeTo),
+            }))
+            : [];
+
+        return {
+            ...reservationToSave,
+            driverLicenceExpireDate: toNullIfBlank(reservationToSave?.driverLicenceExpireDate),
+            reservationItems,
+            reservationCalcs,
+        };
+    };
+
+    const officeItemTypes = (reservationFormOptions.itemTypes || [])
+        .map(itemType => ({
+            code: String(itemType?.code || itemType?.Code || '').trim(),
+            name: String(itemType?.name || itemType?.Name || '').trim(),
+        }))
+        .filter(itemType => itemType.code || itemType.name);
+
+    const normalizeItemTypeValue = (value) => String(value || '').trim().toUpperCase();
+
+    const getEnabledOfficeItemTypeCode = (code) => {
+        const normalizedCode = normalizeItemTypeValue(code);
+        const match = officeItemTypes.find(itemType => normalizeItemTypeValue(itemType.code) === normalizedCode);
+        return match?.code || null;
+    };
+
+    const vehicleItemTypeCode = getEnabledOfficeItemTypeCode('VEHICLE');
+    const trailerItemTypeCode = getEnabledOfficeItemTypeCode('TRAILER');
+    const liftItemTypeCode = getEnabledOfficeItemTypeCode('LIFT');
+    const hakiItemTypeCode = getEnabledOfficeItemTypeCode('HAKI');
+    const aluItemTypeCode = getEnabledOfficeItemTypeCode('ALU');
+    const accessoryItemTypeCode = getEnabledOfficeItemTypeCode('ACCESSORY');
+    const toolItemTypeCode = getEnabledOfficeItemTypeCode('TOOL');
+
+    const isVehicleEnabledForOffice = Boolean(vehicleItemTypeCode);
+    const itemCategories = reservationFormOptions.itemCategories || [];
 
 
     const hasUnsavedChanges = () => {
@@ -141,9 +292,16 @@ const Reservation = () => {
                 ...newItems[index],
                 [field]: value
             };
+
+            const changedItem = newItems[index];
+            const shouldSyncAccessories = isVehicleItem(changedItem) && ITEM_PERIOD_FIELDS.includes(field);
+            const syncedItems = shouldSyncAccessories
+                ? syncAccessoryPeriodsWithVehicle(newItems).items
+                : newItems;
+
             return {
                 ...prev,
-                reservationItems: newItems
+                reservationItems: syncedItems
             };
         });
     };
@@ -151,26 +309,156 @@ const Reservation = () => {
     const handleRemoveItem = (index) => {
         markStale();
         setMessages(prev => prev.filter(msg => msg.type !== 'success'));
-        setReservation(prev => ({
-            ...prev,
-            reservationItems: prev.reservationItems.filter((_, i) => i !== index)
-        }));
+        setReservation(prev => {
+            const nextItems = (prev.reservationItems || []).filter((_, i) => i !== index);
+            const synced = syncAccessoryPeriodsWithVehicle(nextItems);
+
+            return {
+                ...prev,
+                reservationItems: synced.items
+            };
+        });
+    };
+
+    const closeAccessorySelectModal = () => {
+        setShowAccessorySelectModal(false);
+    };
+
+    const handleAddAccessoryClick = () => {
+        setMessages(prev => prev.filter(msg => msg.type !== 'success'));
+        setShowAccessorySelectModal(true);
+    };
+
+    const handleSelectAccessory = (selectedItem) => {
+        if (!selectedItem) {
+            return;
+        }
+
+        markStale();
+        setMessages(prev => prev.filter(msg => msg.type !== 'success'));
+
+        setReservation(prev => {
+            const existingItems = prev?.reservationItems || [];
+            const vehiclePeriod = getPrimaryVehiclePeriod(existingItems);
+            const shouldCopyVehiclePeriod = Boolean(vehiclePeriod);
+
+            const newItem = {
+                itemTypeCode: accessoryItemTypeCode,
+                itemId: Number.isInteger(selectedItem?.id) ? selectedItem.id : null,
+                itemName: selectedItem?.itemNr || '',
+                itemNr: selectedItem?.itemNr || '',
+                regNr: selectedItem?.regNr || '',
+                manufacturer: selectedItem?.manufacturer || '',
+                category: selectedItem?.itemCategoryName || '',
+                model: selectedItem?.itemModelName || '',
+                itemNote: selectedItem?.note || '',
+                bookedFrom: shouldCopyVehiclePeriod ? vehiclePeriod.bookedFrom : '',
+                bookedTo: shouldCopyVehiclePeriod ? vehiclePeriod.bookedTo : '',
+                actualFrom: shouldCopyVehiclePeriod ? vehiclePeriod.actualFrom : '',
+                actualTo: shouldCopyVehiclePeriod ? vehiclePeriod.actualTo : ''
+            };
+
+            const nextItems = [...existingItems, newItem];
+            const synced = syncAccessoryPeriodsWithVehicle(nextItems);
+
+            return {
+                ...prev,
+                reservationItems: synced.items
+            };
+        });
+
+        closeAccessorySelectModal();
     };
 
     const handleAddItem = (itemTypeCode) => {
         markStale();
         setMessages(prev => prev.filter(msg => msg.type !== 'success'));
         setReservation(prev => {
+            const existingItems = prev?.reservationItems || [];
+            const vehiclePeriod = getPrimaryVehiclePeriod(existingItems);
+            const shouldCopyVehiclePeriod = normalizeItemTypeValue(itemTypeCode) === 'ACCESSORY' && Boolean(vehiclePeriod);
+
             const newItem = {
                 itemTypeCode: itemTypeCode,
-                bookedFrom: '',
-                bookedTo: '',
+                bookedFrom: shouldCopyVehiclePeriod ? vehiclePeriod.bookedFrom : '',
+                bookedTo: shouldCopyVehiclePeriod ? vehiclePeriod.bookedTo : '',
+                actualFrom: shouldCopyVehiclePeriod ? vehiclePeriod.actualFrom : '',
+                actualTo: shouldCopyVehiclePeriod ? vehiclePeriod.actualTo : ''
+            };
+
+            const nextItems = [...existingItems, newItem];
+            const synced = syncAccessoryPeriodsWithVehicle(nextItems);
+
+            return {
+                ...prev,
+                reservationItems: synced.items
+            };
+        });
+    };
+
+    const formatDateTimeLocal = (value) => {
+        if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            return '';
+        }
+
+        const year = value.getFullYear();
+        const month = `${value.getMonth() + 1}`.padStart(2, '0');
+        const day = `${value.getDate()}`.padStart(2, '0');
+        const hours = `${value.getHours()}`.padStart(2, '0');
+        const minutes = `${value.getMinutes()}`.padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    const applyTimeOfDay = (value, timeOfDay) => {
+        if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            return '';
+        }
+
+        const normalizedTimeOfDay = String(timeOfDay ?? '').trim();
+        if (!TIME_OF_DAY_PATTERN.test(normalizedTimeOfDay)) {
+            return formatDateTimeLocal(value);
+        }
+
+        const [hoursText, minutesText] = normalizedTimeOfDay.split(':');
+        const nextValue = new Date(value);
+        nextValue.setHours(Number(hoursText), Number(minutesText), 0, 0);
+        return formatDateTimeLocal(nextValue);
+    };
+
+    const handleCarSearch = ({ period, category, model, selectedCar }) => {
+        markStale();
+        setMessages(prev => prev.filter(msg => msg.type !== 'success'));
+
+        setReservation(prev => {
+            const selectedRegNr = selectedCar?.regNr || selectedCar?.regnr || '';
+            const selectedManufacturer = selectedCar?.manufacturer || '';
+            const selectedCategory = selectedCar?.itemCategoryName || selectedCar?.categoryName || selectedCar?.category || category || '';
+            const selectedModel = selectedCar?.itemModelName || selectedCar?.modelName || selectedCar?.model || model || '';
+            const selectedYearModel = selectedCar?.yearModel || selectedCar?.yearmodel || '';
+            const defaultBookedFromTime = String(reservationFormOptions?.defaultBookedFromTime ?? '').trim();
+            const defaultBookedToTime = String(reservationFormOptions?.defaultBookedToTime ?? '').trim();
+
+            const newItem = {
+                itemTypeCode: 'VEHICLE',
+                itemId: Number.isInteger(selectedCar?.id) ? selectedCar.id : null,
+                itemNr: selectedCar?.itemNr || '',
+                regNr: selectedRegNr,
+                manufacturer: selectedManufacturer,
+                category: selectedCategory,
+                model: selectedModel,
+                yearModel: selectedYearModel,
+                bookedFrom: applyTimeOfDay(period?.from, defaultBookedFromTime),
+                bookedTo: applyTimeOfDay(period?.to, defaultBookedToTime),
                 actualFrom: '',
                 actualTo: ''
             };
+
+            const nextItems = [...(prev?.reservationItems || []), newItem];
+            const synced = syncAccessoryPeriodsWithVehicle(nextItems);
+
             return {
                 ...prev,
-                reservationItems: [...(prev.reservationItems || []), newItem]
+                reservationItems: synced.items
             };
         });
     };
@@ -232,11 +520,17 @@ const Reservation = () => {
                 return reservationData;
             }
 
-            setReservation(reservationData);
-            setOriginalReservation(JSON.parse(JSON.stringify(reservationData)));
+            const synced = syncAccessoryPeriodsWithVehicle(reservationData?.reservationItems || []);
+            const normalizedReservationData = {
+                ...reservationData,
+                reservationItems: synced.items,
+            };
+
+            setReservation(normalizedReservationData);
+            setOriginalReservation(JSON.parse(JSON.stringify(normalizedReservationData)));
             skipUnsavedGuardRef.current = false;
             try { setBadges && setBadges(defaultBadges); } catch (e) { /* ignore if unavailable */ }
-            return reservationData;
+            return normalizedReservationData;
         }
         catch (error) {
             if (!isActive()) {
@@ -252,7 +546,12 @@ const Reservation = () => {
     const getReservationFormOptions = async ({ dedupe = false, isActive = () => true } = {}) => {
         const fetchFormOptions = async () => {
             const response = await apiClient.get('/reservation/form-options');
-            return response?.data || { itemTypes: [] };
+            return response?.data || {
+                itemTypes: [],
+                itemCategories: [],
+                defaultBookedFromTime: '',
+                defaultBookedToTime: '',
+            };
         };
 
         try {
@@ -268,12 +567,27 @@ const Reservation = () => {
             return formOptions;
         } catch (error) {
             if (!isActive()) {
-                return { itemTypes: [] };
+                return {
+                    itemTypes: [],
+                    itemCategories: [],
+                    defaultBookedFromTime: '',
+                    defaultBookedToTime: '',
+                };
             }
 
             console.error('Error getting reservation form options:', error);
-            setReservationFormOptions({ itemTypes: [] });
-            return { itemTypes: [] };
+            setReservationFormOptions({
+                itemTypes: [],
+                itemCategories: [],
+                defaultBookedFromTime: '',
+                defaultBookedToTime: '',
+            });
+            return {
+                itemTypes: [],
+                itemCategories: [],
+                defaultBookedFromTime: '',
+                defaultBookedToTime: '',
+            };
         }
     }
 
@@ -284,7 +598,7 @@ const Reservation = () => {
             return;
         }
 
-        const reservationData = { ...reservation };
+        const reservationData = sanitizeReservationForSave(reservation);
 
         try {
             let reservationId = reservation.id;
@@ -311,8 +625,7 @@ const Reservation = () => {
                 await getPdf({ ignoreUnsaved: true });
             }
         } catch (error) {
-            const errorText = error?.response?.data ?? error?.message;
-            setMessages([{ type: 'error', text: errorText }]);
+            setMessages([{ type: 'error', text: formatErrorMessage(error) }]);
         }
     };
 
@@ -327,7 +640,7 @@ const Reservation = () => {
         try {
             await apiClient.delete(`/reservation/${reservation.id}`);
         } catch (error) {
-            const errorText = error?.response?.data;
+            const errorText = formatErrorMessage(error);
             if (errorText) {
                 setMessages([{ type: 'error', text: errorText || 'Kunde inte ta bort förfrågan' }]);
                 return;
@@ -465,6 +778,21 @@ const Reservation = () => {
                 onSelectCustomer={handleSelectCustomer}
             />
 
+            <AccessorySelectModal
+                isOpen={showAccessorySelectModal}
+                onClose={closeAccessorySelectModal}
+                onSelect={handleSelectAccessory}
+                itemTypeCode={accessoryItemTypeCode}
+                selectedPeriod={getPrimaryVehiclePeriod(reservation?.reservationItems || [])}
+            />
+
+            <CarSearchModal
+                isOpen={showCarSearchModal}
+                onClose={() => setShowCarSearchModal(false)}
+                onSearch={handleCarSearch}
+                showAvailabilityPanel={true}
+            />
+
             {/* Unsaved Changes Warning Modal */}
             <ConfirmationModal
                 isOpen={showUnsavedWarning}
@@ -570,7 +898,7 @@ const Reservation = () => {
                         <ul className="mt-2 space-y-2">
                             {messages.map((message, index) => (
                                 <li key={index} className={`text-center text-xs p-2 rounded border border-gray-200 ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                    {message.text}
+                                    {typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}
                                 </li>
                             ))}
                         </ul>
@@ -739,125 +1067,184 @@ const Reservation = () => {
                             </span>
                         </div>
 
-                        <div className="flex items-center space-x-2 ml-3 mt-4">
-                            <span className="text-xs text-gray-700 mr-2">Lägg till:</span>
-                            <button
-                                type="button"
-                                className="text-xs text-gray-700 border border-blue-300 hover:bg-blue-50 px-3 py-1"
-                                onClick={() => handleAddItem('VEHICLE')}
-                            >
-                                PERSONBIL
-                            </button>
-                            <button
-                                type="button"
-                                className="text-xs text-gray-700 border border-blue-300 hover:bg-blue-50 px-3 py-1"
-                            >
-                                SLÄP
-                            </button>
-                            <button
-                                type="button"
-                                className="text-xs text-gray-700 border border-blue-300 hover:bg-blue-50 px-3 py-1"
-                            >
-                                LIFT
-                            </button>
-                            <button
-                                type="button"
-                                className="text-xs text-gray-700 border border-blue-300 hover:bg-blue-50 px-3 py-1"
-                            >
-                                HAKI
-                            </button>
-                            <button
-                                type="button"
-                                className="text-xs text-gray-700 border border-blue-300 hover:bg-blue-50 px-3 py-1"
-                            >
-                                ALU-STÄLLNING
-                            </button>
-                            <button
-                                type="button"
-                                className="text-xs text-gray-700 border border-blue-300 hover:bg-blue-50 px-3 py-1"
-                            >
-                                UTRUSTNING
-                            </button>
+                        <div className="flex items-center space-x-2 ml-3 mt-4 tracking-[0.10em]">
+                            <span className="text-xs text-gray-700 mr-2 uppercase">Lägg till:</span>
+                            {vehicleItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={() => setShowCarSearchModal(true)}
+                                >
+                                    PERSONBIL
+                                </button>
+                            )}
+                            {trailerItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={() => handleAddItem(trailerItemTypeCode)}
+                                >
+                                    SLÄP
+                                </button>
+                            )}
+                            {liftItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={() => handleAddItem(liftItemTypeCode)}
+                                >
+                                    LIFT
+                                </button>
+                            )}
+                            {hakiItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={() => handleAddItem(hakiItemTypeCode)}
+                                >
+                                    HAKI
+                                </button>
+                            )}
+                            {aluItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={() => handleAddItem(aluItemTypeCode)}
+                                >
+                                    ALU-STÄLLNING
+                                </button>
+                            )}
+                            {accessoryItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={handleAddAccessoryClick}
+                                >
+                                    TILLBEHÖR
+                                </button>
+                            )}
+                            {toolItemTypeCode && (
+                                <button
+                                    type="button"
+                                    className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                    onClick={() => handleAddItem(toolItemTypeCode)}
+                                >
+                                    VERKTYG
+                                </button>
+                            )}
                         </div>
 
                         {/* Reservation Items List */}
-                        <div className="ml-3 mt-6 space-y-3">
-                            {reservation?.reservationItems?.map((item, index) => {
-                                const itemTypeCode = item.itemTypeCode?.toUpperCase();
+                        <div className="ml-3 mt-6">
+                            {(() => {
+                                const reservationItems = reservation?.reservationItems || [];
+                                const reservationItemsWithIndex = reservationItems.map((item, index) => ({ item, index }));
+                                const vehiclePeriod = getPrimaryVehiclePeriod(reservationItems);
+                                const hasVehicleInReservation = Boolean(vehiclePeriod);
 
-                                // Render appropriate component based on ItemTypeCode
-                                switch (itemTypeCode) {
-                                    case 'VEHICLE':
-                                        return (
-                                            <ReservationItemVehicle
-                                                key={item.id || index}
-                                                item={item}
-                                                index={index}
-                                                onChange={handleItemChange}
-                                                onRemove={handleRemoveItem}
-                                                insuranceCompanies={[]}
-                                                itemCategories={itemCategories}
-                                            />
-                                        );
-                                    case 'TRAILER':
-                                        return (
-                                            <ReservationItemTrailer
-                                                key={item.id || index}
-                                                item={item}
-                                                index={index}
-                                                onChange={handleItemChange}
-                                                onRemove={handleRemoveItem}
-                                                itemCategories={itemCategories}
-                                            />
-                                        );
-                                    case 'LIFT':
-                                        return (
-                                            <ReservationItemLift
-                                                key={item.id || index}
-                                                item={item}
-                                                index={index}
-                                                onChange={handleItemChange}
-                                                onRemove={handleRemoveItem}
-                                                itemCategories={itemCategories}
-                                            />
-                                        );
-                                    case 'HAKI':
-                                        return (
-                                            <ReservationItemHaki
-                                                key={item.id || index}
-                                                item={item}
-                                                index={index}
-                                                onChange={handleItemChange}
-                                                onRemove={handleRemoveItem}
-                                                itemCategories={itemCategories}
-                                            />
-                                        );
-                                    case 'ALU':
-                                        return (
-                                            <ReservationItemAlu
-                                                key={item.id || index}
-                                                item={item}
-                                                index={index}
-                                                onChange={handleItemChange}
-                                                onRemove={handleRemoveItem}
-                                                itemCategories={itemCategories}
-                                            />
-                                        );
-                                    case 'EQUIPMENT':
-                                        return (
-                                            <ReservationItemEquipment
-                                                key={item.id || index}
-                                                item={item}
-                                                index={index}
-                                                onChange={handleItemChange}
-                                                onRemove={handleRemoveItem}
-                                                itemCategories={itemCategories}
-                                            />
-                                        );
-                                    default:
-                                        return null;
-                                }
-                            })}
+                                const regularItems = reservationItemsWithIndex.filter(({ item }) => item?.itemTypeCode?.toUpperCase() !== 'ACCESSORY');
+                                const accessoryItems = reservationItemsWithIndex.filter(({ item }) => item?.itemTypeCode?.toUpperCase() === 'ACCESSORY');
+
+                                const renderRegularItem = ({ item, index }) => {
+                                    const itemTypeCode = item?.itemTypeCode?.toUpperCase();
+
+                                    switch (itemTypeCode) {
+                                        case 'VEHICLE':
+                                            return (
+                                                <ReservationItemVehicle
+                                                    key={item.id || index}
+                                                    item={item}
+                                                    index={index}
+                                                    onChange={handleItemChange}
+                                                    onRemove={handleRemoveItem}
+                                                    insuranceCompanies={[]}
+                                                    itemCategories={itemCategories}
+                                                />
+                                            );
+                                        case 'TRAILER':
+                                            return (
+                                                <ReservationItemTrailer
+                                                    key={item.id || index}
+                                                    item={item}
+                                                    index={index}
+                                                    onChange={handleItemChange}
+                                                    onRemove={handleRemoveItem}
+                                                    itemCategories={itemCategories}
+                                                />
+                                            );
+                                        case 'LIFT':
+                                            return (
+                                                <ReservationItemLift
+                                                    key={item.id || index}
+                                                    item={item}
+                                                    index={index}
+                                                    onChange={handleItemChange}
+                                                    onRemove={handleRemoveItem}
+                                                    itemCategories={itemCategories}
+                                                />
+                                            );
+                                        case 'HAKI':
+                                            return (
+                                                <ReservationItemHaki
+                                                    key={item.id || index}
+                                                    item={item}
+                                                    index={index}
+                                                    onChange={handleItemChange}
+                                                    onRemove={handleRemoveItem}
+                                                    itemCategories={itemCategories}
+                                                />
+                                            );
+                                        case 'ALU':
+                                            return (
+                                                <ReservationItemAlu
+                                                    key={item.id || index}
+                                                    item={item}
+                                                    index={index}
+                                                    onChange={handleItemChange}
+                                                    onRemove={handleRemoveItem}
+                                                    itemCategories={itemCategories}
+                                                />
+                                            );
+                                        case 'TOOL':
+                                            return (
+                                                <ReservationItemTool
+                                                    key={item.id || index}
+                                                    item={item}
+                                                    index={index}
+                                                    onChange={handleItemChange}
+                                                    onRemove={handleRemoveItem}
+                                                    itemCategories={itemCategories}
+                                                />
+                                            );
+                                        default:
+                                            return null;
+                                    }
+                                };
+
+                                return (
+                                    <>
+                                        <div className="space-y-3">
+                                            {regularItems.map(renderRegularItem)}
+                                        </div>
+                                        {accessoryItems.length > 0 && (
+                                            <div className="mt-3 flex flex-wrap items-start gap-3">
+                                                {accessoryItems.map(({ item, index }) => (
+                                                    <ReservationItemAccessory
+                                                        key={item.id || index}
+                                                        item={item}
+                                                        index={index}
+                                                        onChange={handleItemChange}
+                                                        onRemove={handleRemoveItem}
+                                                        itemCategories={itemCategories}
+                                                        lockPeriodToVehicle={hasVehicleInReservation}
+                                                        vehiclePeriod={vehiclePeriod}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
 
                     </form>

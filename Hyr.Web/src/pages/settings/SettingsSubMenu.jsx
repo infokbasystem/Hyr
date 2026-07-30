@@ -9,6 +9,7 @@ import articlesIcon from "../../assets/appbar.barcode.svg";
 import serviceTypesIcon from "../../assets/appbar.tools.svg";
 import pricingIcon from "../../assets/appbar.money.black.svg";
 import currenciesIcon from "../../assets/appbar.currency.dollar.svg";
+import insuranceCompaniesIcon from '../../assets/appbar.transit.car.accident.svg'
 
 const DEFAULT_ICON_WIDTH = "w-6";
 const DEFAULT_ICON_HEIGHT = "h-6";
@@ -27,6 +28,7 @@ const items = [
     { to: "/settings/models", label: "Modeller", icon: modelsIcon },
     { to: "/settings/articles", label: "Artiklar", icon: articlesIcon },
     { to: "/settings/servicetypes", label: "Service", icon: serviceTypesIcon },
+    { to: "/settings/insurancecompanies", label: "F-bolag", icon: insuranceCompaniesIcon, iconHeight: "h-6", iconWidth: "w-9" },
     { to: "/settings/currencies", label: "Valutor", icon: currenciesIcon, leftMargin: "ml-16 mr-4" },
     { to: "/settings/vat", label: "Moms", iconComponent: Percent },
     { to: "/settings/accounts", label: "Kontoplan", iconComponent: BookText },

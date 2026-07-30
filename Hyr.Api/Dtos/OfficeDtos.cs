@@ -78,9 +78,13 @@ public class OfficeItemTypeSettingDto
 public class OfficeItemTypeSettingsDto
 {
     public List<OfficeItemTypeSettingDto> ItemTypes { get; set; } = [];
+    public string DefaultBookedFromTime { get; set; } = string.Empty;
+    public string DefaultBookedToTime { get; set; } = string.Empty;
 }
 
 public class OfficeItemTypeSettingsUpdateDto
 {
     public List<int> ItemTypeIds { get; set; } = [];
+    public string DefaultBookedFromTime { get; set; } = string.Empty;
+    public string DefaultBookedToTime { get; set; } = string.Empty;
 }
