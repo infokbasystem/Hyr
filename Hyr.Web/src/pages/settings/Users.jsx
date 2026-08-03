@@ -489,13 +489,13 @@ export default function Users() {
 
               <div className="mb-0 min-h-[42px] w-80">
                 {errorMessage && (
-                  <div className="w-full border border-rose-200 bg-rose-50 py-2 pl-4 text-xs text-rose-800">
+                  <div className="rounded-full border border-rose-200 bg-rose-50 px-5 py-1 text-center text-xs text-rose-700">
                     {errorMessage}
                   </div>
                 )}
 
                 {statusMessage && (
-                  <div className="w-full border border-emerald-200 bg-emerald-100 py-2 pl-4 text-xs text-emerald-800">
+                  <div className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-1 text-center text-xs text-emerald-700">
                     {statusMessage}
                   </div>
                 )}
@@ -619,7 +619,7 @@ export default function Users() {
               </div>
 
               {passwordModalErrorMessage && (
-                <div className="mb-3 rounded-sm border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                <div className="mb-3 rounded-full border border-rose-200 bg-rose-50 px-5 py-1 text-center text-xs text-rose-700">
                   {passwordModalErrorMessage}
                 </div>
               )}

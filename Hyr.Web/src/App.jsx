@@ -27,7 +27,7 @@ import Item from './pages/operations/Item';
 import FinanceOverview from './pages/finance/FinanceOverview'
 import Invoice from './pages/finance/Invoice';
 import InvoicesToAccount from './pages/finance/InvoicesToAccount';
-import SearchInvoice from './pages/finance/SearchInvoice';
+import Invoices from './pages/finance/Invoices';
 import FinanceSectionPlaceholder from './pages/finance/FinanceSectionPlaceholder';
 
 import OfficeSettingsLayout from './pages/settings/OfficeSettingsLayout';
@@ -75,7 +75,7 @@ const router = createBrowserRouter(
       <Route path="finance" element={< FinanceLayout />}>
         <Route index element={<ProtectedRoute>< FinanceOverview /></ProtectedRoute>} />
         <Route path="tobeinvoiced" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
-        <Route path="invoices" element={<ProtectedRoute>< SearchInvoice /></ProtectedRoute>} />
+        <Route path="invoices" element={<ProtectedRoute>< Invoices /></ProtectedRoute>} />
         <Route path="newinvoice" element={<Navigate to="/finance/invoice/new" replace />} />
         <Route path="exporttoaccounting" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
         <Route path="stocktaking" element={<ProtectedRoute>< FinanceSectionPlaceholder title="StockTaking" /></ProtectedRoute>} />
@@ -84,7 +84,6 @@ const router = createBrowserRouter(
         <Route path="invoice/new" element={<ProtectedRoute>< Invoice /></ProtectedRoute>} />
         <Route path="invoice/:id" element={<ProtectedRoute>< Invoice /></ProtectedRoute>} />  
         <Route path="invoicestoaccount" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
-        <Route path="searchinvoice" element={<ProtectedRoute>< SearchInvoice /></ProtectedRoute>} />
       </Route>
       <Route path="settings" element={< SettingsLayout />}>
         <Route index element={<Navigate to="office" replace />} />

@@ -1,4 +1,13 @@
 import { NavLink } from "react-router-dom";
+import {
+    ChartNoAxesColumn,
+    Search,
+    FileStack,
+    BadgeDollarSign,
+    ListChecks,
+    Sigma,
+    Scale,
+} from 'lucide-react'
 import bg from "../../assets/content.png";
 
 import overviewIcon from "../../assets/appbar.page.powerpoint.svg";
@@ -10,19 +19,21 @@ import stockTakingIcon from "../../assets/appbar.list.two.svg";
 import stockReportIcon from "../../assets/appbar.pie.svg";
 import accountsReceivableIcon from "../../assets/appbar.currency.dollar.svg";
 
-function IconImage({ src, className = "", width = "w-6", height = "h-6" }) {
+const DEFAULT_ICON_WIDTH = "w-6";
+const DEFAULT_ICON_HEIGHT = "h-6";
+
+function IconImage({ src, className = "", width = DEFAULT_ICON_WIDTH, height = DEFAULT_ICON_HEIGHT }) {
     return <img src={src} alt="" className={[height, width, className].filter(Boolean).join(" ")} />;
 }
 
 const items = [
-    { to: "/finance", label: "Overview", icon: overviewIcon, end: true },
-    { to: "/finance/tobeinvoiced", label: "ToBeInvoiced", icon: toBeInvoicedIcon },
-    { to: "/finance/invoices", label: "Invoices", icon: invoicesIcon },
-    { to: "/finance/invoice/new", label: "NewInvoice", icon: newInvoiceIcon },
-    { to: "/finance/exporttoaccounting", label: "ExportToAccounting", icon: exportToAccountingIcon },
-    { to: "/finance/stocktaking", label: "StockTaking", icon: stockTakingIcon },
-    { to: "/finance/stockreport", label: "StockReport", icon: stockReportIcon },
-    { to: "/finance/accountsreceivable", label: "AccountsReceivable", icon: accountsReceivableIcon },
+    { to: "/finance", label: "Overview", iconComponent: ChartNoAxesColumn, end: true },
+    { to: "/finance/invoices", label: "Sök faktura", iconComponent: Search },
+    { to: "/finance/tobeinvoiced", label: "ToBeInvoiced", iconComponent: FileStack, leftMargin: "ml-12" },
+    { to: "/finance/invoice/new", label: "NewInvoice", iconComponent: BadgeDollarSign },
+    { to: "/finance/stocktaking", label: "StockTaking", iconComponent: ListChecks, leftMargin: "ml-12" },
+    { to: "/finance/stockreport", label: "StockReport", iconComponent: Sigma },
+    { to: "/finance/exporttoaccounting", label: "Bokför", iconComponent: Scale, leftMargin: "ml-12" },
 ];
 
 export default function FinanceSubMenu({ activeOverridePath = "" }) {
@@ -33,7 +44,7 @@ export default function FinanceSubMenu({ activeOverridePath = "" }) {
         >
             {items.map((item) => {
                 return (
-                    <div className="ml-3 mr-3 flex justify-center" key={item.label}>
+                    <div className={["flex justify-center", item.leftMargin || "ml-4 mr-4"].filter(Boolean).join(" ")} key={item.label}>
                         <NavLink
                             to={item.to}
                             end={item.end}
@@ -56,16 +67,30 @@ export default function FinanceSubMenu({ activeOverridePath = "" }) {
 
                                 return (
                                     <>
-                                        <IconImage
-                                            src={item.icon}
-                                            width={item.iconWidth}
-                                            height={item.iconHeight}
-                                            className={
-                                                resolvedActive
-                                                    ? "opacity-100"
-                                                    : "opacity-55 transition-opacity group-hover:opacity-100"
-                                            }
-                                        />
+                                        {item.iconComponent ? (
+                                            <item.iconComponent
+                                                className={[
+                                                    item.iconHeight ?? DEFAULT_ICON_HEIGHT,
+                                                    item.iconWidth ?? DEFAULT_ICON_WIDTH,
+                                                    resolvedActive
+                                                        ? "opacity-100"
+                                                        : "opacity-100 transition-opacity group-hover:opacity-100",
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(" ")}
+                                            />
+                                        ) : (
+                                            <IconImage
+                                                src={item.icon}
+                                                width={item.iconWidth ?? DEFAULT_ICON_WIDTH}
+                                                height={item.iconHeight ?? DEFAULT_ICON_HEIGHT}
+                                                className={
+                                                    resolvedActive
+                                                        ? "opacity-100"
+                                                        : "opacity-55 transition-opacity group-hover:opacity-100"
+                                                }
+                                            />
+                                        )}
                                         <span className="mt-1 whitespace-nowrap font-medium">{item.label}</span>
                                     </>
                                 );

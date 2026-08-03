@@ -86,7 +86,7 @@ const ReservationItemAccessory = ({ item, index, onRemove, onChange, itemCategor
 
                 {/* Column 2: Booking Info */}
                 <div className="min-w-[200px] max-w-[320px]">
-                    <h3 className="text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">Bokningsinfo</h3>
+                    <h3 className="text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">&nbsp;</h3>
                     <div className="space-y-1">
                         {lockPeriodToVehicle ? (
                             <>

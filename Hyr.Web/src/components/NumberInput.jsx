@@ -6,12 +6,19 @@ const NumberInput = ({
     value,
     disabled = false,
     decimals = 2,
+    stylePreset = 'default',
+    gridcell = false,
     className,
     onChange,
     ...props
 }) => {
     const [displayValue, setDisplayValue] = useState("");
     const [isFocused, setIsFocused] = useState(false);
+    const isGridCell = stylePreset === 'gridCell' || gridcell
+
+    const baseClassName = isGridCell
+        ? 'block h-full w-full border border-transparent bg-transparent px-3 pt-[6px] pb-[3px] text-right text-xs text-gray-800 outline-none transition focus:bg-white focus:ring-0 focus:shadow-[inset_0_0_0_1px_#60a5fa]'
+        : 'text-right px-2 py-1 focus:outline-none'
 
     // Format number for display when blurred
     const formatNumber = (num) => {
@@ -93,10 +100,11 @@ const NumberInput = ({
             type="text"
             value={displayValue}
             disabled={disabled}
+            autoComplete="off"
             onFocus={handleFocus}
             onBlur={handleBlur}
             onChange={handleChange}
-            className={`text-right px-2 py-1 focus:outline-none ${className}`}
+            className={`${baseClassName} ${className ?? ''}`.trim()}
             {...props}
         />
     );

@@ -1,10 +1,47 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ArrowLeftCircle, ArrowRightCircle, AlertTriangle } from 'lucide-react';
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import apiClient from '../../lib/apiClient';
 import DateRangePicker from '../../components/DaterangePicker';
+
+const INVOICE_SEARCH_CACHE_KEY = 'finance-invoice-search-page-state';
+
+function readCachedInvoiceState() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    try {
+        const raw = window.sessionStorage.getItem(INVOICE_SEARCH_CACHE_KEY);
+        if (!raw) {
+            return null;
+        }
+
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+function parseDateOnly(value) {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    const [year, month, day] = value.split('-').map(Number);
+    if (!year || !month || !day) {
+        return null;
+    }
+
+    const parsed = new Date(year, month - 1, day);
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+
+    return parsed;
+}
 
 function formatDate(value) {
     if (!value) {
@@ -32,21 +69,47 @@ function formatDateForQuery(value) {
     return parsed.toISOString().slice(0, 10);
 }
 
-const SearchInvoice = () => {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [invoices, setInvoices] = useState([]);
-    const [totalPages, setTotalPages] = useState(1);
-    const [selectedRowId, setSelectedRowId] = useState(null);
+const Invoices = () => {
+    const cachedState = readCachedInvoiceState();
+    const requestSequenceRef = useRef(0);
+    const didMountRef = useRef(false);
+    const hadCachedSnapshotRef = useRef(Boolean(cachedState?.searchLoaded));
 
-    const [fromDate, setFromDate] = useState(null);
-    const [toDate, setToDate] = useState(null);
-    const [invoiceNumber, setInvoiceNumber] = useState('');
+    const [loading, setLoading] = useState(!cachedState?.searchLoaded);
+    const [error, setError] = useState(null);
+    const [invoices, setInvoices] = useState(cachedState?.invoices ?? []);
+    const [totalPages, setTotalPages] = useState(cachedState?.totalPages ?? 1);
+    const [selectedRowId, setSelectedRowId] = useState(cachedState?.selectedRowId ?? null);
+    const [hasSearchSnapshot, setHasSearchSnapshot] = useState(Boolean(cachedState?.searchLoaded));
+
+    const [fromDate, setFromDate] = useState(parseDateOnly(cachedState?.fromDate));
+    const [toDate, setToDate] = useState(parseDateOnly(cachedState?.toDate));
+    const [invoiceNumber, setInvoiceNumber] = useState(cachedState?.invoiceNumber ?? '');
 
     const [filters, setFilters] = useState({
-        page: 1,
-        pageSize: 20
+        page: cachedState?.filters?.page ?? 1,
+        pageSize: cachedState?.filters?.pageSize ?? 20
     });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        window.sessionStorage.setItem(
+            INVOICE_SEARCH_CACHE_KEY,
+            JSON.stringify({
+                invoices,
+                totalPages,
+                selectedRowId,
+                fromDate: formatDateForQuery(fromDate),
+                toDate: formatDateForQuery(toDate),
+                invoiceNumber,
+                filters,
+                searchLoaded: hasSearchSnapshot
+            })
+        );
+    }, [invoices, totalPages, selectedRowId, fromDate, toDate, invoiceNumber, filters, hasSearchSnapshot]);
 
 
     const buildAndExecuteQuery = (newFromDate = fromDate, newToDate = toDate, newInvoiceNumber = invoiceNumber, newFilters = null) => {
@@ -72,23 +135,29 @@ const SearchInvoice = () => {
         queryParams.append('Page', currentFilters.page.toString());
         queryParams.append('PageSize', currentFilters.pageSize.toString());
 
-        // Execute the fetch with built query params
-        fetchInvoices(queryParams);
+        return queryParams;
     };
 
-    const fetchInvoices = async (queryParams) => {
-        setLoading(true);
-        setError(null);
+    const fetchInvoices = async (queryParams, requestId) => {
         try {
             const response = await apiClient.get(`/invoice?${queryParams.toString()}`);
             const data = response.data;
+
+            if (requestId !== requestSequenceRef.current) {
+                return;
+            }
+
             setTotalPages(data.totalPages);
-            setInvoices(data.data);
+            const incomingInvoices = data.data ?? [];
+            setInvoices(incomingInvoices);
+            setSelectedRowId((prev) => (incomingInvoices.some((invoice) => invoice.id === prev) ? prev : null));
         } catch (error) {
+            if (requestId !== requestSequenceRef.current) {
+                return;
+            }
+
             console.error('Error fetching invoices:', error);
             setError(error.message);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -97,36 +166,73 @@ const SearchInvoice = () => {
         setFromDate(startDate ?? null);
         setToDate(endDate ?? null);
 
-        const newFilters = { ...filters, page: 1 };
-        setFilters(newFilters);
-        buildAndExecuteQuery(startDate ?? null, endDate ?? null, invoiceNumber, newFilters);
+        setFilters((prev) => ({ ...prev, page: 1 }));
     };
 
     const handleInvoiceNumberChange = (value) => {
         setInvoiceNumber(value);
-        buildAndExecuteQuery(fromDate, toDate, value);
     };
 
 
     useEffect(() => {
-        buildAndExecuteQuery();
-    }, []);
+        let isDisposed = false;
+
+        const timer = window.setTimeout(async () => {
+            const requestId = ++requestSequenceRef.current;
+            const isWarmStartRefresh = !didMountRef.current && hadCachedSnapshotRef.current;
+            const queryParams = buildAndExecuteQuery();
+
+            if (!isWarmStartRefresh) {
+                setLoading(true);
+            }
+
+            setError(null);
+
+            try {
+                if (isDisposed) {
+                    return;
+                }
+
+                await fetchInvoices(queryParams, requestId);
+            } finally {
+                if (!isDisposed && requestId === requestSequenceRef.current) {
+                    if (!isWarmStartRefresh) {
+                        setLoading(false);
+                    }
+
+                    setHasSearchSnapshot(true);
+
+                    if (!didMountRef.current) {
+                        didMountRef.current = true;
+                    }
+                }
+            }
+        }, 250);
+
+        return () => {
+            isDisposed = true;
+            window.clearTimeout(timer);
+        };
+    }, [fromDate, toDate, invoiceNumber, filters.page, filters.pageSize]);
 
 
     return (
-        <div className="flex h-full flex-col py-2">
-            <div className='ml-10 text-sm text-gray-500'>Sök fakturor</div>
+        <div className="flex h-full flex-col px-0 py-2 md:px-[clamp(8px,10vw,20vw)]">
+            {/* <div className='ml-10 text-sm text-gray-500'>Sök fakturor</div> */}
 
-            <div className={`mt-3 mx-8 flex flex-wrap items-center gap-5 ${loading ? 'pointer-events-none opacity-70' : ''}`}>
+            <div className={`mt-3 flex flex-wrap items-center gap-5 ${loading && !hasSearchSnapshot ? 'pointer-events-none opacity-70' : ''}`}>
                 <div className='flex items-center'>
                     <DateRangePicker
                         presets={['this-month', 'last-month', 'last-3-months', 'last-12-months', 'last-year', 'year-to-date']}
                         placeholder="Välj period"
                         onApply={handlePeriodApply}
+                        initialStartDate={fromDate}
+                        initialEndDate={toDate}
                         triggerRadius="full"
                         triggerClassName="h-7 w-[260px] border-lime-600 px-3 text-xs text-gray-700 focus:border-lime-700"
                         openTriggerClassName="border-lime-700 ring-1 ring-lime-200"
                         closedTriggerClassName="border-lime-600 hover:border-lime-700"
+                        widthClassName="w-60"
                     />
                     <label className="ml-10 mr-5 text-xs text-gray-700">Fakturanr.</label>
                     <input
@@ -153,7 +259,6 @@ const SearchInvoice = () => {
                             onClick={() => {
                                 const newFilters = { ...filters, page: Math.max(1, filters.page - 1) };
                                 setFilters(newFilters);
-                                buildAndExecuteQuery(fromDate, toDate, invoiceNumber, newFilters);
                             }}
                             disabled={filters.page <= 1 || loading}
                             className="disabled:cursor-not-allowed disabled:opacity-50"
@@ -164,7 +269,6 @@ const SearchInvoice = () => {
                             onClick={() => {
                                 const newFilters = { ...filters, page: filters.page + 1 };
                                 setFilters(newFilters);
-                                buildAndExecuteQuery(fromDate, toDate, invoiceNumber, newFilters);
                             }}
                             disabled={loading || invoices.length < filters.pageSize}
                             className="disabled:cursor-not-allowed disabled:opacity-50"
@@ -177,12 +281,12 @@ const SearchInvoice = () => {
             </div>
 
             {error && (
-                <div className="mt-4 mx-8 w-fit rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+                <div className="mt-4 w-fit rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
                     {error}
                 </div>
             )}
 
-            <div className='mt-4 mx-8 flex-1 overflow-auto border-t border-gray-300 py-1'>
+            <div className='mt-4 flex-1 overflow-auto border-t border-gray-300 py-1'>
                 <table className="w-full min-w-full border-collapse text-xs" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
                             <thead>
                                 <tr>
@@ -230,8 +334,6 @@ const SearchInvoice = () => {
                                                 <td className="px-2 pb-[4px] pt-[6px] text-xs text-gray-800">
                                                     <NavLink
                                                         to={`/finance/invoice/${invoice.id}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
                                                         className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
                                                         onClick={(event) => event.stopPropagation()}
                                                     >
@@ -264,4 +366,4 @@ const SearchInvoice = () => {
     )
 }
 
-export default SearchInvoice
+export default Invoices

@@ -46,6 +46,7 @@ public sealed class ReservationUpsertDto
     public string PickupPlaceNote { get; set; } = string.Empty;
     public bool IsOngoingInvoicing { get; set; }
     public string OngoingInvoicingInterval { get; set; } = string.Empty;
+    public string PricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
     public ICollection<ReservationItem> ReservationItems { get; set; } = new List<ReservationItem>();
     public ICollection<ReservationCalc> ReservationCalcs { get; set; } = new List<ReservationCalc>();
 }

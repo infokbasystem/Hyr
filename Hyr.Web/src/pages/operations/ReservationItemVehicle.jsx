@@ -118,6 +118,16 @@ const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceComp
                     {item?.itemNote && (
                         <p className="text-xs text-gray-500 mt-2">{item.itemNote}</p>
                     )}
+                    {/* Delete Button */}
+                    <div className="mt-1">
+                        <button
+                            type="button"
+                            onClick={() => onRemove(index)}
+                            className="text-xs text-red-600 hover:text-red-800 hover:underline"
+                        >
+                            TA BORT BIL
+                        </button>
+                    </div>
                 </div>
 
                 {/* Column 2: Booking Info */}
@@ -405,16 +415,6 @@ const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceComp
                 </div>
             )}
 
-            {/* Delete Button */}
-            <div className="mt-1">
-                <button
-                    type="button"
-                    onClick={() => onRemove(index)}
-                    className="text-xs text-red-600 hover:text-red-800 hover:underline"
-                >
-                    TA BORT BIL
-                </button>
-            </div>
         </div>
     );
 };

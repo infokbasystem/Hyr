@@ -55,6 +55,7 @@ namespace Hyr.Api.Models
         public virtual User? ModifiedByUser { get; set; }
         public virtual Customer? Customer { get; set; }
         public virtual ICollection<InvoiceRow> InvoiceRows { get; set; } = new List<InvoiceRow>();
+        public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
 
         [NotMapped]

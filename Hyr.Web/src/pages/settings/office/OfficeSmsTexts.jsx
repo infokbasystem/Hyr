@@ -563,13 +563,13 @@ export default function OfficeSmsTexts() {
 
                             <div className="mb-0 min-h-[42px] w-80">
                                 {error && (
-                                    <div className="w-full border border-rose-200 bg-rose-50 py-2 pl-4 text-xs text-rose-800">
+                                    <div className="rounded-full border border-rose-200 bg-rose-50 px-5 py-1 text-center text-xs text-rose-700">
                                         {error}
                                     </div>
                                 )}
 
                                 {successMessage && (
-                                    <div className="w-full border border-emerald-200 bg-emerald-100 py-2 pl-4 text-xs text-emerald-800">
+                                    <div className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-1 text-center text-xs text-emerald-700">
                                         {successMessage}
                                     </div>
                                 )}

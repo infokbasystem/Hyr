@@ -49,6 +49,7 @@ namespace Hyr.Api.Models
         public virtual ICollection<ReservationCalcItem> ReservationCalcItems { get; set; } = new List<ReservationCalcItem>();
         public virtual ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
         public virtual ICollection<InvoiceRow> InvoiceRows { get; set; } = new List<InvoiceRow>();
+        public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
         public virtual ICollection<Account> Accounts { get; set; } = new List<Account>();
         public virtual ICollection<Article> Articles { get; set; } = new List<Article>();
         public virtual ICollection<VatRate> VatRates { get; set; } = new List<VatRate>();

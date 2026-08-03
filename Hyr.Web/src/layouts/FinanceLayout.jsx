@@ -22,7 +22,7 @@ const FinanceLayoutContent = () => {
             </div>
             <FinanceSubMenu activeOverridePath={activeOverridePath} />
             <div className="relative flex grow items-stretch bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50" style={{ backgroundImage: `url(${bg})` }}>
-                <div className="relative flex-grow min-w-0 overflow-hidden">
+                <div className="relative flex-grow min-w-0 overflow-visible">
                     <Outlet />
                 </div>
             </div>

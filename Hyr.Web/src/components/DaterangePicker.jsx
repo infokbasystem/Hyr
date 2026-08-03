@@ -35,8 +35,15 @@ const between = (d,s,e) => {
   if (!d||!s||!e) return false;
   return d > new Date(Math.min(s,e)) && d < new Date(Math.max(s,e));
 };
-const fmt = d => d ? `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : null;
-const fmtShort = d => d ? `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : null;
+const fmt = d => {
+  if (!d) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(d).toLowerCase();
+};
+const fmtShort = fmt;
 
 function addMonths(year, month, delta) {
   const date = new Date(year, month + delta, 1);
@@ -342,7 +349,7 @@ export default function DateRangePicker({
         ].join(" ")}
       >
         <span className="text-gray-500 shrink-0"><CalIcon /></span>
-        <span className={hasCommitted ? "text-gray-800" : "text-gray-700"}>
+        <span className={["mt-[2px]", hasCommitted ? "text-gray-800" : "text-gray-700"].join(" ")}>
           {hasCommitted
             ? `${fmtShort(committed.start)} – ${fmtShort(committed.end)}`
             : placeholder}
@@ -350,7 +357,7 @@ export default function DateRangePicker({
         {hasCommitted && (
           <span
             onClick={handleClear}
-            className="ml-auto flex items-center justify-center w-4 h-4 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="mt-[0px] ml-auto flex items-center justify-center w-4 h-4 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </span>

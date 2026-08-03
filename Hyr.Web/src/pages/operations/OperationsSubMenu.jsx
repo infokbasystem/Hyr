@@ -15,12 +15,12 @@ function IconImage({ src, className = "", width = "w-6", height = "h-6" }) {
 
 const items = [
     { to: "/operations", label: "Översikt", icon: overviewIcon, end: true },
-    { to: "/operations/reservations", label: "Sök bokning", icon: searchReservationIcon, leftMargin: "ml-10" },
-    { to: "/operations", label: "SMS-listor", icon: smsIcon, disabled: true },
-    { to: "/operations", label: "Inbox", icon: inboxIcon, disabled: true, leftMargin: "ml-2" },
-    { to: "/operations/reservation", label: "Ny bokning", icon: newReservationIcon, leftMargin: "ml-10" },
+    { to: "/operations/reservations", label: "Sök bokning", icon: searchReservationIcon },
+    { to: "/operations", label: "SMS-listor", icon: smsIcon, disabled: true, leftMargin: "ml-12" },
+    { to: "/operations", label: "Inbox", icon: inboxIcon, disabled: true },
+    { to: "/operations/reservation", label: "Ny bokning", icon: newReservationIcon, leftMargin: "ml-12" },
     { to: "/operations", label: "In/Ut-checkning", icon: checkInOutIcon, iconWidth: "w-10", disabled: true },
-    { to: "/operations/customers", label: "Kunder", icon: customerIcon, leftMargin: "ml-10" },
+    { to: "/operations/customers", label: "Kunder", icon: customerIcon, leftMargin: "ml-12" },
     { to: "/operations/items", label: "Hyresobjekt", icon: itemsIcon },
 ];
 

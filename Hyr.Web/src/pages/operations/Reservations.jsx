@@ -472,7 +472,7 @@ export default function Reservations() {
             value={filters.freeText}
             onChange={(event) => handleFilterChange(event.target.value)}
             placeholder="Sök"
-            className="h-7 w-full rounded-full border border-[#84cc16] bg-white px-4 text-xs text-gray-700 outline-none transition placeholder:text-gray-500 focus:border-[#65a30d]"
+            className="h-7 w-full rounded-full border border-[#84cc16] bg-white pt-[1px] px-4 text-xs text-gray-700 outline-none transition placeholder:text-gray-500 focus:border-[#65a30d]"
           />
         </div>
 
@@ -480,7 +480,7 @@ export default function Reservations() {
           <button
             type="button"
             onClick={handleNewReservation}
-            className="h-7 rounded-full bg-lime-100 border border-lime-600 px-4 text-xs font-medium text-gray-700 transition hover:border-lime-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-7 rounded-full bg-lime-100 border border-lime-600 pt-[1px] px-4 text-xs font-medium text-gray-700 transition hover:border-lime-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Ny bokning
           </button>
@@ -556,7 +556,7 @@ export default function Reservations() {
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`${column.width || ''} whitespace-nowrap px-2 pt-1 pb-2 text-tiny font-medium text-gray-400 ${column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : 'text-left'}`}
+                  className={`${column.width || ''} whitespace-nowrap px-2 pt-1.5 pb-2 text-tiny font-medium text-gray-400 tracking-wider ${column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : 'text-left'}`}
                 >
                   {column.sortable ? (
                     <button
@@ -606,7 +606,7 @@ export default function Reservations() {
                       {row.id ? (
                         <Link
                           to={`/operations/reservation/${row.id}`}
-                          className="font-medium text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+                          className="text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
                           onClick={(event) => event.stopPropagation()}
                         >
                           {row.reservationNr ?? ''}

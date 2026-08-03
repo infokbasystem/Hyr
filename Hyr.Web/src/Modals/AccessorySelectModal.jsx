@@ -417,7 +417,7 @@ const AccessorySelectModal = ({ isOpen, onClose, onSelect, itemTypeCode, selecte
                         Välj ett aktivt objekt av typen tillbehör för att lägga till det på bokningen.
                     </p>
 
-                    <div className="mb-4">
+                    <div className="mx-auto mb-4 w-70">
                         <input
                             ref={inputRef}
                             type="text"

@@ -14,7 +14,9 @@ const ArticleSearchInput = ({
     value,
     onChange,
     onArticleSelect,
-    className = ''
+    className = '',
+    stylePreset = 'default',
+    gridcell = false,
 }) => {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -25,6 +27,15 @@ const ArticleSearchInput = ({
     const searchTimeoutRef = useRef(null);
     const loadingTimeoutRef = useRef(null);
     const lastSearchTermRef = useRef('');
+    const isGridCell = stylePreset === 'gridCell' || gridcell;
+
+    const wrapperClassName = isGridCell ? 'relative' : 'relative px-1';
+    const inputClassName = isGridCell
+        ? `block h-full w-full border border-transparent bg-transparent pt-[5px] pb-[3px] pl-8 pr-2 text-xs text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-0 ${className}`
+        : `w-full h-full border-0 bg-transparent px-2 py-1 pl-6 text-xs focus:border focus:border-blue-400 focus:bg-white focus:outline-none ${className}`;
+    const popupClassName = isGridCell
+        ? 'fixed z-50 min-w-[300px] max-h-[300px] overflow-y-auto rounded-sm border border-gray-300 bg-white shadow-lg transition-opacity duration-150'
+        : 'fixed z-50 min-w-[300px] max-h-[300px] overflow-y-auto rounded-sm border border-gray-300 bg-white shadow-lg transition-opacity duration-150';
 
     // Update popup position when it's shown
     const updatePopupPosition = () => {
@@ -48,6 +59,22 @@ const ArticleSearchInput = ({
             }
         };
     }, []);
+
+    useEffect(() => {
+        if (!showPopup) {
+            return undefined;
+        }
+
+        const handleViewportChange = () => updatePopupPosition();
+
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        return () => {
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
+    }, [showPopup]);
 
     const searchArticles = async (searchTerm) => {
         // Don't search if term is empty
@@ -136,9 +163,9 @@ const ArticleSearchInput = ({
 
     return (
         <>
-            <div className="relative px-1">
+            <div className={wrapperClassName}>
                 <Search
-                    className="absolute left-2 top-1/2 mt-[1px] mr-[3px] -translate-y-1/2 w-3 h-3 text-gray-400"
+                    className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${isGridCell ? 'left-2.5 h-3.5 w-3.5' : 'left-2 mt-[1px] mr-[3px] h-3 w-3'}`}
                 />
                 <input
                     type="text"
@@ -146,14 +173,15 @@ const ArticleSearchInput = ({
                     value={value || ''}
                     onChange={handleInputChange}
                     onBlur={handleBlur}
-                    className={`w-full h-full text-xs px-2 pl-6 py-1 bg-transparent border-0 focus:outline-none focus:bg-white focus:border focus:border-blue-400 ${className}`}
+                    autoComplete="off"
+                    className={inputClassName.trim()}
                 />
             </div>
 
             {/* Article Search Popup - rendered with fixed positioning */}
             {showPopup && (
                 <div
-                    className="fixed z-50 bg-white border border-gray-300 shadow-lg rounded-sm min-w-[300px] max-h-[300px] overflow-y-auto transition-opacity duration-150"
+                    className={popupClassName}
                     style={{
                         top: popupPosition.top,
                         left: popupPosition.left

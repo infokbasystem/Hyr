@@ -35,6 +35,7 @@ namespace Hyr.Api.Models
         public string PickupPlaceNote { get; set; } = string.Empty;
         public bool IsOngoingInvoicing { get; set; }
         public string OngoingInvoicingInterval { get; set; } = string.Empty;
+        public string PricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
 
         public virtual Office? Office { get; set; }
         public virtual User? CreatedByUser { get; set; }

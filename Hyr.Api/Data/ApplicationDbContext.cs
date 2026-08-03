@@ -17,6 +17,7 @@ namespace Hyr.Api.Data
         public DbSet<ReservationCalcItem> ReservationCalcItems { get; set; } = null!;
         public DbSet<Invoice> Invoices { get; set; } = null!;
         public DbSet<InvoiceRow> InvoiceRows { get; set; } = null!;
+        public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<Account> Accounts { get; set; } = null!;
         public DbSet<Article> Articles { get; set; } = null!;
         public DbSet<VatRate> VatRates { get; set; } = null!;
@@ -310,6 +311,7 @@ namespace Hyr.Api.Data
                 entity.Property(e => e.DeliveryPlaceNote).HasMaxLength(2000);
                 entity.Property(e => e.PickupPlaceNote).HasMaxLength(2000);
                 entity.Property(e => e.OngoingInvoicingInterval).HasMaxLength(50);
+                entity.Property(e => e.PricingCalendarCode).HasMaxLength(20);
                 entity.Property(e => e.Deposition).HasColumnType("decimal(18,5)");
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.Reservations)
@@ -470,6 +472,31 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.InvoiceRows)
                     .HasForeignKey(e => e.ArticleId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<Payment>(entity =>
+            {
+                entity.ToTable("Payment");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PaymentDate).IsRequired();
+                entity.Property(e => e.Amount).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.PaymentMethod).HasMaxLength(100);
+                entity.Property(e => e.Reference).HasMaxLength(200);
+                entity.Property(e => e.Note).HasMaxLength(1000);
+
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.Payments)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Invoice)
+                    .WithMany(e => e.Payments)
+                    .HasForeignKey(e => e.InvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => e.OfficeId);
+                entity.HasIndex(e => e.InvoiceId);
+                entity.HasIndex(e => e.PaymentDate);
             });
 
             modelBuilder.Entity<Account>(entity =>

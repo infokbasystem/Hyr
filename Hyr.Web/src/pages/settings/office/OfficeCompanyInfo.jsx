@@ -246,9 +246,14 @@ export default function OfficeCompanyInfo() {
 
                 <div>
                     {messages.length > 0 && (
-                        <div className="w-80 border border-gray-200 bg-white py-2 pl-4 text-xs text-gray-700 shadow-sm">
+                        <div className="pl-4 text-xs text-center text-gray-700">
                             {messages.map((message, index) => (
-                                <div key={`${message.type}-${index}`} className={message.type === 'error' ? 'text-rose-700' : 'text-emerald-700'}>
+                                <div
+                                    key={`${message.type}-${index}`}
+                                    className={message.type === 'error'
+                                        ? 'rounded-full border border-rose-200 bg-rose-50 px-5 py-1 text-rose-700'
+                                        : 'rounded-full border border-emerald-200 bg-emerald-50 px-5 py-1 text-emerald-700'}
+                                >
                                     {message.text}
                                 </div>
                             ))}

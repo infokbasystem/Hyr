@@ -326,6 +326,8 @@ namespace Hyr.Api.Controllers
                     .Collection(r => r.ReservationCalcs)
                     .Query()
                     .Include(rc => rc.ReservationCalcItems)
+                        .ThenInclude(rci => rci.InvoiceRows!)
+                            .ThenInclude(ir => ir.Invoice)
                     .LoadAsync();
 
                 var categoryNamesById = await _context.ItemCategories
@@ -365,6 +367,7 @@ namespace Hyr.Api.Controllers
                     MobilePhone = reservationInDb.MobilePhone,
                     Note = reservationInDb.Note,
                     OngoingInvoicingInterval = reservationInDb.OngoingInvoicingInterval,
+                    PricingCalendarCode = ReservationPricingCalendarCodes.NormalizeOrDefault(reservationInDb.PricingCalendarCode),
                     Orderer = reservationInDb.Orderer,
                     PickupPlaceNote = reservationInDb.PickupPlaceNote,
                     Reference = reservationInDb.Reference,
@@ -460,16 +463,50 @@ namespace Hyr.Api.Controllers
 
                     foreach (var calcItem in calc.ReservationCalcItems)
                     {
-                        reservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                        var mappedCalcItem = new ReservationCalcItem
                         {
                             Id = calcItem.Id,
                             ReservationCalcId = calcItem.ReservationCalcId,
                             ItemId = calcItem.ItemId,
                             PriceListId = calcItem.PriceListId,
                             Qty = calcItem.Qty,
+                            UnitPrice = calcItem.UnitPrice,
                             Sum = calcItem.Sum,
                             Text = calcItem.Text
-                        });
+                        };
+
+                        foreach (var invoiceRow in calcItem.InvoiceRows ?? Enumerable.Empty<InvoiceRow>())
+                        {
+                            mappedCalcItem.InvoiceRows?.Add(new InvoiceRow
+                            {
+                                Id = invoiceRow.Id,
+                                InvoiceId = invoiceRow.InvoiceId,
+                                ReservationCalcItemId = invoiceRow.ReservationCalcItemId,
+                                InvoiceRowType = invoiceRow.InvoiceRowType,
+                                Text1 = invoiceRow.Text1,
+                                Text2 = invoiceRow.Text2,
+                                Qty = invoiceRow.Qty,
+                                UnitPrice = invoiceRow.UnitPrice,
+                                Sum = invoiceRow.Sum,
+                                VatRate = invoiceRow.VatRate,
+                                Invoice = invoiceRow.Invoice == null
+                                    ? null
+                                    : new Invoice
+                                    {
+                                        Id = invoiceRow.Invoice.Id,
+                                        InvoiceNr = invoiceRow.Invoice.InvoiceNr,
+                                        InvoiceDate = invoiceRow.Invoice.InvoiceDate,
+                                        CustomerName = invoiceRow.Invoice.CustomerName,
+                                        InvoiceType = invoiceRow.Invoice.InvoiceType,
+                                        TotExVat = invoiceRow.Invoice.TotExVat,
+                                        TotVat = invoiceRow.Invoice.TotVat,
+                                        TotSum = invoiceRow.Invoice.TotSum,
+                                        IsCancelled = invoiceRow.Invoice.IsCancelled,
+                                    }
+                            });
+                        }
+
+                        reservationCalc.ReservationCalcItems.Add(mappedCalcItem);
                     }
 
                     reservation.ReservationCalcs.Add(reservationCalc);
@@ -528,6 +565,12 @@ namespace Hyr.Api.Controllers
 
                 }
 
+                var normalizedPricingCalendarCode = ReservationPricingCalendarCodes.NormalizeOrDefault(reservation.PricingCalendarCode);
+                if (!ReservationPricingCalendarCodes.IsValid(normalizedPricingCalendarCode))
+                {
+                    return BadRequest(new { message = "Invalid pricing calendar code" });
+                }
+
                 reservationInDb.ModifiedByUserId = user.Id;
                 reservationInDb.ModifiedDate = DateTime.UtcNow;
                 reservationInDb.CustomerId = reservation.CustomerId;
@@ -554,6 +597,7 @@ namespace Hyr.Api.Controllers
                 reservationInDb.PickupPlaceNote = reservation.PickupPlaceNote;
                 reservationInDb.IsOngoingInvoicing = reservation.IsOngoingInvoicing;
                 reservationInDb.OngoingInvoicingInterval = reservation.OngoingInvoicingInterval;
+                reservationInDb.PricingCalendarCode = normalizedPricingCalendarCode;
 
                 // Handle ReservationItems
                 var existingReservationItemIds = reservationInDb.ReservationItems.Select(ri => ri.Id).ToList();
@@ -687,6 +731,7 @@ namespace Hyr.Api.Controllers
                         reservationCalcItemInDb.ItemId = reservationCalcItem.ItemId;
                         reservationCalcItemInDb.PriceListId = reservationCalcItem.PriceListId;
                         reservationCalcItemInDb.Qty = reservationCalcItem.Qty;
+                        reservationCalcItemInDb.UnitPrice = reservationCalcItem.UnitPrice;
                         reservationCalcItemInDb.Sum = reservationCalcItem.Sum;
                         reservationCalcItemInDb.Text = reservationCalcItem.Text;
                     }

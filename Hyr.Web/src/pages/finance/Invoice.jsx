@@ -1,9 +1,9 @@
-import React, { useContext, useLayoutEffect } from 'react'
-import { useState, useEffect, useRef } from 'react'
+import React from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from "react-router";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Printer, Save, Trash2 } from 'lucide-react';
 
 import { usePdf } from '../../contexts/PdfContext';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -11,14 +11,90 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import LabeledReactSelect from '../../components/LabeledReactSelect';
 import NumberInput from '../../components/NumberInput';
 import ArticleSearchInput from '../../components/ArticleSearchInput';
+import Input from '../../components/Input';
+import ActionButton from '../../components/ActionButton';
 import InvoiceCalculations from '../../utils/invoiceCalculations';
 import apiClient from '../../lib/apiClient';
+
+
+const invoiceRequestCache = new Map();
+
+const getSharedInvoiceRequest = (key, requestFactory) => {
+    if (!key || typeof requestFactory !== 'function') {
+        return requestFactory();
+    }
+
+    if (invoiceRequestCache.has(key)) {
+        return invoiceRequestCache.get(key);
+    }
+
+    const request = Promise.resolve()
+        .then(requestFactory)
+        .finally(() => {
+            invoiceRequestCache.delete(key);
+        });
+
+    invoiceRequestCache.set(key, request);
+    return request;
+};
+
+const isSummaryRow = (row) => ['vat', 'rounding'].includes(row?.invoiceRowType?.toLowerCase?.());
+
+const recalculateInvoiceRows = (rows) => {
+    const recalculatedRows = rows.map((row) => ({ ...row }));
+
+    recalculatedRows.forEach((row) => {
+        if (isSummaryRow(row)) {
+            return;
+        }
+
+        const qty = parseFloat(row.qty) || 0;
+        const unitPrice = parseFloat(row.unitPrice) || 0;
+        const discountRate = parseFloat(row.discountRate) || 0;
+        row.sum = qty * unitPrice * (1 - discountRate / 100);
+    });
+
+    const vatAmount = recalculatedRows
+        .filter((row) => !isSummaryRow(row))
+        .reduce((sum, row) => sum + (parseFloat(row.sum) || 0) * (parseFloat(row.vatRate) || 0) / 100, 0);
+
+    const upsertSummaryRow = (invoiceRowType, sum) => {
+        const rowIndex = recalculatedRows.findIndex((row) => row.invoiceRowType?.toLowerCase?.() === invoiceRowType);
+
+        if (rowIndex !== -1) {
+            recalculatedRows[rowIndex] = {
+                ...recalculatedRows[rowIndex],
+                invoiceRowType,
+                sum,
+            };
+            return;
+        }
+
+        recalculatedRows.push({
+            id: 0,
+            tempId: Math.random(),
+            invoiceRowType,
+            sum,
+        });
+    };
+
+    upsertSummaryRow('vat', vatAmount);
+
+    const subtotal = recalculatedRows
+        .filter((row) => row.invoiceRowType?.toLowerCase?.() !== 'rounding')
+        .reduce((sum, row) => sum + (parseFloat(row.sum) || 0), 0);
+
+    upsertSummaryRow('rounding', InvoiceCalculations.calculateRounding(subtotal));
+
+    return recalculatedRows;
+};
 
 
 
 const Invoice = () => {
     const navigate = useNavigate();
     const params = useParams();
+    const [searchParams] = useSearchParams();
     const [invoice, setInvoice] = useState(null);
     const [originalInvoice, setOriginalInvoice] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -26,6 +102,7 @@ const Invoice = () => {
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
     // const [pendingAction, setPendingAction] = useState(null);
     const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
 
@@ -46,59 +123,13 @@ const Invoice = () => {
 
             updatedRows[rowIndex] = { ...updatedRows[rowIndex], [field]: value };
 
-            // Auto-calculate sum when qty or unitPrice changes
-            if (field === 'qty' || field === 'unitPrice' || field === 'discountRate') {
-                const qty = field === 'qty' ? parseFloat(value) || 0 : parseFloat(updatedRows[rowIndex].qty) || 0;
-                const unitPrice = field === 'unitPrice' ? parseFloat(value) || 0 : parseFloat(updatedRows[rowIndex].unitPrice) || 0;
-                const discountRate = parseFloat(field === 'discountRate' ? value : updatedRows[rowIndex].discountRate) || 0;
-                updatedRows[rowIndex].sum = qty * unitPrice * (1 - discountRate / 100);
-
-                // Calculate VAT
-                const vatRowIndex = updatedRows.findIndex(r => r.invoiceRowType?.toLowerCase() === 'vat');
-                const vatAmount = updatedRows
-                    .filter(r => !['vat', 'rounding'].includes(r.invoiceRowType?.toLowerCase?.()))
-                    .reduce((sum, r) => sum + (parseFloat(r.sum) || 0) * (parseFloat(r.vatRate) || 0) / 100, 0);
-                if (vatRowIndex !== -1) {
-                    // Update existing VAT row
-                    updatedRows[vatRowIndex].sum = vatAmount;
-                } else {
-                    // Add new VAT row
-                    const vatRow = {
-                        id: 0,
-                        tempId: Math.random(),
-                        invoiceRowType: 'vat',
-                        sum: vatAmount,
-                    };
-                    updatedRows.push(vatRow);
-                }
-
-                // Calculate rounding
-                const subtotal = updatedRows
-                    .filter(r => !['rounding'].includes(r.invoiceRowType?.toLowerCase?.()))
-                    .reduce((sum, r) => sum + (parseFloat(r.sum) || 0), 0);
-
-                const roundingAmount = InvoiceCalculations.calculateRounding(subtotal);
-
-                const roundingRowIndex = updatedRows.findIndex(r => r.invoiceRowType?.toLowerCase() === 'rounding');
-                if (roundingRowIndex !== -1) {
-                    updatedRows[roundingRowIndex].sum = roundingAmount;
-                } else {
-                    const roundingRow = {
-                        id: 0,
-                        tempId: Math.random(),
-                        invoiceRowType: 'rounding',
-                        sum: roundingAmount,
-                    };
-                    updatedRows.push(roundingRow);
-                }
-            }
-
-            return { ...prev, invoiceRows: updatedRows };
+            return { ...prev, invoiceRows: recalculateInvoiceRows(updatedRows) };
         });
     };
 
     const addNewRow = () => {
         markStale();
+        const visibleRowCount = (invoice?.invoiceRows || []).filter((row) => !isSummaryRow(row)).length;
         const newRow = {
             id: 0,
             tempId: Math.random(),
@@ -106,7 +137,7 @@ const Invoice = () => {
             invoiceId: invoice?.id || null,
             itemId: null,
             reservationCalcItemId: null,
-            sortNr: (invoice?.invoiceRows?.length || 0) + 1,
+            sortNr: visibleRowCount + 1,
             articleId: null,
             articleNr: '',
             invoiceRowType: '',
@@ -121,7 +152,7 @@ const Invoice = () => {
         };
         setInvoice(prev => ({
             ...prev,
-            invoiceRows: [...(prev?.invoiceRows || []), newRow]
+            invoiceRows: recalculateInvoiceRows([...(prev?.invoiceRows || []), newRow])
         }));
     };
 
@@ -129,17 +160,29 @@ const Invoice = () => {
         markStale();
         setInvoice(prev => ({
             ...prev,
-            invoiceRows: (prev?.invoiceRows || []).filter(r => getRowTempId(r) !== tempId)
+            invoiceRows: recalculateInvoiceRows((prev?.invoiceRows || []).filter(r => getRowTempId(r) !== tempId))
         }));
     };
 
     const handleArticleSelect = (rowId, article) => {
-        handleRowChange(rowId, 'articleId', article.id);
-        handleRowChange(rowId, 'articleNr', article.articleNr || '');
-        handleRowChange(rowId, 'text1', article.name || article.description || '');
-        handleRowChange(rowId, 'unitPrice', article.price || 0);
-        handleRowChange(rowId, 'vatRate', article.vatRate || 25);
-        handleRowChange(rowId, 'accountNr', article.accountNr || null);
+        markStale();
+        setInvoice(prev => {
+            const updatedRows = [...(prev?.invoiceRows || [])];
+            const rowIndex = updatedRows.findIndex(r => getRowTempId(r) === rowId);
+            if (rowIndex === -1) return prev;
+
+            updatedRows[rowIndex] = {
+                ...updatedRows[rowIndex],
+                articleId: article.id,
+                articleNr: article.articleNr || '',
+                text1: article.name || article.description || '',
+                unitPrice: article.price || 0,
+                vatRate: article.vatRate || 25,
+                accountNr: article.accountNr || null,
+            };
+
+            return { ...prev, invoiceRows: recalculateInvoiceRows(updatedRows) };
+        });
     };
 
     const handleChange = (field, e) => {
@@ -160,13 +203,13 @@ const Invoice = () => {
         setShowDeleteConfirm(true);
     };
 
-    const handleSaveOrClose = async (e) => {
-        e.preventDefault();
-        if (hasUnsavedChanges()) {
-            await submitInvoice(e);
-        } else {
-            window.close();
+    const handleBackClick = () => {
+        if (window.history.length > 1) {
+            navigate(-1);
+            return;
         }
+
+        window.close();
     };
 
     const hasUnsavedChanges = () => {
@@ -177,12 +220,24 @@ const Invoice = () => {
     };
 
 
-    const getInvoiceById = async (id, calculationId) => {
+    const getInvoiceById = async (id, calculationId, { dedupe = false, isActive = () => true } = {}) => {
         console.log('getInvoiceById', id);
-        try {
+        const cacheKey = `invoice:${id}:calc:${calculationId || 'none'}`;
+
+        const fetchInvoice = async () => {
             const queryParams = calculationId ? `?calculationId=${calculationId}` : '';
             const response = await apiClient.get(`/invoice/${id}${queryParams}`);
-            const data = response.data;
+            return response.data;
+        };
+
+        try {
+            const data = dedupe
+                ? await getSharedInvoiceRequest(cacheKey, fetchInvoice)
+                : await fetchInvoice();
+
+            if (!isActive()) {
+                return null;
+            }
 
             const attachments = (
                 Array.isArray(data?.attachments)
@@ -198,11 +253,6 @@ const Invoice = () => {
             setOriginalInvoice(JSON.parse(JSON.stringify(invoiceData)));
             // pass the default badges into PdfContext (can be updated later)
             try { setBadges && setBadges(defaultBadges); } catch (e) { /* ignore if unavailable */ }
-            // load address lists for customer and supplier (if present)
-            await fetchCustomerDeliveryAddresses(data?.customerId);
-            await fetchSupplierPickupAddresses(data?.supplierId);
-            // setOriginalFiles(attachments);
-            setAttachedFiles(attachments.map(f => ({ ...f })));
             return invoiceData;
         }
         catch (error) {
@@ -212,7 +262,7 @@ const Invoice = () => {
     }
 
     const submitInvoice = async (e) => {
-        e.preventDefault();
+        e?.preventDefault?.();
         console.log('Form submitted');
         if (!invoice) {
             console.error('No invoice data to submit');
@@ -221,24 +271,35 @@ const Invoice = () => {
         console.log('invoice:', invoice);
 
         const invoiceData = { ...invoice };
-        let res;
+
         try {
-            res = await apiClient.post('/invoice', invoiceData);
+            let invoiceId = invoice.id;
+
+            const res = await apiClient.post('/invoice', invoiceData);
+            invoiceId = res.data;
+
+            const refreshedInvoice = await getInvoiceById(invoiceId, null, { dedupe: false });
+            if (refreshedInvoice) {
+                setInvoice(refreshedInvoice);
+                setOriginalInvoice(JSON.parse(JSON.stringify(refreshedInvoice)));
+            }
+
+            setMessages([{ type: 'success', text: 'Fakturan sparad' }]);
+
+            if (`${params.id}` !== `${invoiceId}`) {
+                navigate(`/finance/invoice/${invoiceId}`, { replace: true });
+            }
+
+            clearStale?.();
+            // Reload the PDF after successful save without triggering unsaved warning
+            if (showPdfPanel) {
+                await getPdf({ ignoreUnsaved: true });
+            }
         } catch (error) {
             const errorText = error?.response?.data ?? error?.message;
             setMessages([{ type: 'error', text: errorText }]);
             return;
         }
-        const data = res.data;
-        console.log('invoice updated:', data);
-        await getInvoiceById(data);
-        window.history.replaceState({}, '', `/sales/invoice/${data}`);
-        clearStale?.();
-        // Reload the PDF after successful save without triggering unsaved warning
-        if (showPdfPanel) {
-            await getPdf({ ignoreUnsaved: true });
-        }
-        setMessages([{ type: 'success', text: 'Fakturan sparad' }]);
     };
 
     const deleteInvoice = async () => {
@@ -297,14 +358,24 @@ const Invoice = () => {
     };
 
 
-    // Initial data fetching - runs once on mount
+    const calculationId = searchParams.get('calculationId');
+
+    // Initial data fetching - runs when ID or calculation query changes
     useEffect(() => {
-        if (params.id === 'new') {
-            getInvoiceById(params.id, null);
-        } else {
-            getInvoiceById(params.id, null);
-        }
-    }, []);
+        let isActive = true;
+
+        setLoading(true);
+        getInvoiceById(params.id, calculationId, { dedupe: true, isActive: () => isActive })
+            .finally(() => {
+                if (isActive) {
+                    setLoading(false);
+                }
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [params.id, calculationId]);
 
     // Cleanup: close PDF panel when component unmounts (navigating away)
     useEffect(() => {
@@ -314,10 +385,46 @@ const Invoice = () => {
     }, [closePdfPreview]);
 
 
+    if (loading) {
+        return (
+            <div className="relative flex flex-col h-full md:px-[clamp(8px,5vw,10vw)] animate-pulse">
+                <div className="mt-1 flex h-full items-stretch">
+                    <aside className="mt-6 pr-3 flex flex-col w-70 border-r border-gray-300 mb-8">
+                        <div className="space-y-3 px-2 pb-4">
+                            <div className="h-3 bg-gray-200 rounded w-1/2 mx-auto" />
+                            <div className="h-3 bg-gray-200 rounded w-3/4" />
+                            <div className="h-3 bg-gray-200 rounded w-3/4" />
+                        </div>
+                        <hr className="border-gray-200" />
+                        <div className="space-y-3 px-2 pt-4">
+                            <div className="h-3 bg-gray-200 rounded w-1/2 mx-auto" />
+                            <div className="h-6 bg-gray-200 rounded" />
+                            <div className="h-6 bg-gray-200 rounded" />
+                        </div>
+                    </aside>
+                    <div className="flex-grow pl-10">
+                        <div className="h-4 bg-gray-200 rounded w-40 mb-6" />
+                        <div className="flex gap-4 mb-8">
+                            <div className="h-8 bg-gray-200 rounded w-20" />
+                            <div className="h-8 bg-gray-200 rounded w-20" />
+                            <div className="h-8 bg-gray-200 rounded w-24" />
+                        </div>
+                        <div className="space-y-3">
+                            <div className="h-10 bg-gray-200 rounded" />
+                            <div className="h-10 bg-gray-200 rounded" />
+                            <div className="h-10 bg-gray-200 rounded" />
+                            <div className="h-10 bg-gray-200 rounded" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const visibleInvoiceRows = (invoice?.invoiceRows || []).filter((row) => !isSummaryRow(row));
 
     return (
-        <div className="relative flex flex-col h-full p-2">
-            <h2 className="ml-5 pb-2 text-sm text-gray-700">{invoice?.id ? (<>Faktura <span className="text-red-500">{invoice.invoiceNr}</span></>) : ("Ny faktura")}</h2>
+        <div className="relative flex flex-col h-full md:px-[clamp(8px,5vw,10vw)]">
 
             {/* Unsaved Changes Warning Modal */}
             <ConfirmationModal
@@ -379,38 +486,100 @@ const Invoice = () => {
                 </div>
             )}
 
-            <div className="flex h-full items-stretch">
+            <div className="mt-1 flex min-h-0 items-start overflow-visible">
 
-                <div className="flex-grow pe-10 py-2 ml-2">
+                <aside className="sticky top-[calc(52px+72px+1rem)] z-10 flex w-65 shrink-0 self-start">
+                    <div className="flex h-full w-full flex-col overflow-hidden pr-0">
+                        <div className="ml-2 space-y-4 pr-0 pb-4">
+                            <h2 className="text-sm text-center text-gray-500">Info</h2>
+                            <div className="space-y-2 text-xs">
+                                <div className="grid grid-cols-[65px_110px_1fr] mx-2">
+                                    {invoice?.createdDate && (
+                                        <>
+                                            <div className="text-gray-500">
+                                                <span>Skapad:</span>
+                                            </div>
+                                            <div className="text-gray-500">
+                                                {new Date(invoice.createdDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                            <div className="text-gray-500">
+                                                {invoice?.createdByUserName && `av ${invoice.createdByUserName}`}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-[65px_110px_1fr] mx-2">
+                                    {invoice?.editedDate && (
+                                        <>
+                                            <div className="text-gray-500">
+                                                <span>Redigerad:</span>
+                                            </div>
+                                            <div className="text-gray-500">
+                                                {new Date(invoice.editedDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                            <div className="text-gray-500">
+                                                {invoice?.editedByUserName && `av ${invoice.editedByUserName}`}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr className="border-gray-300 dark:border-white" />
+
+                        <h2 className="text-sm text-center text-gray-500 pt-4">Meddelanden</h2>
+                        {messages.length == 0 ? (
+                            <p className='text-xs text-center font-light mt-4'>Inga meddelanden</p>
+                        ) : (
+                            <ul className="mt-2 space-y-2">
+                                {messages.map((message, index) => (
+                                    <li key={index} className={`text-center text-xs p-2 rounded border border-gray-200 ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                        {message.text}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        <hr className="mt-7 border-gray-300 dark:border-white" />
+                    </div>
+                </aside>
+
+                <div className="mx-10 w-px self-stretch bg-gray-300" />
+
+                <div className='flex-grow pl-0 pb-10'>
+                    <h2 className="pb-3 text-sm text-gray-500 tracking-[0.10em] font-semibold">{invoice?.id ? (<>FAKTURA <span className="ml-2">Nr. {invoice.invoiceNr}</span></>) : ("Ny faktura")}</h2>
                     <form onSubmit={submitInvoice} autoComplete="off">
-                        <div className="flex justify-between w-full mb-5">
-                            <div className='flex items-center space-x-4'>
-                                <button
-                                    type='button'
-                                    onClick={handleSaveOrClose}
-                                    className={`w-25 shadow-md/30 text-xs text-white ${hasUnsavedChanges() ? 'bg-lime-700 hover:bg-lime-900': 'bg-orange-400 hover:bg-orange-500'} px-5 p-[5px]`}
-                                >
-                                    {hasUnsavedChanges() ? 'Spara' : 'Stäng'}
-                                </button>
+                        <div className="flex justify-between w-full mb-6">
+                            <div className='flex items-center gap-5 flex-wrap'>
+                                <ActionButton
+                                    label="Tillbaka"
+                                    icon={ArrowLeft}
+                                    onClick={handleBackClick}
+                                    accent="sky"
+                                />
+                                <ActionButton
+                                    label={'Spara'}
+                                    icon={Save}
+                                    onClick={submitInvoice}
+                                    accent={'lime'}
+                                />
                                 {invoice?.id != 0 && (
-                                    <button
-                                        type="button"
+                                    <ActionButton
+                                        label="Skriv ut"
+                                        icon={Printer}
                                         onClick={getPdf}
-                                        className="shadow-md/30 text-xs text-gray bg-blue-200 hover:bg-blue-300 px-4 py-[5px] ml-10"
-                                    >
-                                        Skriv ut
-                                    </button>
+                                        accent="sky"
+                                    />
                                 )}
                             </div>
-                            <div className='flex items-center space-x-4'>
+                            <div className='flex items-center gap-5'>
                                 {invoice?.id != 0 && (
-                                    <button
-                                        type="button"
+                                    <ActionButton
+                                        label="Radera"
+                                        icon={Trash2}
                                         onClick={handleDeleteClick}
-                                        className="shadow-md/30 text-xs text-white bg-red-700 hover:bg-red-800 px-5 p-[5px]"
-                                    >
-                                        Radera
-                                    </button>
+                                        accent="rose"
+                                    />
                                 )}
                             </div>
                         </div>
@@ -430,12 +599,16 @@ const Invoice = () => {
 
                         {/* Invoice Rows Editable Grid */}
                         <div className="mt-8 ml-1">
+                            <div className="ml-1 mb-2 flex items-center gap-3">
+                                <p className="w-50 text-xs font-semibold uppercase tracking-wider text-gray-500">Fakturarader</p>
+                                <p className="text-xs text-gray-500">Sök i Artikelnr-kolumnen.</p>
+                            </div>
                             <div className="overflow-x-auto">
                                 <table className="min-w-full">
                                     <thead>
                                         <tr className="border-t border-gray-300">
                                             <th className="px-2 py-2 text-left text-tiny font-medium text-gray-400 uppercase w-10">Sort</th>
-                                            <th className="px-3 py-2 text-left text-tiny font-medium text-gray-400 uppercase w-40">Artikelnr</th>
+                                            <th className="px-3 py-2 text-left text-tiny font-medium text-gray-400 uppercase w-44">Artikelnr</th>
                                             <th className="px-3 py-2 text-left text-tiny font-medium text-gray-400 uppercase">Text</th>
                                             <th className="px-3 py-2 text-left text-tiny font-medium text-gray-400 uppercase">Text 2</th>
                                             <th className="px-3 pl-2 pr-1 text-right text-tiny font-medium text-gray-400 uppercase w-20">Rabatt %</th>
@@ -449,101 +622,104 @@ const Invoice = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white">
-                                        {(invoice?.invoiceRows || []).filter(row => !['vat', 'rounding'].includes(row.invoiceRowType?.toLowerCase?.())).map((row, index) => (
-                                            <tr key={getRowTempId(row)} className="border-b border-gray-100 hover:bg-blue-50 transition-colors">
-                                                <td className="px-2 py-0.5 text-xs text-gray-600">{index + 1}</td>
-                                                <td className="p-0">
+                                        {visibleInvoiceRows.map((row, index) => (
+                                            <tr key={getRowTempId(row)} className="border-b border-gray-100 transition-colors hover:bg-blue-50">
+                                                <td className="px-2 pt-[1px] text-xs text-gray-600 align-middle">{index + 1}</td>
+                                                <td className="p-0 align-top">
                                                     <ArticleSearchInput
                                                         value={row.articleNr}
                                                         onChange={(value) => handleRowChange(getRowTempId(row), 'articleNr', value)}
                                                         onArticleSelect={(article) => handleArticleSelect(getRowTempId(row), article)}
+                                                        gridcell
                                                     />
                                                 </td>
-                                                <td className="p-0">
-                                                    <input
+                                                <td className="p-0 align-top">
+                                                    <Input
                                                         type="text"
+                                                        gridcell
                                                         value={row.text1 || ''}
                                                         onChange={(e) => handleRowChange(getRowTempId(row), 'text1', e.target.value)}
-                                                        className="w-full h-full text-xs px-3 py-1 bg-transparent border-0 focus:outline-none focus:bg-white focus:border focus:border-blue-400"
                                                     />
                                                 </td>
-                                                <td className="p-0">
-                                                    <input
-                                                        type="text 2"
+                                                <td className="p-0 align-top">
+                                                    <Input
+                                                        type="text"
+                                                        gridcell
                                                         value={row.text2 || ''}
                                                         onChange={(e) => handleRowChange(getRowTempId(row), 'text2', e.target.value)}
-                                                        className="w-full h-full text-xs px-3 py-1 bg-transparent border-0 focus:outline-none focus:bg-white focus:border focus:border-blue-400"
                                                     />
                                                 </td>
-                                                <td className="p-0">
+                                                <td className="p-0 align-top">
                                                     <NumberInput
                                                         rowId={getRowTempId(row)}
                                                         field="discountRate"
                                                         value={row.discountRate || ''}
                                                         onChange={handleRowChange}
-                                                        className="w-full h-full text-xs border-0 text-right focus:outline-none focus:bg-white focus:border focus:border-blue-400"
+                                                        gridcell
                                                         decimals={2}
                                                     />
                                                 </td>
-                                                <td className="p-0">
+                                                <td className="p-0 align-top">
                                                     <NumberInput
                                                         rowId={getRowTempId(row)}
                                                         field="qty"
                                                         value={row.qty || ''}
                                                         onChange={handleRowChange}
-                                                        className="w-full h-full text-xs border-0 text-right focus:outline-none focus:bg-white focus:border focus:border-blue-400"
+                                                        gridcell
                                                         decimals={2}
                                                     />
                                                 </td>
-                                                <td className="p-0">
+                                                <td className="p-0 align-top">
                                                     <NumberInput
                                                         rowId={getRowTempId(row)}
                                                         field="unitPrice"
                                                         value={row.unitPrice || ''}
                                                         onChange={handleRowChange}
-                                                        className="w-full h-full text-xs border-0 text-right focus:outline-none focus:bg-white focus:border focus:border-blue-400"
+                                                        gridcell
                                                         decimals={2}
                                                     />
                                                 </td>
-                                                <td className="p-0">
+                                                <td className="p-0 align-top">
                                                     <NumberInput
                                                         rowId={getRowTempId(row)}
                                                         field="sum"
                                                         value={row.sum || ''}
                                                         disabled={true}
-                                                        className="w-full h-full text-xs border-0 text-right text-gray-600"
+                                                        gridcell
+                                                        className="text-gray-600"
                                                         decimals={2}
                                                     />
                                                 </td>
-                                                <td className="p-0">
+                                                <td className="p-0 align-top">
                                                     <NumberInput
                                                         rowId={getRowTempId(row)}
                                                         field="vatRate"
                                                         value={row.vatRate || ''}
                                                         onChange={handleRowChange}
-                                                        className="w-full h-full text-xs border-0 text-right focus:outline-none focus:bg-white focus:border focus:border-blue-400"
+                                                        gridcell
                                                         decimals={2}
                                                     />
                                                 </td>
-                                                <td className="p-0">
+                                                <td className="p-0 align-top">
                                                     <NumberInput
                                                         rowId={getRowTempId(row)}
                                                         field="accountNr"
                                                         value={row.accountNr || ''}
                                                         onChange={handleRowChange}
-                                                        className="w-full h-full text-xs border-0 text-right focus:outline-none focus:bg-white focus:border focus:border-blue-400"
+                                                        gridcell
                                                         decimals={0}
                                                     />
                                                 </td>
-                                                <td className="p-0">
-                                                    <input
+                                                <td className="p-0 align-top">
+                                                    <Input
                                                         type="text"
+                                                        gridcell
                                                         value={row.costCenter || ''}
                                                         onChange={(e) => handleRowChange(getRowTempId(row), 'costCenter', e.target.value)}
-                                                        className="w-full text-xs px-3 py-1 border-0 text-right focus:outline-none focus:bg-white focus:border focus:border-blue-400"
+                                                        className="text-right"
                                                     />
                                                 </td>
-                                                <td className="px-0 text-center">
+                                                <td className="px-0 text-center align-middle">
                                                     <button
                                                         type="button"
                                                         onClick={() => deleteRow(getRowTempId(row))}
@@ -557,7 +733,7 @@ const Invoice = () => {
                                         ))}
                                         {/* Empty row for adding new entries */}
                                         <tr className="border-b border-gray-100">
-                                            <td className="px-2 py-0.5 text-xs text-gray-400">{(invoice?.invoiceRows?.length || 0) + 1}</td>
+                                            <td className="px-2 py-0 text-xs leading-5 text-gray-400">{visibleInvoiceRows.length + 1}</td>
                                             <td colSpan="11" className="px-2 py-0.5">
                                                 <button
                                                     type="button"
@@ -573,7 +749,7 @@ const Invoice = () => {
                             </div>
 
                             {/* Summary Section */}
-                            {(invoice?.invoiceRows?.length || 0) > 0 && (
+                            {visibleInvoiceRows.length > 0 && (
                                 <div className="flex justify-end mt-6">
                                     <div className="border border-gray-300 bg-yellow-50 px-6 py-3">
                                         <div className="grid grid-cols-4 gap-8 text-xs">
@@ -632,74 +808,6 @@ const Invoice = () => {
                             {JSON.stringify(originalInvoice, null, 2)}
                         </pre>
                     </div> */}
-                </div>
-
-                {/* Right bar */}
-                <div className="flex flex-col w-70 border-l border-gray-300 px-4 py-2 mb-20">
-                    <div className="space-y-3">
-                        <h2 className="text-sm text-center text-gray-700">Info</h2>
-                        <div className="space-y-2 text-xs text-gray-600">
-                            <div className="grid grid-cols-5 gap-4 mx-2">
-                                {invoice?.createdDate && (
-                                    <>
-                                        <div className="col-span-1">
-                                            <span className="font-medium">Skapad:</span>
-                                        </div>
-                                        <div className="col-span-2">
-                                            {new Date(invoice.createdDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                        <div className="col-span-2 text-gray-500">
-                                            {invoice?.createdByUserName && `av ${invoice.createdByUserName}`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-5 gap-4 mx-2">
-                                {invoice?.editedDate && (
-                                    <>
-                                        <div className="col-span-1">
-                                            <span className="font-medium">Redigerad:</span>
-                                        </div>
-                                        <div className="col-span-2">
-                                            {new Date(invoice.editedDate).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                        <div className="col-span-2 text-gray-500">
-                                            {invoice?.editedByUserName && `av ${invoice.editedByUserName}`}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <hr className="mt-7 border-gray-300 dark:border-white" />
-                    <h2 className="text-sm text-center text-gray-700 mt-5">Meddelanden</h2>
-                    {messages.length == 0 ? (
-                        <p className='text-xs text-center font-light mt-5'>Inga meddelanden</p>
-                    ) : (
-                        <ul className="mt-2 space-y-2">
-                            {messages.map((message, index) => (
-                                <li key={index} className={`text-center text-xs p-2 rounded border border-gray-200 ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                    {message.text}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                    <hr className="mt-7 border-gray-300 dark:border-white" />
-                    {/* {inquiry && attachedFiles && (
-                        <FileList
-                            files={attachedFiles}
-                            onRemove={handleRemoveFile}
-                            onAdd={handleAddFile}
-                            onEdit={handleEditFile}
-                            paths={[
-                                { id: 'docs', name: 'Dokument' },
-                                { id: 'specs', name: 'Specifikationer' },
-                                { id: 'designs', name: 'Design' }
-                            ]}
-                            entityId={inquiry?.id}
-                            entityType="inquiry"
-                        />
-                    )} */}
                 </div>
 
             </div>

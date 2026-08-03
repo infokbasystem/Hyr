@@ -477,6 +477,7 @@ export default function InsuranceCompanies() {
     <div className="flex h-full min-h-full w-full flex-col px-0 pb-10 md:px-[clamp(8px,15vw,10vw)]">
       <div className="mt-3 flex min-h-0 flex-1 flex-col">
         <div className="grid min-h-0 flex-1 lg:items-stretch lg:grid-cols-[450px_1px_minmax(0,1fr)] lg:gap-8">
+          
           <aside className="mb-8 border-b border-gray-300 pr-4 text-gray-700 lg:border-b-0">
             <div className="mr-5">
               <div className="flex items-center justify-between gap-2">
@@ -591,13 +592,13 @@ export default function InsuranceCompanies() {
 
               <div className="mb-0 min-h-[42px] w-80">
                 {error && (
-                  <div className="w-full border border-rose-200 bg-rose-50 py-2 pl-4 text-xs text-rose-800">
+                  <div className="rounded-full border border-rose-200 bg-rose-50 px-5 py-1 text-center text-xs text-rose-700">
                     {error}
                   </div>
                 )}
 
                 {successMessage && (
-                  <div className="w-full border border-emerald-200 bg-emerald-100 py-2 pl-4 text-xs text-emerald-800">
+                  <div className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-1 text-center text-xs text-emerald-700">
                     {successMessage}
                   </div>
                 )}
