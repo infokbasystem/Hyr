@@ -128,6 +128,16 @@ namespace Hyr.Api.Controllers
                 return BadRequest(new { message = "CustomerName is required" });
             }
 
+            if (customer.DefaultPriceListId.HasValue)
+            {
+                var defaultPriceListExists = await _context.PriceLists
+                    .AnyAsync(priceList => priceList.Id == customer.DefaultPriceListId.Value && priceList.OfficeId == user.OfficeId);
+                if (!defaultPriceListExists)
+                {
+                    return BadRequest(new { message = "DefaultPriceListId must belong to the current office" });
+                }
+            }
+
             var newCustomer = new Customer
             {
                 OfficeId = user.OfficeId,
@@ -223,6 +233,7 @@ namespace Hyr.Api.Controllers
                 EfakturaVatRegistration = customer.EfakturaVatRegistration,
                 CrediflowPartyId = customer.CrediflowPartyId,
                 GLNnr = customer.GLNnr,
+                DefaultPriceListId = customer.DefaultPriceListId,
 
                 // Audit / tracking fields
                 CreatedAt = customer.CreatedAt,
@@ -269,6 +280,7 @@ namespace Hyr.Api.Controllers
             target.EfakturaVatRegistration = source.EfakturaVatRegistration ?? string.Empty;
             target.CrediflowPartyId = source.CrediflowPartyId;
             target.GLNnr = source.GLNnr;
+            target.DefaultPriceListId = source.DefaultPriceListId;
         }
 
     }

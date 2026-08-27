@@ -15,8 +15,15 @@ public sealed class ReservationFormOptionsDto
 {
     public List<ItemTypeOptionDto> ItemTypes { get; set; } = [];
     public List<ItemCategoryOptionDto> ItemCategories { get; set; } = [];
+    public List<PriceListOptionDto> PriceLists { get; set; } = [];
     public string DefaultBookedFromTime { get; set; } = string.Empty;
     public string DefaultBookedToTime { get; set; } = string.Empty;
+}
+
+public sealed class PriceListOptionDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
 }
 
 public sealed class ReservationUpsertDto
@@ -41,6 +48,7 @@ public sealed class ReservationUpsertDto
     public string MobilePhone { get; set; } = string.Empty;
     public string Reference { get; set; } = string.Empty;
     public decimal? Deposition { get; set; }
+    public int? PriceListId { get; set; }
     public string Note { get; set; } = string.Empty;
     public string DeliveryPlaceNote { get; set; } = string.Empty;
     public string PickupPlaceNote { get; set; } = string.Empty;

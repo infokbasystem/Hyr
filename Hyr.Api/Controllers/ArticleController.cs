@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using Hyr.Api.Data;
+using Hyr.Api.Dtos;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
 using Hyr.Api.Services;
@@ -23,6 +24,25 @@ namespace Hyr.Api.Controllers
             _currentUserService = currentUserService;
         }
 
+        [HttpGet("form-options")]
+        [Authorize]
+        public async Task<ActionResult<ArticleFormOptionsDto>> GetFormOptions()
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            if (!user.OfficeId.HasValue)
+            {
+                return BadRequest(new { message = "User has no office" });
+            }
+
+            var formOptions = await BuildArticleFormOptions(user.OfficeId.Value);
+            return Ok(formOptions);
+        }
+
         [HttpGet]
         [Authorize]
         public async Task<ActionResult<PagedResult<Article>>> GetArticles([FromQuery] ArticleFilter filter)
@@ -35,8 +55,6 @@ namespace Hyr.Api.Controllers
 
             var query = _context.Articles
                 .Where(a => a.OfficeId == user.OfficeId)
-                .Include(a => a.Account)
-                .Include(a => a.VatRate)
                 .AsQueryable();
 
 
@@ -59,25 +77,18 @@ namespace Hyr.Api.Controllers
 
             var totalRecords = await query.CountAsync();
 
-            // Apply sorting (default to Name:asc if not specified)
-            var sortBy = filter.SortBy ?? new[] { "Name:asc" };
+            // Apply sorting (default to Name:asc, then Id:desc for deterministic ties)
+            var sortBy = filter.SortBy ?? new[] { "Name:asc", "Id:desc" };
             query = query.ApplyMultiSort(sortBy);
 
             var pagedQuery = query
                 .Skip((filter.Page - 1) * filter.PageSize)
                 .Take(filter.PageSize);
 
-            var articles = await pagedQuery.Select(a => new Article
-            {
-                Id = a.Id,
-                OfficeId = a.OfficeId,
-                ArticleNr = a.ArticleNr,
-                Name = a.Name,
-                Price = a.Price,
-                AccountId = a.AccountId,
-                VatRateId = a.VatRateId,
-                IsActive = a.IsActive,
-            }).ToListAsync();
+            var articles = await pagedQuery
+                .AsNoTracking()
+                .Select(a => MapArticle(a))
+                .ToListAsync();
 
             return Ok(new PagedResult<Article>
             {
@@ -95,11 +106,17 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<ActionResult<Article>> GetArticle(int id)
         {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
             var article = await _context.Articles
-                .Include(a => a.Office)
-                .Include(a => a.Account)
-                .Include(a => a.VatRate)
-                .FirstOrDefaultAsync(a => a.Id == id);
+                .AsNoTracking()
+                .Where(a => a.Id == id && a.OfficeId == user.OfficeId)
+                .Select(a => MapArticle(a))
+                .FirstOrDefaultAsync();
 
             if (article == null)
             {
@@ -113,10 +130,23 @@ namespace Hyr.Api.Controllers
         [Authorize]
         public async Task<IActionResult> DeleteArticle(int id)
         {
-            var article = await _context.Articles.FindAsync(id);
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            var article = await _context.Articles
+                .FirstOrDefaultAsync(a => a.Id == id && a.OfficeId == user.OfficeId);
+
             if (article == null)
             {
                 return NotFound();
+            }
+
+            if (!string.IsNullOrWhiteSpace(article.CalcPriceTypeCode))
+            {
+                return BadRequest(new { message = "Systemartiklar kan inte tas bort." });
             }
 
             _context.Articles.Remove(article);
@@ -140,32 +170,34 @@ namespace Hyr.Api.Controllers
                     return Unauthorized(new { message = "User not found" });
                 }
 
+                if (!user.OfficeId.HasValue)
+                {
+                    return BadRequest(new { message = "User has no office" });
+                }
+
                 Article? articleInDb = null;
 
                 if (article.Id == 0)
                 {
                     articleInDb = new Article();
-                    articleInDb.OfficeId = user.OfficeId;
+                    articleInDb.OfficeId = user.OfficeId.Value;
                     _context.Articles.Add(articleInDb);
                 }
                 else
                 {
-                    articleInDb = await _context.Articles.FindAsync(article.Id);
+                    articleInDb = await _context.Articles
+                        .FirstOrDefaultAsync(a => a.Id == article.Id && a.OfficeId == user.OfficeId);
+
                     if (articleInDb == null)
                     {
                         return NotFound(new { message = "Article not found" });
                     }
                 }
 
-                articleInDb.ArticleNr = article.ArticleNr;
-                articleInDb.Name = article.Name;
-                articleInDb.Price = article.Price;
-                articleInDb.AccountId = article.AccountId;
-                articleInDb.VatRateId = article.VatRateId;
-                articleInDb.IsActive = article.IsActive;
+                ApplyArticleChanges(articleInDb, article);
 
                 await _context.SaveChangesAsync();
-                return Ok(articleInDb);
+                return Ok(MapArticle(articleInDb));
             }
             catch (Exception ex)
             {
@@ -173,9 +205,65 @@ namespace Hyr.Api.Controllers
             }
         }
 
-        private async Task<bool> ArticleExists(int id)
+        private static Article MapArticle(Article source)
         {
-            return await _context.Articles.AnyAsync(a => a.Id == id);
+            return new Article
+            {
+                Id = source.Id,
+                OfficeId = source.OfficeId,
+                ArticleNr = source.ArticleNr,
+                Name = source.Name,
+                Price = source.Price,
+                AccountId = source.AccountId,
+                VatRateId = source.VatRateId,
+                IsActive = source.IsActive,
+                CalcPriceTypeCode = source.CalcPriceTypeCode,
+            };
+        }
+
+        private static void ApplyArticleChanges(Article target, Article source)
+        {
+            target.ArticleNr = source.ArticleNr?.Trim() ?? string.Empty;
+            target.Name = source.Name?.Trim() ?? string.Empty;
+            target.Price = source.Price;
+            target.AccountId = source.AccountId;
+            target.VatRateId = source.VatRateId;
+            target.IsActive = source.IsActive;
+        }
+
+        private async Task<ArticleFormOptionsDto> BuildArticleFormOptions(int officeId)
+        {
+            var accounts = await _context.Accounts
+                .Where(account => account.OfficeId == officeId)
+                .AsNoTracking()
+                .OrderBy(account => account.AccountNr)
+                .ThenBy(account => account.Name)
+                .Select(account => new AccountOptionDto
+                {
+                    Id = account.Id,
+                    AccountNr = account.AccountNr,
+                    Name = account.Name,
+                })
+                .ToListAsync();
+
+            var vatRates = await _context.VatRates
+                .Where(vatRate => vatRate.OfficeId == officeId)
+                .AsNoTracking()
+                .OrderByDescending(vatRate => vatRate.IsDefault)
+                .ThenBy(vatRate => vatRate.Name)
+                .Select(vatRate => new VatRateOptionDto
+                {
+                    Id = vatRate.Id,
+                    Name = vatRate.Name,
+                    Rate = vatRate.Rate,
+                })
+                .ToListAsync();
+
+            return new ArticleFormOptionsDto
+            {
+                Accounts = accounts,
+                VatRates = vatRates,
+            };
         }
     }
 }

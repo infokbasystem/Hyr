@@ -43,9 +43,14 @@ import SettingsSection from './pages/settings/SettingsSection';
 import FortnoxRedirect from './pages/settings/FortnoxRedirect';
 import Categories from './pages/settings/Categories';
 import Models from './pages/settings/Models';
+import Articles from './pages/settings/Articles';
 import ServiceTypes from './pages/settings/ServiceTypes';
 import InsuranceCompanies from './pages/settings/InsuranceCompanies';
+import Currencies from './pages/settings/Currencies';
+import Vat from './pages/settings/Vat';
+import Accounts from './pages/settings/Accounts';
 import Users from './pages/settings/Users';
+import Pricing from './pages/settings/Pricing';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -102,12 +107,12 @@ const router = createBrowserRouter(
         <Route path='categories' element={<ProtectedRoute><Categories /></ProtectedRoute>} />
         <Route path='models' element={<ProtectedRoute><Models /></ProtectedRoute>} />
         <Route path='insurancecompanies' element={<ProtectedRoute><InsuranceCompanies /></ProtectedRoute>} />
-        <Route path='articles' element={<ProtectedRoute><SettingsSection title="Articles" /></ProtectedRoute>} />
+        <Route path='articles' element={<ProtectedRoute><Articles /></ProtectedRoute>} />
         <Route path='servicetypes' element={<ProtectedRoute><ServiceTypes /></ProtectedRoute>} />
-        <Route path='pricing' element={<ProtectedRoute><SettingsSection title="Pricing" /></ProtectedRoute>} />
-        <Route path='currencies' element={<ProtectedRoute><SettingsSection title="Valutor" /></ProtectedRoute>} />
-        <Route path='vat' element={<ProtectedRoute><SettingsSection title="Moms" /></ProtectedRoute>} />
-        <Route path='accounts' element={<ProtectedRoute><SettingsSection title="Kontoplan" /></ProtectedRoute>} />
+        <Route path='pricing' element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
+        <Route path='currencies' element={<ProtectedRoute><Currencies /></ProtectedRoute>} />
+        <Route path='vat' element={<ProtectedRoute><Vat /></ProtectedRoute>} />
+        <Route path='accounts' element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
         <Route path='fortnoxredirect' element={<ProtectedRoute>< FortnoxRedirect /></ProtectedRoute>} />
       </Route>
       <Route path="something-went-wrong" element={< MainLayout />}>

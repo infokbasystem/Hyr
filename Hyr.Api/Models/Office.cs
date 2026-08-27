@@ -55,6 +55,8 @@ namespace Hyr.Api.Models
         public virtual ICollection<VatRate> VatRates { get; set; } = new List<VatRate>();
         public virtual ICollection<ItemCategory> ItemCategories { get; set; } = new List<ItemCategory>();
         public virtual ICollection<ItemModel> ItemModels { get; set; } = new List<ItemModel>();
+        public virtual ICollection<PriceList> PriceLists { get; set; } = new List<PriceList>();
+        public virtual ICollection<Currency> Currencies { get; set; } = new List<Currency>();
         public virtual ICollection<ServiceType> ServiceTypes { get; set; } = new List<ServiceType>();
         public virtual ICollection<InsuranceCompany> InsuranceCompanies { get; set; } = new List<InsuranceCompany>();
         public virtual ICollection<Department> Departments { get; set; } = new List<Department>();

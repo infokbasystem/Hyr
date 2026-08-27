@@ -12,6 +12,7 @@ namespace Hyr.Api.Models
         public DateTime? ModifiedDate { get; set; }
         public int? ReservationNr { get; set; }
         public int? CustomerId { get; set; }
+        public int? PriceListId { get; set; }
         public string StatusCode { get; set; } = string.Empty;
         public string DriverName { get; set; } = string.Empty;
         public string PickUpBy { get; set; } = string.Empty;
@@ -41,6 +42,7 @@ namespace Hyr.Api.Models
         public virtual User? CreatedByUser { get; set; }
         public virtual User? ModifiedByUser { get; set; }
         public virtual Customer? Customer { get; set; }
+        public virtual PriceList? PriceList { get; set; }
         
         public virtual ICollection<ReservationItem> ReservationItems { get; set; } = new List<ReservationItem>();
         public virtual ICollection<ReservationCalc> ReservationCalcs { get; set; } = new List<ReservationCalc>();

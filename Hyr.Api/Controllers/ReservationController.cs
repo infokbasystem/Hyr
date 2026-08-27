@@ -156,10 +156,23 @@ namespace Hyr.Api.Controllers
                 })
                 .ToListAsync();
 
+            var priceLists = await _context.PriceLists
+                .Where(priceList => priceList.OfficeId == officeId && priceList.IsActive)
+                .AsNoTracking()
+                .OrderBy(priceList => priceList.Priority)
+                .ThenBy(priceList => priceList.Name)
+                .Select(priceList => new PriceListOptionDto
+                {
+                    Id = priceList.Id,
+                    Name = priceList.Name,
+                })
+                .ToListAsync();
+
             return Ok(new ReservationFormOptionsDto
             {
                 ItemTypes = itemTypes,
                 ItemCategories = itemCategories,
+                PriceLists = priceLists,
                 DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty,
                 DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty,
             });
@@ -353,6 +366,7 @@ namespace Hyr.Api.Controllers
                     CustomerName = reservationInDb.CustomerName,
                     DeliveryPlaceNote = reservationInDb.DeliveryPlaceNote,
                     Deposition = reservationInDb.Deposition,
+                    PriceListId = reservationInDb.PriceListId,
                     DeliveryPlace = reservationInDb.DeliveryPlace,
                     CustomerMarking = reservationInDb.CustomerMarking,
                     DriverName = reservationInDb.DriverName,
@@ -458,7 +472,8 @@ namespace Hyr.Api.Controllers
                         Id = calc.Id,
                         ReservationId = calc.ReservationId,
                         DateTimeFrom = calc.DateTimeFrom,
-                        DateTimeTo = calc.DateTimeTo
+                        DateTimeTo = calc.DateTimeTo,
+                        ReceiverTypeCode = ReceiverTypeCodes.NormalizeOrDefault(calc.ReceiverTypeCode)
                     };
 
                     foreach (var calcItem in calc.ReservationCalcItems)
@@ -469,9 +484,12 @@ namespace Hyr.Api.Controllers
                             ReservationCalcId = calcItem.ReservationCalcId,
                             ItemId = calcItem.ItemId,
                             PriceListId = calcItem.PriceListId,
+                            VatId = calcItem.VatId,
+                            VatRate = calcItem.VatRate,
                             Qty = calcItem.Qty,
                             UnitPrice = calcItem.UnitPrice,
                             Sum = calcItem.Sum,
+                            CalcPriceTypeCode = CalcPriceTypeCodes.NormalizeOrDefault(calcItem.CalcPriceTypeCode),
                             Text = calcItem.Text
                         };
 
@@ -571,9 +589,50 @@ namespace Hyr.Api.Controllers
                     return BadRequest(new { message = "Invalid pricing calendar code" });
                 }
 
+                var effectivePriceListId = reservation.PriceListId;
+                if (!effectivePriceListId.HasValue && reservation.CustomerId.HasValue)
+                {
+                    effectivePriceListId = await _context.Customers
+                        .Where(customer => customer.Id == reservation.CustomerId.Value && customer.OfficeId == user.OfficeId)
+                        .Select(customer => customer.DefaultPriceListId)
+                        .FirstOrDefaultAsync();
+                }
+
+                if (effectivePriceListId.HasValue)
+                {
+                    var priceListExists = await _context.PriceLists
+                        .AnyAsync(priceList => priceList.Id == effectivePriceListId.Value && priceList.OfficeId == user.OfficeId);
+                    if (!priceListExists)
+                    {
+                        return BadRequest(new { message = "PriceListId must belong to the current office" });
+                    }
+                }
+
+                var defaultVatId = (int?)null;
+                var defaultVatRate = 25m;
+
+                if (user.OfficeId.HasValue)
+                {
+                    var defaultVat = await _context.VatRates
+                        .AsNoTracking()
+                        .Where(vat => vat.OfficeId == user.OfficeId.Value && vat.IsDefault)
+                        .OrderByDescending(vat => vat.IsActive)
+                        .ThenBy(vat => vat.Id)
+                        .Select(vat => new
+                        {
+                            vat.Id,
+                            vat.Rate,
+                        })
+                        .FirstOrDefaultAsync();
+
+                    defaultVatId = defaultVat?.Id;
+                    defaultVatRate = defaultVat?.Rate ?? 25m;
+                }
+
                 reservationInDb.ModifiedByUserId = user.Id;
                 reservationInDb.ModifiedDate = DateTime.UtcNow;
                 reservationInDb.CustomerId = reservation.CustomerId;
+                reservationInDb.PriceListId = effectivePriceListId;
                 reservationInDb.StatusCode = reservation.StatusCode;
                 reservationInDb.DriverName = reservation.DriverName;
                 reservationInDb.PickUpBy = reservation.PickUpBy;
@@ -699,6 +758,7 @@ namespace Hyr.Api.Controllers
                     }
                     reservationCalcInDb.DateTimeFrom = reservationCalc.DateTimeFrom;
                     reservationCalcInDb.DateTimeTo = reservationCalc.DateTimeTo;
+                    reservationCalcInDb.ReceiverTypeCode = ReceiverTypeCodes.NormalizeOrDefault(reservationCalc.ReceiverTypeCode);
                     // Handle ReservationCalcItems
                     var existingReservationCalcItemIds = reservationCalcInDb.ReservationCalcItems.Select(rci => rci.Id).ToList();
                     var incomingReservationCalcItemIds = reservationCalc.ReservationCalcItems.Select(rci => rci.Id).ToList();
@@ -733,6 +793,9 @@ namespace Hyr.Api.Controllers
                         reservationCalcItemInDb.Qty = reservationCalcItem.Qty;
                         reservationCalcItemInDb.UnitPrice = reservationCalcItem.UnitPrice;
                         reservationCalcItemInDb.Sum = reservationCalcItem.Sum;
+                        reservationCalcItemInDb.VatId = defaultVatId;
+                        reservationCalcItemInDb.VatRate = defaultVatRate;
+                        reservationCalcItemInDb.CalcPriceTypeCode = CalcPriceTypeCodes.NormalizeOrDefault(reservationCalcItem.CalcPriceTypeCode);
                         reservationCalcItemInDb.Text = reservationCalcItem.Text;
                     }
                 }

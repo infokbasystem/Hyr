@@ -12,9 +12,9 @@ const LabeledSelect = ({
   disabled,
   ...props }) => {
   return (
-    <div className={`w-full pb-[1px] mt-${margintop} ${labelPosition === 'top' ? 'flex flex-col gap-1' : 'flex items-center space-x-1'}`}>
+    <div className={`w-full pb-[1px] mt-${margintop} ${labelPosition === 'top' ? 'flex flex-col' : 'flex items-center'}`}>
       <div className={`relative flex flex-none justify-between ${labelPosition === 'top' ? 'w-full items-center' : `items-center ${labelWidth}`}`}>
-        <label className="text-xs leading-none text-gray-700">{label}</label>
+        <label className={`text-xs leading-none text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>{label}</label>
       </div>
 
       <div className="flex flex-row items-center w-full">
@@ -22,7 +22,7 @@ const LabeledSelect = ({
           name={name}
           value={value ?? ''}
           onChange={(e) => onChange(e.target.value)}
-          className={`text-xs leading-none ${inputWidth || 'w-full'} border border-gray-300 rounded-sm px-1 py-[calc(0.26rem-1px)] focus:outline-none bg-white disabled:bg-transparent disabled:text-gray-500`}
+          className={`text-xs leading-none ${inputWidth || 'w-full'} h-6 border border-gray-300 rounded-sm px-1 focus:outline-none bg-white disabled:bg-transparent disabled:text-gray-500`}
           disabled={disabled}
           {...props}
         >

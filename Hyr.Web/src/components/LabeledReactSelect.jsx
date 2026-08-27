@@ -1,7 +1,7 @@
 import Select, { components } from 'react-select';
 
 
-const LabeledReactSelect = ({ label, labelWidth, margintop, name, value, items, onChange, disableInactive, allowRawValueLabel = false, ...props }) => {
+const LabeledReactSelect = ({ label, labelWidth, margintop, name, value, items, onChange, disableInactive, allowRawValueLabel = false, disabled = false, ...props }) => {
     const normalizedItems = Array.isArray(items) ? items : [];
 
     const options = normalizedItems
@@ -86,7 +86,7 @@ const LabeledReactSelect = ({ label, labelWidth, margintop, name, value, items, 
 
     return (
         <div className={`flex items-center space-x-1 w-full pb-[1px] mt-${margintop}`}>
-            <label className={`${labelWidth || ''} flex-none text-xs text-gray-700`}>{label}</label>
+            <label className={`${labelWidth || ''} flex-none text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>{label}</label>
             <Select
                 options={options}
                 value={selectedValue}
@@ -95,6 +95,7 @@ const LabeledReactSelect = ({ label, labelWidth, margintop, name, value, items, 
                 placeholder="Välj"
                 isClearable
                 isSearchable
+                isDisabled={disabled}
                 styles={customStyles}
                 closeMenuOnSelect={!isMultiSelect}
                 hideSelectedOptions={false}

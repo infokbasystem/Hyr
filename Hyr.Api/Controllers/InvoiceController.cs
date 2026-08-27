@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using Hyr.Api.Data;
+using Hyr.Api.Dtos;
 using Hyr.Api.Models;
 using Hyr.Api.Filters;
 using Hyr.Api.Services;
@@ -24,13 +25,64 @@ namespace Hyr.Api.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ICurrentUserService _currentUserService;
+        private readonly ICalcPriceTypeArticleService _calcPriceTypeArticleService;
         // private readonly OldApplicationDbContext _context;
 
-        public InvoiceController(ApplicationDbContext context, ICurrentUserService currentUserService)
+        private static readonly InvoicePaymentMethodOptionDto[] PaymentMethodOptions =
+        [
+            new InvoicePaymentMethodOptionDto { Value = string.Empty, Label = "-" },
+            new InvoicePaymentMethodOptionDto { Value = "SWISH", Label = "Swish" },
+            new InvoicePaymentMethodOptionDto { Value = "BG", Label = "Bankgiro" },
+            new InvoicePaymentMethodOptionDto { Value = "PG", Label = "Plusgiro" },
+            new InvoicePaymentMethodOptionDto { Value = "CARD", Label = "Kort" },
+            new InvoicePaymentMethodOptionDto { Value = "CASH", Label = "Kontant" },
+            new InvoicePaymentMethodOptionDto { Value = "INVOICE", Label = "Faktura" },
+        ];
+
+        public InvoiceController(ApplicationDbContext context, ICurrentUserService currentUserService, ICalcPriceTypeArticleService calcPriceTypeArticleService)
         {
             _context = context;
             _currentUserService = currentUserService;
+            _calcPriceTypeArticleService = calcPriceTypeArticleService;
             // _context = oldContext;
+        }
+
+        [HttpGet("form-options")]
+        [Authorize]
+        public async Task<ActionResult<InvoiceFormOptionsDto>> GetFormOptions()
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            if (user.OfficeId == null)
+            {
+                return BadRequest(new { message = "Office not found" });
+            }
+
+            var currencies = await _context.Currencies
+                .AsNoTracking()
+                .Where(currency => currency.OfficeId == user.OfficeId.Value)
+                .OrderByDescending(currency => currency.IsDefault)
+                .ThenBy(currency => currency.CurrencyName)
+                .ThenBy(currency => currency.Id)
+                .Select(currency => new InvoiceCurrencyOptionDto
+                {
+                    Id = currency.Id,
+                    CurrencyName = currency.CurrencyName ?? string.Empty,
+                    PurchaseCurrencyRate = currency.PurchaseCurrencyRate.HasValue ? (decimal?)currency.PurchaseCurrencyRate.Value : null,
+                    SalesCurrencyRate = currency.SalesCurrencyRate.HasValue ? (decimal?)currency.SalesCurrencyRate.Value : null,
+                    IsDefault = currency.IsDefault,
+                })
+                .ToListAsync();
+
+            return Ok(new InvoiceFormOptionsDto
+            {
+                Currencies = currencies,
+                PaymentMethods = PaymentMethodOptions.ToList(),
+            });
         }
 
         [HttpGet]
@@ -87,6 +139,10 @@ namespace Hyr.Api.Controllers
             {
                 result.Add(new Models.Invoice
                 {
+                    CreatedByUserId = item.Invoice.CreatedByUserId,
+                    CreatedDate = item.Invoice.CreatedDate,
+                    ModifiedByUserId = item.Invoice.ModifiedByUserId,
+                    ModifiedDate = item.Invoice.ModifiedDate,
                     AccountedDate = item.Invoice.AccountedDate,
                     AccountNr = item.Invoice.AccountNr,
                     AccountNrVat = item.Invoice.AccountNrVat,
@@ -147,16 +203,200 @@ namespace Hyr.Api.Controllers
             };
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("reservation/{reservationId}/has-uninvoiced-items")]
         [Authorize]
-        public async Task<ActionResult<Invoice>> GetInvoice(int id)
+        public async Task<ActionResult<object>> HasUninvoicedReservationItems(int reservationId, [FromQuery] string? receiverTypeCode)
         {
             var user = await _currentUserService.GetCurrentUserAsync(User);
             if (user == null)
             {
                 return Unauthorized(new { message = "User not found" });
             }
-            var invoiceInDb = await _context.Invoices.Where(i => i.Id == id && i.OfficeId == user.OfficeId).FirstOrDefaultAsync();
+
+            if (user.OfficeId == null)
+            {
+                return BadRequest(new { message = "Office not found" });
+            }
+
+            var reservationExists = await _context.Reservations
+                .AsNoTracking()
+                .AnyAsync(reservation => reservation.Id == reservationId && reservation.OfficeId == user.OfficeId);
+
+            if (!reservationExists)
+            {
+                return NotFound(new { message = "Reservation not found" });
+            }
+
+            var receiverType = ReceiverTypeCodes.Parse(receiverTypeCode);
+            var normalizedReceiverTypeCode = ReceiverTypeCodes.ToCode(receiverType);
+            var hasUninvoicedItems = await _context.ReservationCalcItems
+                .AsNoTracking()
+                .AnyAsync(calcItem => calcItem.ReservationCalc != null
+                    && calcItem.ReservationCalc.ReservationId == reservationId
+                    && calcItem.OfficeId == user.OfficeId
+                    && calcItem.ReservationCalc.ReceiverTypeCode == normalizedReceiverTypeCode
+                    && !_context.InvoiceRows.Any(invoiceRow => invoiceRow.ReservationCalcItemId == calcItem.Id && invoiceRow.InvoiceId != null));
+
+            return Ok(new { hasUninvoicedItems });
+        }
+
+        [HttpGet("new")]
+        [Authorize]
+        public async Task<ActionResult<InvoiceDto>> GetNewInvoice([FromQuery] int? reservationId, [FromQuery] string? receiverTypeCode)
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            if (user.OfficeId == null)
+            {
+                return BadRequest(new { message = "Office not found" });
+            }
+
+            var receiverType = ReceiverTypeCodes.Parse(receiverTypeCode);
+            var normalizedReceiverTypeCode = ReceiverTypeCodes.ToCode(receiverType);
+
+            var invoice = new InvoiceDto
+            {
+                Id = 0,
+                OfficeId = user.OfficeId,
+                InvoiceDate = DateTime.Today,
+                CreatedByUserId = user.Id,
+                CreatedByUserName = user.Name ?? string.Empty,
+                InvoicePayMethod = "INVOICE",
+                NrOfInvoiceDays = 30,
+                TermsOfPayment = "30",
+                OurReference = user.Name ?? string.Empty,
+            };
+
+            if (reservationId is not > 0)
+            {
+                invoice.DueDate = invoice.InvoiceDate?.AddDays(invoice.NrOfInvoiceDays ?? 0);
+                return Ok(invoice);
+            }
+
+            var reservation = await _context.Reservations
+                .AsNoTracking()
+                .Where(r => r.Id == reservationId.Value && r.OfficeId == user.OfficeId)
+                .Include(r => r.Customer)
+                .Include(r => r.ReservationItems)
+                .FirstOrDefaultAsync();
+
+            if (reservation == null)
+            {
+                return NotFound(new { message = "Reservation not found" });
+            }
+
+            var uninvoicedCalcItems = await _context.ReservationCalcItems
+                .AsNoTracking()
+                .Where(calcItem => calcItem.ReservationCalc != null
+                    && calcItem.ReservationCalc.ReservationId == reservation.Id
+                    && calcItem.OfficeId == user.OfficeId
+                    && calcItem.ReservationCalc.ReceiverTypeCode == normalizedReceiverTypeCode
+                    && !_context.InvoiceRows.Any(invoiceRow => invoiceRow.ReservationCalcItemId == calcItem.Id && invoiceRow.InvoiceId != null))
+                .OrderBy(calcItem => calcItem.ReservationCalcId)
+                .ThenBy(calcItem => calcItem.Id)
+                .ToListAsync();
+
+            var sortNr = 1;
+            var calcPriceTypeArticles = await _calcPriceTypeArticleService.EnsureArticlesAsync(user.OfficeId.Value);
+            foreach (var calcItem in uninvoicedCalcItems)
+            {
+                calcPriceTypeArticles.TryGetValue(calcItem.CalcPriceTypeCode ?? string.Empty, out var article);
+
+                invoice.InvoiceRows.Add(new InvoiceRow
+                {
+                    Id = 0,
+                    OfficeId = user.OfficeId,
+                    ItemId = calcItem.ItemId,
+                    ReservationCalcItemId = calcItem.Id,
+                    ArticleId = article?.Id,
+                    ArticleNr = article?.ArticleNr ?? string.Empty,
+                    SortNr = sortNr++,
+                    Text1 = calcItem.Text,
+                    Qty = calcItem.Qty,
+                    UnitPrice = calcItem.UnitPrice,
+                    Sum = calcItem.Sum,
+                    VatRate = calcItem.VatRate,
+                });
+            }
+
+            if (receiverType == ReceiverType.InsuranceCompany)
+            {
+                var insuranceCompanyId = reservation.ReservationItems
+                    .Where(item => item.InsuranceCompanyId.HasValue)
+                    .Select(item => item.InsuranceCompanyId)
+                    .FirstOrDefault();
+
+                var insuranceCompany = insuranceCompanyId.HasValue
+                    ? await _context.InsuranceCompanies
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(company => company.Id == insuranceCompanyId.Value && company.OfficeId == user.OfficeId)
+                    : null;
+
+                if (insuranceCompany != null)
+                {
+                    invoice.CustomerName = insuranceCompany.Name;
+                    invoice.OrgNr = insuranceCompany.OrganizationNr;
+                    invoice.Street1 = insuranceCompany.Street;
+                    invoice.ZipCode = ParseZipCode(insuranceCompany.ZipCode);
+                    invoice.City = insuranceCompany.City;
+                    invoice.YourReference = insuranceCompany.ContactPerson;
+
+                    if (insuranceCompany.PaymentDays.HasValue)
+                    {
+                        invoice.NrOfInvoiceDays = insuranceCompany.PaymentDays.Value;
+                        invoice.TermsOfPayment = insuranceCompany.PaymentDays.Value.ToString();
+                    }
+                }
+            }
+            else if (receiverType == ReceiverType.Customer && reservation.Customer != null)
+            {
+                var customer = reservation.Customer;
+                invoice.CustomerId = customer.Id;
+                invoice.CustomerName = customer.CustomerName;
+                invoice.OrgNr = customer.OrgNr;
+                invoice.VatNr = customer.VatNr;
+                invoice.Street1 = customer.Street1;
+                invoice.Street2 = customer.Street2;
+                invoice.ZipCode = ParseZipCode(customer.ZipCode);
+                invoice.City = customer.City;
+                invoice.YourReference = reservation.Reference;
+
+                if (customer.NrOfInvoiceDays.HasValue)
+                {
+                    invoice.NrOfInvoiceDays = customer.NrOfInvoiceDays.Value;
+                    invoice.TermsOfPayment = customer.NrOfInvoiceDays.Value.ToString();
+                }
+            }
+
+            invoice.DueDate = invoice.InvoiceDate?.AddDays(invoice.NrOfInvoiceDays ?? 0);
+
+            return Ok(invoice);
+        }
+
+        private static int? ParseZipCode(string? value)
+        {
+            var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var parsed) ? parsed : null;
+        }
+
+        [HttpGet("{id}")]
+        [Authorize]
+        public async Task<ActionResult<InvoiceDto>> GetInvoice(int id)
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+            var invoiceInDb = await _context.Invoices
+                .Where(i => i.Id == id && i.OfficeId == user.OfficeId)
+                .Include(i => i.CreatedByUser)
+                .Include(i => i.ModifiedByUser)
+                .FirstOrDefaultAsync();
 
             if (invoiceInDb == null)
             {
@@ -193,8 +433,15 @@ namespace Hyr.Api.Controllers
                 });
             }
 
-            var invoice = new Models.Invoice()
+            var invoice = new InvoiceDto()
             {
+                OfficeId = invoiceInDb.OfficeId,
+                CreatedByUserId = invoiceInDb.CreatedByUserId,
+                CreatedDate = invoiceInDb.CreatedDate,
+                CreatedByUserName = invoiceInDb.CreatedByUser != null ? invoiceInDb.CreatedByUser.Name : string.Empty,
+                ModifiedByUserId = invoiceInDb.ModifiedByUserId,
+                ModifiedDate = invoiceInDb.ModifiedDate,
+                ModifiedByUserName = invoiceInDb.ModifiedByUser != null ? invoiceInDb.ModifiedByUser.Name : string.Empty,
                 AccountedDate = invoiceInDb.AccountedDate,
                 AccountNr = invoiceInDb.AccountNr,
                 AccountNrVat = invoiceInDb.AccountNrVat,
@@ -246,7 +493,7 @@ namespace Hyr.Api.Controllers
 
         [HttpPost]
         [Authorize]
-        public async Task<ActionResult<Invoice>> PostInvoice([FromBody] Invoice invoice)
+        public async Task<ActionResult<Invoice>> PostInvoice([FromBody] InvoiceUpsertDto invoice)
         {
             try
             {

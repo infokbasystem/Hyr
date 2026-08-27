@@ -23,6 +23,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlSer
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<ICalcPriceTypeArticleService, CalcPriceTypeArticleService>();
 
 // JWT Configuration
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "D8C73B12-A68F-4708-8D64-ACA28121F156";

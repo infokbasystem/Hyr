@@ -52,7 +52,7 @@ export default function OfficeSettingsLayout() {
                 </ul>
             </aside>
 
-            <div aria-hidden="true" className="mt-3 mr-2 w-px self-stretch bg-gray-300" />
+            <div aria-hidden="true" className="mt-6 mr-2 w-px self-stretch bg-gray-300" />
 
             <section className="min-w-0 flex-1 px-0 py-0">
                 <Outlet />

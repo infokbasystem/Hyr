@@ -13,5 +13,6 @@ namespace Hyr.Api.Models
         public virtual Office? Office { get; set; }
 
         public virtual ICollection<Article> Articles { get; set; } = new List<Article>();
+        public virtual ICollection<ReservationCalcItem> ReservationCalcItems { get; set; } = new List<ReservationCalcItem>();
     }
 }

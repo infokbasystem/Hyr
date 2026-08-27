@@ -24,6 +24,19 @@ namespace Hyr.Api.Data
         public DbSet<ItemType> ItemTypes { get; set; } = null!;
         public DbSet<ItemCategory> ItemCategories { get; set; } = null!;
         public DbSet<ItemModel> ItemModels { get; set; } = null!;
+        public DbSet<PriceList> PriceLists { get; set; } = null!;
+        public DbSet<PriceListDayPrice> PriceListDayPrices { get; set; } = null!;
+        public DbSet<PriceListDayPriceFreeKm> PriceListDayPriceFreeKms { get; set; } = null!;
+        public DbSet<PriceListWeekPriceIncludedKm> PriceListWeekPriceIncludedKms { get; set; } = null!;
+        public DbSet<PriceListWeekPriceFreeKm> PriceListWeekPriceFreeKms { get; set; } = null!;
+        public DbSet<PriceListThirtyDayPriceIncludedKm> PriceListThirtyDayPriceIncludedKms { get; set; } = null!;
+        public DbSet<PriceListWeekendPrice> PriceListWeekendPrices { get; set; } = null!;
+        public DbSet<PriceListHourPriceIncludedKm> PriceListHourPriceIncludedKms { get; set; } = null!;
+        public DbSet<PriceListServicePrice> PriceListServicePrices { get; set; } = null!;
+        public DbSet<PriceListGuaranteePrice> PriceListGuaranteePrices { get; set; } = null!;
+        public DbSet<PriceListWeekendPriceIncludedKm> PriceListWeekendPriceIncludedKms { get; set; } = null!;
+        public DbSet<PriceListWeekendPriceFreeKm> PriceListWeekendPriceFreeKms { get; set; } = null!;
+        public DbSet<Currency> Currencies { get; set; } = null!;
         public DbSet<ServiceType> ServiceTypes { get; set; } = null!;
         public DbSet<InsuranceCompany> InsuranceCompanies { get; set; } = null!;
         public DbSet<Department> Departments { get; set; } = null!;
@@ -132,6 +145,10 @@ namespace Hyr.Api.Data
                     .WithMany()
                     .HasForeignKey(e => e.UpdatedBy)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.DefaultPriceList)
+                    .WithMany(e => e.CustomersWithDefaultPriceList)
+                    .HasForeignKey(e => e.DefaultPriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<Item>(entity =>
@@ -224,6 +241,23 @@ namespace Hyr.Api.Data
                 entity.HasOne(e => e.PackageItem)
                     .WithMany(e => e.IncludedInItems)
                     .HasForeignKey(e => e.PackageItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<Currency>(entity =>
+            {
+                entity.ToTable("Currency");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.OfficeId).IsRequired();
+                entity.Property(e => e.CurrencyName).IsRequired(false).HasMaxLength(255);
+                entity.Property(e => e.PurchaseCurrencyRate).HasColumnType("float(53)");
+                entity.Property(e => e.SalesCurrencyRate).HasColumnType("float(53)");
+                entity.Property(e => e.KeyFortnox).IsRequired(false).HasMaxLength(255);
+                entity.Property(e => e.IsDefault).IsRequired();
+
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.Currencies)
+                    .HasForeignKey(e => e.OfficeId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -329,6 +363,10 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.Reservations)
                     .HasForeignKey(e => e.CustomerId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.ReservationsWithPriceListOverride)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<ReservationItem>(entity =>
@@ -374,13 +412,16 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.ReservationCalcs)
                     .HasForeignKey(e => e.ReservationId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.Property(e => e.ReceiverTypeCode).HasMaxLength(30).HasDefaultValue(ReceiverTypeCodes.Customer);
             });
 
             modelBuilder.Entity<ReservationCalcItem>(entity =>
             {
                 entity.ToTable("ReservationCalcItem");
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.CalcPriceTypeCode).HasMaxLength(30).HasDefaultValue(CalcPriceTypeCodes.FreeText);
                 entity.Property(e => e.Text).HasMaxLength(500);
+                entity.Property(e => e.VatRate).HasColumnType("decimal(18,5)");
                 entity.Property(e => e.Qty).HasColumnType("decimal(18,5)");
                 entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,5)");
                 entity.Property(e => e.Sum).HasColumnType("decimal(18,5)");
@@ -392,6 +433,18 @@ namespace Hyr.Api.Data
                    .WithMany(e => e.ReservationCalcItems)
                    .HasForeignKey(e => e.ReservationCalcId)
                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Item)
+                    .WithMany(e => e.ReservationCalcItems)
+                    .HasForeignKey(e => e.ItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.ReservationCalcItems)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Vat)
+                    .WithMany(e => e.ReservationCalcItems)
+                    .HasForeignKey(e => e.VatId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<Invoice>(entity =>
@@ -542,6 +595,10 @@ namespace Hyr.Api.Data
                     .WithMany(e => e.Articles)
                     .HasForeignKey(e => e.VatRateId)
                     .OnDelete(DeleteBehavior.Restrict);
+                entity.Property(e => e.CalcPriceTypeCode).HasMaxLength(30);
+                entity.HasIndex(e => new { e.OfficeId, e.CalcPriceTypeCode })
+                    .IsUnique()
+                    .HasFilter("[CalcPriceTypeCode] IS NOT NULL");
             });
 
             modelBuilder.Entity<ItemType>(entity =>
@@ -572,6 +629,222 @@ namespace Hyr.Api.Data
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.ItemModels)
                     .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceList>(entity =>
+            {
+                entity.ToTable("PriceList");
+                entity.ToTable(t => t.HasCheckConstraint("CK_PriceList_ValidDateRange", "[ValidTo] IS NULL OR [ValidTo] >= [ValidFrom]"));
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.IsActive).IsRequired();
+                entity.Property(e => e.Priority).IsRequired(false);
+                entity.HasIndex(e => new { e.OfficeId, e.Name }).IsUnique();
+                entity.HasIndex(e => new { e.OfficeId, e.IsActive, e.ValidFrom, e.ValidTo });
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.PriceLists)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListDayPrice>(entity =>
+            {
+                entity.ToTable("PriceListDayPrice");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.DayPrices)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.DayPrices)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListDayPriceFreeKm>(entity =>
+            {
+                entity.ToTable("PriceListDayPriceFreeKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerDay).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.DayPriceFreeKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.DayPriceFreeKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListWeekPriceIncludedKm>(entity =>
+            {
+                entity.ToTable("PriceListWeekPriceIncludedKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerWeek).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKmPerWeek).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExtraDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKmPerExtraDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExcessKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.WeekPriceIncludedKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.WeekPriceIncludedKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListWeekPriceFreeKm>(entity =>
+            {
+                entity.ToTable("PriceListWeekPriceFreeKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerWeek).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExtraDay).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.WeekPriceFreeKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.WeekPriceFreeKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListThirtyDayPriceIncludedKm>(entity =>
+            {
+                entity.ToTable("PriceListThirtyDayPriceIncludedKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePer30Days).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKmPer30Days).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExtraDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKmPerExtraDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExcessKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.ThirtyDayPriceIncludedKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.ThirtyDayPriceIncludedKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListWeekendPrice>(entity =>
+            {
+                entity.ToTable("PriceListWeekendPrice");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FromTime).HasColumnType("time");
+                entity.Property(e => e.ToTime).HasColumnType("time");
+                entity.Property(e => e.WeekendPrice).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.WeekendPrices)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.WeekendPrices)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListHourPriceIncludedKm>(entity =>
+            {
+                entity.ToTable("PriceListHourPriceIncludedKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerHour).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKmPerHour).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExcessKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.HourPriceIncludedKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.HourPriceIncludedKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListServicePrice>(entity =>
+            {
+                entity.ToTable("PriceListServicePrice");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerServiceDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKmPerDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExcessKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.ServicePrices)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.ServicePrices)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListGuaranteePrice>(entity =>
+            {
+                entity.ToTable("PriceListGuaranteePrice");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.PricePerGuaranteeDay).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.GuaranteePrices)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.GuaranteePrices)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListWeekendPriceIncludedKm>(entity =>
+            {
+                entity.ToTable("PriceListWeekendPriceIncludedKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FromTime).HasColumnType("time");
+                entity.Property(e => e.ToTime).HasColumnType("time");
+                entity.Property(e => e.WeekendPrice).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.IncludedKm).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerExcessKm).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.WeekendPriceIncludedKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.WeekendPriceIncludedKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PriceListWeekendPriceFreeKm>(entity =>
+            {
+                entity.ToTable("PriceListWeekendPriceFreeKm");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FromTime).HasColumnType("time");
+                entity.Property(e => e.ToTime).HasColumnType("time");
+                entity.Property(e => e.WeekendPrice).HasColumnType("decimal(10,5)");
+                entity.HasIndex(e => new { e.PriceListId, e.ItemCategoryId }).IsUnique();
+                entity.HasOne(e => e.PriceList)
+                    .WithMany(e => e.WeekendPriceFreeKms)
+                    .HasForeignKey(e => e.PriceListId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.WeekendPriceFreeKms)
+                    .HasForeignKey(e => e.ItemCategoryId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 

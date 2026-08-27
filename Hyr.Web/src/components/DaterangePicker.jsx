@@ -45,6 +45,19 @@ const fmt = d => {
 };
 const fmtShort = fmt;
 
+const roundDateToNearestQuarterHour = (date) => {
+  const rounded = new Date(date);
+  const now = new Date();
+  const totalMinutes = now.getHours() * 60 + now.getMinutes();
+  const roundedTotalMinutes = Math.round(totalMinutes / 15) * 15;
+  const safeMinutes = ((roundedTotalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  const normalizedHours = Math.floor(safeMinutes / 60);
+  const normalizedMinutes = safeMinutes % 60;
+
+  rounded.setHours(normalizedHours, normalizedMinutes, 0, 0);
+  return rounded;
+};
+
 function addMonths(year, month, delta) {
   const date = new Date(year, month + delta, 1);
   return { year: date.getFullYear(), month: date.getMonth() };
@@ -281,8 +294,12 @@ export default function DateRangePicker({
 
   const handleApply = () => {
     if (!startDate || !endDate) return;
-    setCommitted({ start: startDate, end: endDate });
-    onApply?.({ startDate, endDate });
+
+    const adjustedStart = roundDateToNearestQuarterHour(new Date(startDate));
+    const adjustedEnd = roundDateToNearestQuarterHour(new Date(endDate));
+
+    setCommitted({ start: adjustedStart, end: adjustedEnd });
+    onApply?.({ startDate: adjustedStart, endDate: adjustedEnd });
     setOpen(false);
   };
 

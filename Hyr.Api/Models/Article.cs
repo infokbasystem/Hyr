@@ -11,6 +11,9 @@ namespace Hyr.Api.Models
         public int? VatRateId { get; set; }
         public bool IsActive { get; set; }
 
+        // Set only for auto-created system articles that back a calc price type.
+        public string? CalcPriceTypeCode { get; set; }
+
         public virtual Office? Office { get; set; }
         public virtual Account? Account { get; set; }
         public virtual VatRate? VatRate { get; set; }

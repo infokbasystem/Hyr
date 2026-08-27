@@ -19,6 +19,7 @@ const LabeledCheckbox = ({
     onChange,
     disabled = false,
     labelPosition = 'right',
+    labelWidth = '',
     text = '',
     color = 'teal',
     checkedColor,
@@ -80,7 +81,7 @@ const LabeledCheckbox = ({
             disabled={disabled}
             onClick={handleToggle}
             onKeyDown={handleKeyDown}
-            className={`inline-flex h-6.25 w-6.25 shrink-0 items-center justify-center rounded-full border border-[#e5e7eb] bg-white p-[2px] align-middle text-xs leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${checkboxClassName}`}
+            className={`inline-flex h-6.25 w-6.25 shrink-0 items-center justify-center rounded-full border border-[#e5e7eb] bg-white p-[2px] align-middle text-xs leading-none transition focus-visible:outline focus-visible:outline-0 focus-visible:outline-offset-2 focus-visible:outline-lime-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${checkboxClassName}`}
         >
             <span
                 className="inline-flex h-full w-full items-center justify-center rounded-full border text-xs font-semibold leading-none transition-all"
@@ -104,11 +105,11 @@ const LabeledCheckbox = ({
     return (
         <label
             htmlFor={resolvedId}
-            className={`inline-flex items-center gap-2 text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${className}`}
+            className={`flex items-center gap-2 text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${className}`}
         >
-            {labelPosition === 'left' && <span className={labelClassName}>{label}</span>}
+            {labelPosition === 'left' && <span className={`${labelWidth} ${labelClassName}`.trim()}>{label}</span>}
             {checkboxElement}
-            {labelPosition !== 'left' && <span className={labelClassName}>{label}</span>}
+            {labelPosition !== 'left' && <span className={`${labelWidth} ${labelClassName}`.trim()}>{label}</span>}
         </label>
     );
 };

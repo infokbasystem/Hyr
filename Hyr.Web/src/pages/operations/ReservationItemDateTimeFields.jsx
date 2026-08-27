@@ -3,6 +3,12 @@ import TimeDropdownInput from '../../components/TimeDropdownInput';
 
 const DEFAULT_TIME = '00:00';
 const DATE_TIME_PATTERN = /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/;
+const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const normalizeTimeOfDay = (value) => {
+    const trimmedValue = String(value ?? '').trim();
+    return TIME_OF_DAY_PATTERN.test(trimmedValue) ? trimmedValue : '';
+};
 
 const getTodayDatePart = () => {
     const now = new Date();
@@ -37,7 +43,30 @@ const buildDateTimeValue = (datePart, timePart) => {
     return `${datePart}T${timePart || DEFAULT_TIME}`;
 };
 
-const ReservationItemDateTimeFields = ({ item, onFieldChange }) => {
+const roundTimeToNearestQuarterHour = (value = new Date()) => {
+    const reference = new Date(value);
+    const totalMinutes = reference.getHours() * 60 + reference.getMinutes();
+    const roundedTotalMinutes = Math.round(totalMinutes / 15) * 15;
+    const wrappedMinutes = ((roundedTotalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+    const hours = Math.floor(wrappedMinutes / 60);
+    const minutes = wrappedMinutes % 60;
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromTime = '', defaultBookedToTime = '' }) => {
+    const resolveDefaultTimeOfDay = (field) => {
+        if (field === 'bookedFrom') {
+            return normalizeTimeOfDay(defaultBookedFromTime);
+        }
+
+        if (field === 'bookedTo') {
+            return normalizeTimeOfDay(defaultBookedToTime);
+        }
+
+        return '';
+    };
+
     const handleDateChange = (field, nextDatePart) => {
         const nextDate = String(nextDatePart ?? '').trim();
         if (!nextDate) {
@@ -46,7 +75,12 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange }) => {
         }
 
         const currentValue = splitDateTimeValue(item?.[field]);
-        onFieldChange(field, buildDateTimeValue(nextDate, currentValue.timePart || DEFAULT_TIME));
+        const hasExistingTime = Boolean(currentValue.timePart);
+        const nextTimePart = field === 'actualFrom' || field === 'actualTo'
+            ? (hasExistingTime ? currentValue.timePart : roundTimeToNearestQuarterHour())
+            : currentValue.timePart || resolveDefaultTimeOfDay(field) || DEFAULT_TIME;
+
+        onFieldChange(field, buildDateTimeValue(nextDate, nextTimePart));
     };
 
     const handleTimeChange = (field, nextTimePart) => {

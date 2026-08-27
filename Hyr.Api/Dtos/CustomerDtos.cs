@@ -39,6 +39,7 @@ public class CustomerDto
     public string EfakturaVatRegistration { get; set; } = string.Empty;
     public int? CrediflowPartyId { get; set; }
     public int? GLNnr { get; set; }
+    public int? DefaultPriceListId { get; set; }
 
     // Audit / tracking fields
     public DateTime? CreatedAt { get; set; }
@@ -84,4 +85,5 @@ public class CustomerUpsertDto
     public string EfakturaVatRegistration { get; set; } = string.Empty;
     public int? CrediflowPartyId { get; set; }
     public int? GLNnr { get; set; }
+    public int? DefaultPriceListId { get; set; }
 }

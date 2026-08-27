@@ -103,8 +103,8 @@ const LabeledDatePicker = ({
     };
 
     return (
-        <div className={`flex items-center space-x-1 w-full pb-[1px] mt-${margintop}`} ref={wrapperRef}>
-            <label className={`${labelWidth || ''} flex-none text-xs text-gray-700`}>{label}</label>
+        <div className={`flex items-center w-full pb-[1px] mt-${margintop}`} ref={wrapperRef}>
+            <label className={`${labelWidth || ''} flex-none text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>{label}</label>
 
             <div className={`relative ${inputWidth || 'w-full'}`}>
                 {name && <input type="hidden" name={name} value={hiddenValue} />}
@@ -113,10 +113,10 @@ const LabeledDatePicker = ({
                     type="button"
                     onClick={() => !disabled && setIsOpen((current) => !current)}
                     disabled={disabled}
-                    className={`h-6.25 flex w-full items-center gap-0 rounded-sm border border-gray-300 pl-2 pr-0.5 text-left text-xs text-gray-700 focus:outline-none ${disabled ? 'bg-transparent text-gray-500' : 'bg-white'}`}
+                    className={`h-6 flex w-full items-center gap-0 rounded-sm border border-gray-300 pl-2 pr-0.5 text-left text-xs text-gray-700 focus:outline-none ${disabled ? 'bg-transparent text-gray-500' : 'bg-white'}`}
                     aria-expanded={isOpen}
                 >
-                    {showCalendarIcon && <CalendarDays size={14} className="shrink-0 text-gray-500" />}
+                    {showCalendarIcon && <CalendarDays size={14} className="shrink-0 text-gray-500 mr-2 mb-[1px]" />}
                     <span className={`flex-1 truncate ${selectedDate ? 'text-gray-800' : 'text-gray-400'}`}>
                         {selectedDate ? formatDateShort(selectedDate) : placeholder}
                     </span>

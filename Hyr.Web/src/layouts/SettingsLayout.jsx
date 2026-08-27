@@ -18,7 +18,7 @@ const SettingsLayout = () => {
             </div>
             <SettingsSubMenu activeOverridePath={activeOverridePath} />
             <div className="relative flex grow items-stretch bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50" style={{ backgroundImage: `url(${bg})` }}>
-                <div className="flex-grow min-w-0 overflow-hidden pt-2 px-0">
+                <div className="flex-grow min-w-0 overflow-visible pt-2 px-0">
                     <Outlet />
                 </div>
             </div>

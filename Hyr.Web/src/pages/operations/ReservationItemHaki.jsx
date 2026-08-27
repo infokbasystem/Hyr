@@ -3,7 +3,7 @@ import LabeledInput from '../../components/LabeledInput';
 import LabeledSelect from '../../components/LabeledSelect';
 import ReservationItemDateTimeFields from './ReservationItemDateTimeFields';
 
-const ReservationItemHaki = ({ item, index, onRemove, onChange, itemCategories }) => {
+const ReservationItemHaki = ({ item, index, onRemove, onChange, itemCategories, defaultBookedFromTime = '', defaultBookedToTime = '' }) => {
     const handleChange = (field, value) => {
         onChange(index, field, value);
     };
@@ -38,7 +38,12 @@ const ReservationItemHaki = ({ item, index, onRemove, onChange, itemCategories }
                 <div>
                     <h3 className="text-sm font-bold mb-2">Bokningsinfo</h3>
                     <div className="space-y-1">
-                        <ReservationItemDateTimeFields item={item} onFieldChange={handleChange} />
+                        <ReservationItemDateTimeFields
+                            item={item}
+                            onFieldChange={handleChange}
+                            defaultBookedFromTime={defaultBookedFromTime}
+                            defaultBookedToTime={defaultBookedToTime}
+                        />
                         <LabeledInput
                             label="Lämningsplats"
                             value={item?.deliveryPlaceNote || ''}

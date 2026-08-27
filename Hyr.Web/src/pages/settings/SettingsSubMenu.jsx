@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { BookText, Percent } from 'lucide-react'
+import { BookText, Euro, Percent } from 'lucide-react'
 import bg from "../../assets/content.png";
 
 import factoryIcon from '../../assets/appbar.factory-1067.svg'
@@ -8,7 +8,6 @@ import modelsIcon from "../../assets/appbar.cabinet.files.svg";
 import articlesIcon from "../../assets/appbar.barcode.svg";
 import serviceTypesIcon from "../../assets/appbar.tools.svg";
 import pricingIcon from "../../assets/appbar.money.black.svg";
-import currenciesIcon from "../../assets/appbar.currency.dollar.svg";
 import insuranceCompaniesIcon from '../../assets/appbar.transit.car.accident.svg'
 
 const DEFAULT_ICON_WIDTH = "w-6";
@@ -29,7 +28,7 @@ const items = [
     { to: "/settings/articles", label: "Artiklar", icon: articlesIcon },
     { to: "/settings/servicetypes", label: "Service", icon: serviceTypesIcon },
     { to: "/settings/insurancecompanies", label: "F-bolag", icon: insuranceCompaniesIcon, iconHeight: "h-6", iconWidth: "w-9" },
-    { to: "/settings/currencies", label: "Valutor", icon: currenciesIcon, leftMargin: "ml-16 mr-4" },
+    { to: "/settings/currencies", label: "Valutor", iconComponent: Euro, leftMargin: "ml-16 mr-4" },
     { to: "/settings/vat", label: "Moms", iconComponent: Percent },
     { to: "/settings/accounts", label: "Kontoplan", iconComponent: BookText },
 ];

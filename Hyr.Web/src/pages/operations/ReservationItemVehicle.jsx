@@ -8,6 +8,12 @@ import TimeDropdownInput from '../../components/TimeDropdownInput';
 
 const DEFAULT_TIME = '00:00';
 const DATE_TIME_PATTERN = /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/;
+const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const normalizeTimeOfDay = (value) => {
+    const trimmedValue = String(value ?? '').trim();
+    return TIME_OF_DAY_PATTERN.test(trimmedValue) ? trimmedValue : '';
+};
 
 const getTodayDatePart = () => {
     const now = new Date();
@@ -42,8 +48,19 @@ const buildDateTimeValue = (datePart, timePart) => {
     return `${datePart}T${timePart || DEFAULT_TIME}`;
 };
 
+const roundTimeToNearestQuarterHour = (value = new Date()) => {
+    const reference = new Date(value);
+    const totalMinutes = reference.getHours() * 60 + reference.getMinutes();
+    const roundedTotalMinutes = Math.round(totalMinutes / 15) * 15;
+    const wrappedMinutes = ((roundedTotalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+    const hours = Math.floor(wrappedMinutes / 60);
+    const minutes = wrappedMinutes % 60;
 
-const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceCompanies, itemCategories }) => {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+
+const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceCompanies, itemCategories, defaultBookedFromTime = '', defaultBookedToTime = '' }) => {
     const [showInsurance, setShowInsurance] = useState(item?.isInsurance || false);
 
     const handleChange = (field, value) => {
@@ -55,6 +72,18 @@ const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceComp
         handleChange('isInsurance', value);
     };
 
+    const resolveDefaultTimeOfDay = (field) => {
+        if (field === 'bookedFrom') {
+            return normalizeTimeOfDay(defaultBookedFromTime);
+        }
+
+        if (field === 'bookedTo') {
+            return normalizeTimeOfDay(defaultBookedToTime);
+        }
+
+        return '';
+    };
+
     const handleDateChange = (field, nextDatePart) => {
         const nextDate = String(nextDatePart ?? '').trim();
         if (!nextDate) {
@@ -63,7 +92,12 @@ const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceComp
         }
 
         const currentValue = splitDateTimeValue(item?.[field]);
-        handleChange(field, buildDateTimeValue(nextDate, currentValue.timePart || DEFAULT_TIME));
+        const hasExistingTime = Boolean(currentValue.timePart);
+        const nextTimePart = field === 'actualFrom' || field === 'actualTo'
+            ? (hasExistingTime ? currentValue.timePart : roundTimeToNearestQuarterHour())
+            : currentValue.timePart || resolveDefaultTimeOfDay(field) || DEFAULT_TIME;
+
+        handleChange(field, buildDateTimeValue(nextDate, nextTimePart));
     };
 
     const handleTimeChange = (field, nextTimePart) => {
@@ -131,98 +165,98 @@ const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceComp
                 </div>
 
                 {/* Column 2: Booking Info */}
-                <div className="">
-                    <h3 className="text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">Bokningsinfo</h3>
+                <div>
                     <div className="">
-                        <div className="flex items-center gap-8">
-                            <div className="flex items-center gap-1">
-                                <LabeledDatePicker
-                                    label="Bokad från"
-                                    value={bookedFrom.datePart}
-                                    onChange={(value) => handleDateChange('bookedFrom', value)}
-                                    valueType="input"
-                                    labelWidth="w-18"
-                                    inputWidth="w-[100px]"
-                                    margintop="0"
-                                    placeholder="Datum"
-                                />
-                                <TimeDropdownInput
-                                    value={bookedFrom.timePart}
-                                    onChange={(value) => handleTimeChange('bookedFrom', value)}
-                                />
+                        <div className="flex items-row gap-5 mb-2">
+                            <div>
+                                <h3 className="ml-1 text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">Bokad</h3>
+                                <div className="flex items-center gap-1">
+                                    <LabeledDatePicker
+                                        value={bookedFrom.datePart}
+                                        onChange={(value) => handleDateChange('bookedFrom', value)}
+                                        valueType="input"
+                                        inputWidth="w-[100px]"
+                                        margintop="0"
+                                        placeholder="Datum"
+                                    />
+                                    <TimeDropdownInput
+                                        value={bookedFrom.timePart}
+                                        onChange={(value) => handleTimeChange('bookedFrom', value)}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <LabeledDatePicker
+                                        value={bookedTo.datePart}
+                                        onChange={(value) => handleDateChange('bookedTo', value)}
+                                        valueType="input"
+                                        inputWidth="w-[100px]"
+                                        margintop="0"
+                                        placeholder="Datum"
+                                    />
+                                    <TimeDropdownInput
+                                        value={bookedTo.timePart}
+                                        onChange={(value) => handleTimeChange('bookedTo', value)}
+                                    />
+                                </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                                <LabeledDatePicker
-                                    label="Utlämnad"
-                                    value={actualFrom.datePart}
-                                    onChange={(value) => handleDateChange('actualFrom', value)}
-                                    valueType="input"
-                                    labelWidth="w-18"
-                                    inputWidth="w-[100px]"
-                                    margintop="0"
-                                    placeholder="Datum"
-                                />
-                                <TimeDropdownInput
-                                    value={actualFrom.timePart}
-                                    onChange={(value) => handleTimeChange('actualFrom', value)}
-                                />
+                            <div>
+                                <h3 className="ml-1 text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">ANVÄND</h3>
+                                <div className="flex items-center gap-1">
+                                    <LabeledDatePicker
+                                        value={actualFrom.datePart}
+                                        onChange={(value) => handleDateChange('actualFrom', value)}
+                                        valueType="input"
+                                        inputWidth="w-[100px]"
+                                        margintop="0"
+                                        placeholder="Datum"
+                                    />
+                                    <TimeDropdownInput
+                                        value={actualFrom.timePart}
+                                        onChange={(value) => handleTimeChange('actualFrom', value)}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <LabeledDatePicker
+                                        value={actualTo.datePart}
+                                        onChange={(value) => handleDateChange('actualTo', value)}
+                                        valueType="input"
+                                        inputWidth="w-[100px]"
+                                        margintop="0"
+                                        placeholder="Datum"
+                                    />
+                                    <TimeDropdownInput
+                                        value={actualTo.timePart}
+                                        onChange={(value) => handleTimeChange('actualTo', value)}
+                                    />
+                                </div>
                             </div>
+                            {/* <div>
+                                <h3 className="ml-1 text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">DEBITERAD</h3>
+                            </div> */}
                         </div>
-                        <div className="flex items-center gap-8">
-                            <div className="flex items-center gap-1">
-                                <LabeledDatePicker
-                                    label="Bokad till"
-                                    value={bookedTo.datePart}
-                                    onChange={(value) => handleDateChange('bookedTo', value)}
-                                    valueType="input"
-                                    labelWidth="w-18"
-                                    inputWidth="w-[100px]"
-                                    margintop="0"
-                                    placeholder="Datum"
-                                />
-                                <TimeDropdownInput
-                                    value={bookedTo.timePart}
-                                    onChange={(value) => handleTimeChange('bookedTo', value)}
-                                />
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <LabeledDatePicker
-                                    label="Återlämnad"
-                                    value={actualTo.datePart}
-                                    onChange={(value) => handleDateChange('actualTo', value)}
-                                    valueType="input"
-                                    labelWidth="w-18"
-                                    inputWidth="w-[100px]"
-                                    margintop="0"
-                                    placeholder="Datum"
-                                />
-                                <TimeDropdownInput
-                                    value={actualTo.timePart}
-                                    onChange={(value) => handleTimeChange('actualTo', value)}
-                                />
-                            </div>
+                        <div>
+                            <LabeledInput
+                                label="Lämningsplats"
+                                value={item?.deliveryPlaceNote || ''}
+                                onChange={(value) => handleChange('deliveryPlaceNote', value)}
+                                labelWidth="w-24"
+                                inputWidth="w-[432px]"
+                                margintop="2"
+                            />
+                            <LabeledInput
+                                label="Hämtningsplats"
+                                value={item?.pickupPlaceNote || ''}
+                                onChange={(value) => handleChange('pickupPlaceNote', value)}
+                                labelWidth="w-24"
+                                inputWidth="w-[432px]"
+                            />
                         </div>
-                        <LabeledInput
-                            label="Lämningsplats"
-                            value={item?.deliveryPlaceNote || ''}
-                            onChange={(value) => handleChange('deliveryPlaceNote', value)}
-                            labelWidth="w-24"
-                            inputWidth="w-[432px]"
-                            margintop="2"
-                        />
-                        <LabeledInput
-                            label="Hämtningsplats"
-                            value={item?.pickupPlaceNote || ''}
-                            onChange={(value) => handleChange('pickupPlaceNote', value)}
-                            labelWidth="w-24"
-                            inputWidth="w-[432px]"
-                        />
                     </div>
                 </div>
 
                 {/* Column 3: Checkboxes */}
                 <div className="w-[160px] pl-6">
-                    <h3 className="text-sm font-bold mb-2">&nbsp;</h3>
+                    <h3 className="text-sm font-bold">&nbsp;</h3>
                     <div className="">
                         <LabeledCheckbox
                             label="Incheckad"
@@ -259,7 +293,7 @@ const ReservationItemVehicle = ({ item, index, onRemove, onChange, insuranceComp
 
                 {/* Column 4: Meter & Fuel */}
                 <div className="w-[150px]">
-                    <h3 className="text-sm font-bold mb-2">&nbsp;</h3>
+                    <h3 className="text-sm font-bold">&nbsp;</h3>
                     <div className="">
                         <LabeledInput
                             label="Mätarst. ut"

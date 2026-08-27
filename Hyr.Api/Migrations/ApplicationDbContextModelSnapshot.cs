@@ -68,6 +68,10 @@ namespace Hyr.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("CalcPriceTypeCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -89,11 +93,48 @@ namespace Hyr.Api.Migrations
 
                     b.HasIndex("AccountId");
 
-                    b.HasIndex("OfficeId");
-
                     b.HasIndex("VatRateId");
 
+                    b.HasIndex("OfficeId", "CalcPriceTypeCode")
+                        .IsUnique()
+                        .HasFilter("[CalcPriceTypeCode] IS NOT NULL");
+
                     b.ToTable("Article", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.Currency", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CurrencyName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KeyFortnox")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("PurchaseCurrencyRate")
+                        .HasColumnType("float(53)");
+
+                    b.Property<double?>("SalesCurrencyRate")
+                        .HasColumnType("float(53)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OfficeId");
+
+                    b.ToTable("Currency", (string)null);
                 });
 
             modelBuilder.Entity("Hyr.Api.Models.Customer", b =>
@@ -132,6 +173,9 @@ namespace Hyr.Api.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<int?>("CustomerNr")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultPriceListId")
                         .HasColumnType("int");
 
                     b.Property<string>("EfakturaAddresseeID")
@@ -279,6 +323,8 @@ namespace Hyr.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedBy");
+
+                    b.HasIndex("DefaultPriceListId");
 
                     b.HasIndex("OfficeId");
 
@@ -1225,13 +1271,582 @@ namespace Hyr.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OfficeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
-                    b.ToTable("PriceList");
+                    b.HasIndex("OfficeId", "Name")
+                        .IsUnique()
+                        .HasFilter("[OfficeId] IS NOT NULL");
+
+                    b.HasIndex("OfficeId", "IsActive", "ValidFrom", "ValidTo");
+
+                    b.ToTable("PriceList", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PriceList_ValidDateRange", "[ValidTo] IS NULL OR [ValidTo] >= [ValidFrom]");
+                        });
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListDayPrice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListDayPrice", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListDayPriceFreeKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListDayPriceFreeKm", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListGuaranteePrice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerGuaranteeDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListGuaranteePrice", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListHourPriceIncludedKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("IncludedKmPerHour")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerExcessKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerHour")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListHourPriceIncludedKm", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListServicePrice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("IncludedKmPerDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerExcessKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerServiceDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListServicePrice", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListThirtyDayPriceIncludedKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("IncludedKmPer30Days")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("IncludedKmPerExtraDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePer30Days")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerExcessKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerExtraDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListThirtyDayPriceIncludedKm", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekPriceFreeKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerExtraDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerWeek")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListWeekPriceFreeKm", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekPriceIncludedKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("IncludedKmPerExtraDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("IncludedKmPerWeek")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerExcessKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerExtraDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerWeek")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListWeekPriceIncludedKm", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekendPrice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromDayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("FromTime")
+                        .HasColumnType("time");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ToDayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("ToTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("WeekendPrice")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListWeekendPrice", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekendPriceFreeKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromDayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("FromTime")
+                        .HasColumnType("time");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToDayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("ToTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("WeekendPrice")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListWeekendPriceFreeKm", (string)null);
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekendPriceIncludedKm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromDayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("FromTime")
+                        .HasColumnType("time");
+
+                    b.Property<decimal?>("IncludedKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PricePerExcessKm")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<int?>("ToDayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("ToTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("WeekendPrice")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("PriceListId", "ItemCategoryId")
+                        .IsUnique()
+                        .HasFilter("[PriceListId] IS NOT NULL AND [ItemCategoryId] IS NOT NULL");
+
+                    b.ToTable("PriceListWeekendPriceIncludedKm", (string)null);
                 });
 
             modelBuilder.Entity("Hyr.Api.Models.Reservation", b =>
@@ -1349,6 +1964,9 @@ namespace Hyr.Api.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
+
                     b.Property<string>("PricingCalendarCode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1387,6 +2005,8 @@ namespace Hyr.Api.Migrations
 
                     b.HasIndex("OfficeId");
 
+                    b.HasIndex("PriceListId");
+
                     b.ToTable("Reservation", (string)null);
                 });
 
@@ -1407,6 +2027,13 @@ namespace Hyr.Api.Migrations
                     b.Property<int?>("OfficeId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ReceiverTypeCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("CUSTOMER");
+
                     b.Property<int?>("ReservationId")
                         .HasColumnType("int");
 
@@ -1426,6 +2053,13 @@ namespace Hyr.Api.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CalcPriceTypeCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("FREETEXT");
 
                     b.Property<int?>("ItemId")
                         .HasColumnType("int");
@@ -1453,6 +2087,12 @@ namespace Hyr.Api.Migrations
                     b.Property<decimal?>("UnitPrice")
                         .HasColumnType("decimal(18,5)");
 
+                    b.Property<int?>("VatId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("VatRate")
+                        .HasColumnType("decimal(18,5)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
@@ -1462,6 +2102,8 @@ namespace Hyr.Api.Migrations
                     b.HasIndex("PriceListId");
 
                     b.HasIndex("ReservationCalcId");
+
+                    b.HasIndex("VatId");
 
                     b.ToTable("ReservationCalcItem", (string)null);
                 });
@@ -1791,11 +2433,27 @@ namespace Hyr.Api.Migrations
                     b.Navigation("VatRate");
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.Currency", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("Currencies")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Office");
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.Customer", b =>
                 {
                     b.HasOne("Hyr.Api.Models.User", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "DefaultPriceList")
+                        .WithMany("CustomersWithDefaultPriceList")
+                        .HasForeignKey("DefaultPriceListId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Hyr.Api.Models.Office", "Office")
@@ -1809,6 +2467,8 @@ namespace Hyr.Api.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("DefaultPriceList");
 
                     b.Navigation("Office");
 
@@ -2040,6 +2700,203 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Office");
                 });
 
+            modelBuilder.Entity("Hyr.Api.Models.PriceList", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.Office", "Office")
+                        .WithMany("PriceLists")
+                        .HasForeignKey("OfficeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Office");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListDayPrice", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("DayPrices")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("DayPrices")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListDayPriceFreeKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("DayPriceFreeKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("DayPriceFreeKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListGuaranteePrice", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("GuaranteePrices")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("GuaranteePrices")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListHourPriceIncludedKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("HourPriceIncludedKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("HourPriceIncludedKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListServicePrice", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("ServicePrices")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("ServicePrices")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListThirtyDayPriceIncludedKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("ThirtyDayPriceIncludedKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("ThirtyDayPriceIncludedKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekPriceFreeKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("WeekPriceFreeKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("WeekPriceFreeKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekPriceIncludedKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("WeekPriceIncludedKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("WeekPriceIncludedKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekendPrice", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("WeekendPrices")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("WeekendPrices")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekendPriceFreeKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("WeekendPriceFreeKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("WeekendPriceFreeKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("Hyr.Api.Models.PriceListWeekendPriceIncludedKm", b =>
+                {
+                    b.HasOne("Hyr.Api.Models.ItemCategory", "ItemCategory")
+                        .WithMany("WeekendPriceIncludedKms")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("WeekendPriceIncludedKms")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ItemCategory");
+
+                    b.Navigation("PriceList");
+                });
+
             modelBuilder.Entity("Hyr.Api.Models.Reservation", b =>
                 {
                     b.HasOne("Hyr.Api.Models.User", "CreatedByUser")
@@ -2062,6 +2919,11 @@ namespace Hyr.Api.Migrations
                         .HasForeignKey("OfficeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
+                        .WithMany("ReservationsWithPriceListOverride")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Customer");
@@ -2069,6 +2931,8 @@ namespace Hyr.Api.Migrations
                     b.Navigation("ModifiedByUser");
 
                     b.Navigation("Office");
+
+                    b.Navigation("PriceList");
                 });
 
             modelBuilder.Entity("Hyr.Api.Models.ReservationCalc", b =>
@@ -2092,7 +2956,8 @@ namespace Hyr.Api.Migrations
                 {
                     b.HasOne("Hyr.Api.Models.Item", "Item")
                         .WithMany("ReservationCalcItems")
-                        .HasForeignKey("ItemId");
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Hyr.Api.Models.Office", "Office")
                         .WithMany("ReservationCalcItems")
@@ -2101,11 +2966,17 @@ namespace Hyr.Api.Migrations
 
                     b.HasOne("Hyr.Api.Models.PriceList", "PriceList")
                         .WithMany("ReservationCalcItems")
-                        .HasForeignKey("PriceListId");
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Hyr.Api.Models.ReservationCalc", "ReservationCalc")
                         .WithMany("ReservationCalcItems")
                         .HasForeignKey("ReservationCalcId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hyr.Api.Models.VatRate", "Vat")
+                        .WithMany("ReservationCalcItems")
+                        .HasForeignKey("VatId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Item");
@@ -2115,6 +2986,8 @@ namespace Hyr.Api.Migrations
                     b.Navigation("PriceList");
 
                     b.Navigation("ReservationCalc");
+
+                    b.Navigation("Vat");
                 });
 
             modelBuilder.Entity("Hyr.Api.Models.ReservationItem", b =>
@@ -2221,7 +3094,29 @@ namespace Hyr.Api.Migrations
 
             modelBuilder.Entity("Hyr.Api.Models.ItemCategory", b =>
                 {
+                    b.Navigation("DayPriceFreeKms");
+
+                    b.Navigation("DayPrices");
+
+                    b.Navigation("GuaranteePrices");
+
+                    b.Navigation("HourPriceIncludedKms");
+
                     b.Navigation("Items");
+
+                    b.Navigation("ServicePrices");
+
+                    b.Navigation("ThirtyDayPriceIncludedKms");
+
+                    b.Navigation("WeekPriceFreeKms");
+
+                    b.Navigation("WeekPriceIncludedKms");
+
+                    b.Navigation("WeekendPriceFreeKms");
+
+                    b.Navigation("WeekendPriceIncludedKms");
+
+                    b.Navigation("WeekendPrices");
                 });
 
             modelBuilder.Entity("Hyr.Api.Models.ItemModel", b =>
@@ -2241,6 +3136,8 @@ namespace Hyr.Api.Migrations
                     b.Navigation("Accounts");
 
                     b.Navigation("Articles");
+
+                    b.Navigation("Currencies");
 
                     b.Navigation("Customers");
 
@@ -2264,6 +3161,8 @@ namespace Hyr.Api.Migrations
 
                     b.Navigation("Payments");
 
+                    b.Navigation("PriceLists");
+
                     b.Navigation("ReservationCalcItems");
 
                     b.Navigation("ReservationCalcs");
@@ -2283,7 +3182,33 @@ namespace Hyr.Api.Migrations
 
             modelBuilder.Entity("Hyr.Api.Models.PriceList", b =>
                 {
+                    b.Navigation("CustomersWithDefaultPriceList");
+
+                    b.Navigation("DayPriceFreeKms");
+
+                    b.Navigation("DayPrices");
+
+                    b.Navigation("GuaranteePrices");
+
+                    b.Navigation("HourPriceIncludedKms");
+
                     b.Navigation("ReservationCalcItems");
+
+                    b.Navigation("ReservationsWithPriceListOverride");
+
+                    b.Navigation("ServicePrices");
+
+                    b.Navigation("ThirtyDayPriceIncludedKms");
+
+                    b.Navigation("WeekPriceFreeKms");
+
+                    b.Navigation("WeekPriceIncludedKms");
+
+                    b.Navigation("WeekendPriceFreeKms");
+
+                    b.Navigation("WeekendPriceIncludedKms");
+
+                    b.Navigation("WeekendPrices");
                 });
 
             modelBuilder.Entity("Hyr.Api.Models.Reservation", b =>
@@ -2317,6 +3242,8 @@ namespace Hyr.Api.Migrations
             modelBuilder.Entity("Hyr.Api.Models.VatRate", b =>
                 {
                     b.Navigation("Articles");
+
+                    b.Navigation("ReservationCalcItems");
                 });
 #pragma warning restore 612, 618
         }

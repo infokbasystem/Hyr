@@ -69,7 +69,7 @@ function Section({ title, children, className = '', headerRight = null }) {
         <h2 className="text-center text-xs leading-none font-medium text-stone-500">{title}</h2>
         {headerRight ? <div className="absolute right-0 top-1/2 -translate-y-1/2">{headerRight}</div> : null}
       </div>
-      <div className="border-t border-stone-400/70" />
+      <div className="border-t border-stone-300/80" />
       <div className="pt-1">{children}</div>
     </section>
   )
@@ -80,11 +80,11 @@ function WeeklyHeaderLabels() {
     <span className="inline-flex items-center gap-8">
       <span>Intäkter per vecka</span>
       <span className="inline-flex items-center gap-2">
-        <span className="h-[13px] w-[13px] bg-[#d9601f]" />
+        <span className="h-[11px] w-[11px] bg-[#d9601f]" />
         fakturerat
       </span>
       <span className="inline-flex items-center gap-2">
-        <span className="h-[13px] w-[13px] bg-[#efc236]" />
+        <span className="h-[11px] w-[11px] bg-[#efc236]" />
         kassaflöde
       </span>
     </span>
@@ -102,7 +102,7 @@ function WeeklyNavigationControls({ loading, weekOffset, onPrevious, onNext }) {
           className="disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Föregående vecka"
         >
-          <ArrowLeftCircle className="h-5 w-5 text-red-300 hover:text-red-400" />
+          <ArrowLeftCircle className="h-4 w-4 text-red-300 hover:text-red-400" />
         </button>
         <button
           type="button"
@@ -111,7 +111,7 @@ function WeeklyNavigationControls({ loading, weekOffset, onPrevious, onNext }) {
           className="disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Nästa vecka"
         >
-          <ArrowRightCircle className="h-5 w-5 text-red-300 hover:text-red-400" />
+          <ArrowRightCircle className="h-4 w-4 text-red-300 hover:text-red-400" />
         </button>
       </div>
     </div>
@@ -279,7 +279,7 @@ function PaginationControls({ pageNumber, totalPages, totalCount, loading, onPre
           className="disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Föregående sida"
         >
-          <ArrowLeftCircle className="h-5 w-5 text-red-300 hover:text-red-400" />
+          <ArrowLeftCircle className="h-4 w-4 text-red-300 hover:text-red-400" />
         </button>
         <button
           type="button"
@@ -288,7 +288,7 @@ function PaginationControls({ pageNumber, totalPages, totalCount, loading, onPre
           className="disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Nästa sida"
         >
-          <ArrowRightCircle className="h-5 w-5 text-red-300 hover:text-red-400" />
+          <ArrowRightCircle className="h-4 w-4 text-red-300 hover:text-red-400" />
         </button>
       </div>
     </div>

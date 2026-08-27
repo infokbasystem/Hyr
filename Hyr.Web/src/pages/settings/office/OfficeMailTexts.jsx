@@ -119,8 +119,7 @@ export default function OfficeMailTexts() {
                     ? null
                     : mappedRows.find((entry) => entry.id === selectedId)
 
-                const nextSelected = selectedFromPage ?? mappedRows[0]
-                setSelectedId(nextSelected.id)
+                setSelectedId(selectedFromPage?.id ?? null)
             })
             .catch((requestError) => {
                 if (!isActive) {
@@ -472,7 +471,7 @@ export default function OfficeMailTexts() {
                             onKeyDown={handleListKeyDown}
                             className="mt-5 max-h-[calc(100vh-360px)] overflow-y-auto pr-2 focus:outline-none"
                         >
-                            <div className="mb-2 border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
+                            <div className="mb-1 border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
                                 <span>Mail</span>
                             </div>
 
@@ -552,7 +551,7 @@ export default function OfficeMailTexts() {
                         </div>
                     </aside>
 
-                    <div aria-hidden="true" className="mt-2 hidden bg-gray-300 lg:block" />
+                    <div aria-hidden="true" className="mt-6 bg-gray-300" />
 
                     <section className="px-3 lg:px-4">
                         <div className="mb-4 flex items-start justify-between gap-5">

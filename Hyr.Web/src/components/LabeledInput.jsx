@@ -94,9 +94,9 @@ const LabeledInput = ({
 
 
     return (
-        <div className={`flex items-center space-x-1 ${!inputWidth ? 'w-full' : ''} pb-[1px] mt-${margintop}`} ref={wrapperRef}>
+        <div className={`flex items-center ${!inputWidth ? 'w-full' : ''} pb-[1px] mt-${margintop}`} ref={wrapperRef}>
             <div className={`relative flex items-center flex-none justify-between`}>
-                <label className={`text-xs text-gray-700 ${labelWidth || ''}`}>{label}</label>
+                <label className={`text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${labelWidth || ''}`}>{label}</label>
                 {popupItems && Array.isArray(popupItems) && (
                     <button
                         type="button"
@@ -139,7 +139,7 @@ const LabeledInput = ({
                 )}
             </div>
 
-            <div className={`relative flex items-center ${inputWidth || 'w-full'}`}>
+            <div className={`relative h-6 flex items-center ${inputWidth || 'w-full'}`}>
                 {prefix && (
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-600 pointer-events-none">
                         {prefix}
@@ -152,7 +152,7 @@ const LabeledInput = ({
                     autoComplete="off"
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`text-xs w-full border border-gray-300 rounded-sm px-2 py-1 focus:outline-none ${!disabled ? 'bg-white' : ''} ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
+                    className={`text-xs h-full w-full border border-gray-300 rounded-sm px-2 focus:outline-none ${!disabled ? 'bg-white' : ''} ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
                     {...props}
                 />
                 {suffix && (

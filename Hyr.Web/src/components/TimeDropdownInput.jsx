@@ -71,12 +71,12 @@ export default function TimeDropdownInput({ value, onChange, disabled = false })
     }
 
     return (
-        <div ref={wrapperRef} className="relative">
+        <div ref={wrapperRef} className="relative pb-[1px]">
             <button
                 type="button"
                 onClick={() => !disabled && setIsOpen((current) => !current)}
                 disabled={disabled}
-                className={`flex h-6.25 w-[70px] items-center justify-between rounded-sm border border-gray-300 bg-white px-2 text-xs focus:outline-none ${disabled ? 'text-gray-400' : parsedValue ? 'font-medium text-gray-800' : 'text-gray-400'}`}
+                className={`flex h-6 w-[70px] items-center justify-between rounded-sm border border-gray-300 bg-white px-2 text-xs focus:outline-none ${disabled ? 'text-gray-400' : parsedValue ? 'font-medium text-gray-800' : 'text-gray-400'}`}
                 aria-expanded={isOpen}
             >
                 <span>{parsedValue ?? '--:--'}</span>

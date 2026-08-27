@@ -10,6 +10,7 @@ const ConfirmationModal = ({
   confirmText = 'Bekräfta',
   cancelText = 'Avbryt',
   isDestructive = false,
+  singleAction = false,
 }) => {
   if (!isOpen) return null;
 
@@ -38,21 +39,25 @@ const ConfirmationModal = ({
               {message}
             </p>
             <div className="flex gap-4 mt-6 mb-3 pt-4 justify-end">
+              {!singleAction && (
+                <button
+                  onClick={onClose}
+                  className="shadow-md/30 text-xs text-white bg-orange-400 hover:bg-orange-600 px-10 p-[5px]"
+                >
+                  {cancelText}
+                </button>
+              )}
               <button
-                onClick={onClose}
-                className="shadow-md/30 text-xs text-white bg-orange-400 hover:bg-orange-600 px-10 p-[5px]"
-              >
-                {cancelText}
-              </button>
-              <button
-                onClick={onConfirm}
+                onClick={singleAction ? onClose : onConfirm}
                 className={`shadow-md/30 text-xs text-white px-10 p-[5px] ${
-                  isDestructive
-                    ? 'bg-red-600 hover:bg-red-800'
-                    : 'bg-lime-700 hover:bg-lime-900'
+                  singleAction
+                    ? 'bg-lime-700 hover:bg-lime-900'
+                    : isDestructive
+                      ? 'bg-red-600 hover:bg-red-800'
+                      : 'bg-lime-700 hover:bg-lime-900'
                 }`}
               >
-                {confirmText}
+                {singleAction ? confirmText : confirmText}
               </button>
             </div>
           </div>

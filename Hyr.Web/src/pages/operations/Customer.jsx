@@ -281,27 +281,29 @@ export default function Customer() {
             return (
                 <div className="flex h-full min-h-full w-full flex-1 flex-col px-0 py-0 md:px-[clamp(8px,5vw,10vw)]">
                     <div className="mt-1 flex min-h-0 flex-1 flex-col">
-                        <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-stretch">
-                            <aside className="text-gray-700 mt-6 pr-3 border-b border-gray-300 lg:border-b-0 lg:border-r mb-8">
-                                <div className="space-y-4 pr-0 pb-4 ml-2">
-                                    <h2 className="text-4 text-center text-gray-700 text-sm">Info</h2>
-                                    <div className="space-y-2 text-xs text-gray-600">
-                                        <Skeleton height={14} width="92%" />
-                                        <Skeleton height={14} width="88%" />
+                        <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                            <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
+                                <aside className="text-gray-700 lg:sticky lg:top-[calc(52px+72px+1rem)] lg:z-10 lg:self-start">
+                                    <div className="space-y-4 pr-0 pb-4 ml-2">
+                                        <h2 className="text-4 text-center text-gray-700 text-sm">Info</h2>
+                                        <div className="space-y-2 text-xs text-gray-600">
+                                            <Skeleton height={14} width="92%" />
+                                            <Skeleton height={14} width="88%" />
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="border-b border-gray-300" />
+                                    <div className="border-b border-gray-300" />
 
-                                <div className="space-y-4 pr-0 py-4 ml-2">
-                                    <h2 className="text-4 text-center text-gray-700 text-sm">Meddelanden</h2>
-                                    <div className="space-y-2 text-xs text-gray-600">
-                                        <Skeleton height={30} />
-                                        <Skeleton height={30} width="92%" />
+                                    <div className="space-y-4 pr-0 py-4 ml-2">
+                                        <h2 className="text-4 text-center text-gray-700 text-sm">Meddelanden</h2>
+                                        <div className="space-y-2 text-xs text-gray-600">
+                                            <Skeleton height={30} />
+                                            <Skeleton height={30} width="92%" />
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="border-b border-gray-300" />
-                            </aside>
+                                    <div className="border-b border-gray-300" />
+                                </aside>
+                            </div>
 
                             <section className="lg:pl-2">
                                 <div className="pb-3">
@@ -365,42 +367,44 @@ export default function Customer() {
 
             <div className="mt-1 flex min-h-0 flex-1 flex-col">
 
-                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-stretch">
+                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-8 lg:items-start">
 
-                    <aside className="mt-6 pr-3 border-b border-gray-300 lg:border-b-0 lg:border-r mb-8">
-                        <div className="space-y-4 pr-0 pb-4 ml-2">
-                            <h2 className="text-4 text-center text-gray-500 text-sm">Info</h2>
-                            <div className="space-y-2 text-xs text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
-                                {renderMetaRow('Skapad:', customer.createdAt, customer.createdByName)}
-                                {renderMetaRow('Redigerad:', customer.updatedAt, customer.updatedByName)}
+                    <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
+                        <aside className="lg:sticky lg:top-[calc(52px+72px+1rem)] lg:z-10 lg:self-start">
+                            <div className="space-y-4 pr-0 pb-4 ml-2">
+                                <h2 className="text-4 text-center text-gray-500 text-sm">Info</h2>
+                                <div className="space-y-2 text-xs text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                    {renderMetaRow('Skapad:', customer.createdAt, customer.createdByName)}
+                                    {renderMetaRow('Redigerad:', customer.updatedAt, customer.updatedByName)}
+                                </div>
                             </div>
-                        </div>
-                        
-                        <div className="border-b border-gray-300" />
+                            
+                            <div className="border-b border-gray-300" />
 
-                        <div className="space-y-4 pr-0 py-4 ml-2">
-                            <h2 className="text-4 text-center text-gray-500 text-sm">Meddelanden</h2>
-                            <div className="space-y-2 text-xs text-gray-600">
-                                {messages.length === 0 && (
-                                    <></>
-                                )}
+                            <div className="space-y-4 pr-0 py-4 ml-2">
+                                <h2 className="text-4 text-center text-gray-500 text-sm">Meddelanden</h2>
+                                <div className="space-y-2 text-xs text-gray-600">
+                                    {messages.length === 0 && (
+                                        <></>
+                                    )}
 
-                                {messages.map((message, index) => (
-                                    <div
-                                        key={message.id ?? `${message.type}-${message.text}-${index}`}
-                                        className={`rounded-sm border px-3 py-2 text-xs text-center ${message.type === 'error'
-                                            ? 'border-rose-200 bg-rose-50 text-rose-800'
-                                            : 'border-emerald-200 bg-emerald-100 text-emerald-800'
-                                            }`}
-                                    >
-                                        {message.text}
-                                    </div>
-                                ))}
+                                    {messages.map((message, index) => (
+                                        <div
+                                            key={message.id ?? `${message.type}-${message.text}-${index}`}
+                                            className={`rounded-sm border px-3 py-2 text-xs text-center ${message.type === 'error'
+                                                ? 'border-rose-200 bg-rose-50 text-rose-800'
+                                                : 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                }`}
+                                        >
+                                            {message.text}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="border-b border-gray-300" />
-                    </aside>
+                            <div className="border-b border-gray-300" />
+                        </aside>
+                    </div>
 
                     <section className="lg:pl-2">
                         <h2 className="text-sm pb-3 text-gray-500 uppercase tracking-[0.10em] font-semibold">{customer.customerName}</h2>

@@ -47,10 +47,12 @@ namespace Hyr.Api.Models
         public string EfakturaVatRegistration { get; set; } = string.Empty;
         public int? CrediflowPartyId { get; set; }
         public int? GLNnr { get; set; }
+        public int? DefaultPriceListId { get; set; }
 
         public virtual Office? Office { get; set; }
         public virtual User? CreatedByUser { get; set; }
         public virtual User? UpdatedByUser { get; set; }
+        public virtual PriceList? DefaultPriceList { get; set; }
         public virtual ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
         public virtual ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
 

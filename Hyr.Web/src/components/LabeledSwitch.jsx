@@ -26,7 +26,7 @@ const LabeledSwitch = ({
                 ...(marginLeft !== undefined ? { marginLeft: `${marginLeft}px` } : {}),
             }}
         >
-            <label className={`${labelWidth || ''} pr-2 flex-none text-xs text-gray-700`}>{label}</label>
+            <label className={`${labelWidth || ''} pr-2 flex-none text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>{label}</label>
             <ToggleSwitch
                 rowId={rowId}
                 field={field}

@@ -8,6 +8,7 @@ namespace Hyr.Api.Models
         public int? ReservationId { get; set; }
         public DateTime? DateTimeFrom { get; set; }
         public DateTime? DateTimeTo { get; set; }
+        public string ReceiverTypeCode { get; set; } = ReceiverTypeCodes.Customer;
 
         public virtual Office? Office { get; set; }
         public virtual Reservation? Reservation { get; set; }

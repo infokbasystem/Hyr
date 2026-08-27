@@ -476,7 +476,7 @@ export default function Users() {
             </aside>
           )}
 
-          {isAdmin && <div aria-hidden="true" className="mt-2 hidden bg-gray-300 lg:block" />}
+          {isAdmin && <div aria-hidden="true" className="mt-6 bg-gray-300" />}
 
           <section className="px-3 lg:px-4">
             <div className="mb-4 flex items-start justify-between gap-5">

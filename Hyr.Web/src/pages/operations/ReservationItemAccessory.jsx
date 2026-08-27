@@ -44,7 +44,7 @@ const formatDateTimeForDisplay = (value) => {
     });
 };
 
-const ReservationItemAccessory = ({ item, index, onRemove, onChange, itemCategories, lockPeriodToVehicle = false, vehiclePeriod = null }) => {
+const ReservationItemAccessory = ({ item, index, onRemove, onChange, itemCategories, lockPeriodToVehicle = false, vehiclePeriod = null, defaultBookedFromTime = '', defaultBookedToTime = '' }) => {
     const handleChange = (field, value) => {
         onChange(index, field, value);
     };
@@ -106,7 +106,12 @@ const ReservationItemAccessory = ({ item, index, onRemove, onChange, itemCategor
                                 </div>
                             </>
                         ) : (
-                            <ReservationItemDateTimeFields item={item} onFieldChange={handleChange} />
+                            <ReservationItemDateTimeFields
+                                item={item}
+                                onFieldChange={handleChange}
+                                defaultBookedFromTime={defaultBookedFromTime}
+                                defaultBookedToTime={defaultBookedToTime}
+                            />
                         )}
                     </div>
                 </div>

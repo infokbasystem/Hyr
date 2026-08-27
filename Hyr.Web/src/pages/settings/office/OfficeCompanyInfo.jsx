@@ -21,13 +21,8 @@ const EMPTY_OFFICE = {
     zipCode: '',
     city: '',
     country: '',
-    invoiceFee: null,
     generalContractText: '',
-    deductibleReductionText: '',
-    latePaymentInterest: null,
     telephone: '',
-    mobilePhone: '',
-    emergencyNumber: '',
     faxNr: '',
     email: '',
     web: '',
@@ -38,7 +33,6 @@ const EMPTY_OFFICE = {
     bankAccountNr: '',
     bgNr: '',
     pgNr: '',
-    defaultPaymentDays: null,
     vatRegCity: '',
     vatRegText: '',
     iban: '',
@@ -377,33 +371,6 @@ export default function OfficeCompanyInfo() {
                                     value={office?.deductibleReductionText ?? ''}
                                     onChange={(value) => updateField('deductibleReductionText', value ?? '')}
                                     height="h-14"
-                                />
-                                <LabeledInput
-                                    name="defaultPaymentDays"
-                                    label="Betalningsdagar"
-                                    labelWidth="w-24"
-                                    inputWidth="w-20"
-                                    margintop="4"
-                                    value={office?.defaultPaymentDays ?? ''}
-                                    onChange={(value) => updateField('defaultPaymentDays', value ?? '')}
-                                />
-                                <LabeledInput
-                                    name="latePaymentInterest"
-                                    label="Dröjsmålsränta"
-                                    labelWidth="w-24"
-                                    inputWidth="w-20"
-                                    margintop="0"
-                                    value={office?.latePaymentInterest ?? ''}
-                                    onChange={(value) => updateField('latePaymentInterest', value ?? '')}
-                                />
-                                <LabeledInput
-                                    name="invoiceFee"
-                                    label="Fakturaavgift"
-                                    labelWidth="w-24"
-                                    inputWidth="w-20"
-                                    margintop="0"
-                                    value={office?.invoiceFee ?? ''}
-                                    onChange={(value) => updateField('invoiceFee', value ?? '')}
                                 />
                             </div>
                         </div>

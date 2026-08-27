@@ -111,8 +111,7 @@ export default function Categories() {
           ? null
           : mappedCategories.find((itemCategory) => itemCategory.id === selectedCategoryId)
 
-        const nextSelected = selectedFromPage ?? mappedCategories[0]
-        setSelectedCategoryId(nextSelected.id)
+        setSelectedCategoryId(selectedFromPage?.id ?? null)
       })
       .catch((requestError) => {
         if (!isActive) {
@@ -456,7 +455,7 @@ export default function Categories() {
               onKeyDown={handleListKeyDown}
               className="mt-5 max-h-[calc(100vh-360px)] overflow-y-auto pr-2 focus:outline-none"
             >
-              <div className="mb-2 grid grid-cols-[92px_minmax(0,1fr)] border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
+              <div className="mb-1 grid grid-cols-[92px_minmax(0,1fr)] border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
                 <span>Kod</span>
                 <span>Beskrivning</span>
               </div>
@@ -538,7 +537,7 @@ export default function Categories() {
             </div>
           </aside>
 
-          <div aria-hidden="true" className="mt-2 hidden bg-gray-300 lg:block" />
+          <div aria-hidden="true" className="mt-6 bg-gray-300" />
 
           <section className="px-3 lg:px-4">
             <div className="mb-4 flex items-start justify-between gap-5">
