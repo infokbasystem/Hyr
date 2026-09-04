@@ -22,8 +22,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="RateLimiter" Version="2.2.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
-    <PackageReference Include="Telerik.Drawing.Skia" Version="19.3.26.121" />
-    <PackageReference Include="Telerik.Reporting" Version="19.3.26.121" />
+    <PackageReference Include="QuestPDF" Version="2026.8.0" />
     <PackageReference Include="TimeZoneConverter" Version="7.0.0" />
   </ItemGroup>
 

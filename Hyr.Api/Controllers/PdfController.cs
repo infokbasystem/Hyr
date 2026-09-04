@@ -1,32 +1,26 @@
-using System.Text.Json;
-using System.Threading;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-
-using Telerik.Reporting;
-using Telerik.Reporting.Processing;
-using Telerik.Reporting.XmlSerialization;
-
-
-using Hyr.Api.Data;
 using Hyr.Api.Services;
 
 namespace Hyr.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PdfController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
         private readonly ICurrentUserService _currentUserService;
+        private readonly IInvoicePdfService _invoicePdfService;
+        private readonly IReservationPdfService _reservationPdfService;
 
-        public PdfController(ApplicationDbContext context, ICurrentUserService currentUserService)
+        public PdfController(
+            ICurrentUserService currentUserService,
+            IInvoicePdfService invoicePdfService,
+            IReservationPdfService reservationPdfService)
         {
-            _context = context;
             _currentUserService = currentUserService;
+            _invoicePdfService = invoicePdfService;
+            _reservationPdfService = reservationPdfService;
         }
 
         [HttpGet("invoice/{id:int}")]
@@ -38,81 +32,31 @@ namespace Hyr.Api.Controllers
                 return Unauthorized(new { message = "User not found" });
             }
 
-            var reportPath = Path.Combine(Directory.GetCurrentDirectory(), "", "Reports", "Invoice.trdx");
-
-            if (!System.IO.File.Exists(reportPath))
+            if (!user.OfficeId.HasValue)
             {
-                return NotFound("Report file not found.");
+                return Unauthorized(new { message = "User has no office" });
             }
 
-            Telerik.Reporting.Report report;
-            using (var fs = System.IO.File.OpenRead(reportPath))
+            var pdf = await _invoicePdfService.GenerateInvoicePdfAsync(user.OfficeId.Value, id, HttpContext.RequestAborted);
+            return pdf is null
+                ? NotFound("Invoice not found.")
+                : File(pdf.Content, "application/pdf", pdf.FileName, enableRangeProcessing: true);
+        }
+
+        [HttpGet("reservation/{id:int}")]
+        public async Task<IActionResult> GetReservationPdfById(int id)
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null || !user.OfficeId.HasValue)
             {
-                var serializer = new ReportXmlSerializer();
-                report = (Telerik.Reporting.Report)serializer.Deserialize(fs);
+                return Unauthorized(new { message = "User not found or has no office" });
             }
 
-            if (report == null)
-                return Problem("Failed to load report.");
-
-            var officeInDb = await _context.Offices.Where(o => o.Id == user.OfficeId).FirstOrDefaultAsync();
-            var invoiceInDb = await _context.Invoices
-                            .Include(i => i.CreatedByUser)
-                            .Include(i => i.ModifiedByUser)
-                            .Include(i => i.Customer)
-                            .Include(i => i.InvoiceRows)
-                            .FirstOrDefaultAsync(i => i.Id == id);
-
-            if (invoiceInDb == null)
-            {
-                return NotFound("Invoice not found.");
-            }
-
-            var invoice = new Models.Print.Invoice
-            {
-                Id = invoiceInDb.Id.ToString(),
-                InvoiceNr = invoiceInDb.InvoiceNr.GetValueOrDefault().ToString(),
-                InvoiceDate = invoiceInDb.InvoiceDate.GetValueOrDefault().ToString("yyyy-MM-dd"),
-                DueDate = invoiceInDb.DueDate.GetValueOrDefault().AddDays(invoiceInDb.NrOfInvoiceDays.GetValueOrDefault()).ToString("yyyy-MM-dd"),
-                CustomerName = invoiceInDb.CustomerName,
-                InvoiceRows = invoiceInDb.InvoiceRows.Select(r => new Models.Print.InvoiceRow
-                {
-                    AccountNr = r.AccountNr.GetValueOrDefault().ToString(),
-                    ArticleId = r.ArticleId.GetValueOrDefault().ToString(),
-                    ArticleNr = r.ArticleNr,
-                    CostCenter = r.CostCenter,
-                    DiscountRate = r.DiscountRate.GetValueOrDefault().ToString(),
-                    InvoiceId = r.InvoiceId.GetValueOrDefault().ToString(),
-                    InvoiceRowType = r.InvoiceRowType,
-                    Qty = r.Qty.GetValueOrDefault().ToString(),
-                    SortNr = r.SortNr.GetValueOrDefault().ToString(),
-                    Sum = r.Sum.GetValueOrDefault().ToString(),
-                    Text1 = r.Text1,
-                    Text2 = r.Text2,
-                    UnitPrice = r.UnitPrice.GetValueOrDefault().ToString(),
-                    VatRate = r.VatRate.GetValueOrDefault().ToString()
-                }).ToList()
-            };
-
-            report.DataSource = invoice;
-
-            // Render PDF
-            var result = await Task.Run(() =>
-            {
-                var processor = new ReportProcessor();
-                var reportSource = new Telerik.Reporting.InstanceReportSource { ReportDocument = report };
-                return processor.RenderReport("PDF", reportSource, null);
-            });
-
-            if (result.HasErrors)
-                return Problem(string.Join("\n", (IEnumerable<string>)result.Errors.Select(e => e.Message)));
-
-            // Return PDF to browser
-            return File(result.DocumentBytes, "application/pdf", null, enableRangeProcessing: true);
-
-
+            var pdf = await _reservationPdfService.GenerateReservationPdfAsync(user.OfficeId.Value, id, HttpContext.RequestAborted);
+            return pdf is null
+                ? NotFound("Reservation not found.")
+                : File(pdf.Content, "application/pdf", pdf.FileName, enableRangeProcessing: true);
         }
 
     }
 }
-

@@ -54,7 +54,7 @@ function formatDateForQuery(value) {
     return parsed.toISOString().slice(0, 10);
 }
 
-const USE_DUMMY_ACCOUNTING = true
+const USE_DUMMY_ACCOUNTING = false
 
 function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms))

@@ -1480,7 +1480,7 @@ const Reservation = () => {
     };
 
     const getPdf = async ({ ignoreUnsaved = false } = {}) => {
-        if (!reservation) return;
+        if (!reservation?.id) return;
 
         if (!ignoreUnsaved && hasUnsavedChanges()) {
             // setPendingAction('pdf');
@@ -1921,7 +1921,7 @@ const Reservation = () => {
                                         onClick={submitReservation}
                                         accent="lime"
                                     />
-                                    {reservation?.id != 0 && (
+                                    {reservation?.id > 0 && (
                                         <ActionButton
                                             label="Skriv ut"
                                             icon={Printer}

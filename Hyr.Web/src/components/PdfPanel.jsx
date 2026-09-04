@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
+import { Mail, Printer, X } from 'lucide-react';
 import EmailModal from './EmailModal';
+import ActionButton from './ActionButton';
 
 import { usePdf } from '../contexts/PdfContext';
 
@@ -135,32 +137,32 @@ export default function PdfPanel({ onOpenFileModal = null, topOffset = '0px' }) 
     return (
         <>
             <div
-                className={`absolute right-0 w-[560px] bg-yellow-50 shadow-xl/30 z-50 pt-3 pl-3
+                className={`absolute right-0 z-40 w-[560px] bg-yellow-50 shadow-xl/30 px-5 py-10
                     transform transition-transform duration-300
                     ${visible ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-full opacity-0 pointer-events-none'}`}
                 style={{ top: topOffset, bottom: 0 }}
             >
-                <div className="flex items-center p-3">
-                    <button
-                        type="button"
+                <div className="flex items-center gap-3 p-3">
+                    <ActionButton
+                        label="Stäng"
+                        icon={X}
                         onClick={handleClose}
-                        className="shadow-md/30 text-xs text-white bg-red-700 hover:bg-red-900 px-5 p-[5px] w-20">
-                        Stäng
-                    </button>
-                    <button
-                        type="button"
+                        accent="rose"
+                    />
+                    <ActionButton
+                        label="Skriv ut"
+                        icon={Printer}
                         onClick={handlePrint}
                         disabled={isStale}
-                        className={`shadow-md/30 text-xs text-gray bg-blue-200 px-4 py-[5px] ml-10 w-20 ${isStale ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-300'}`}>
-                        Skriv ut
-                    </button>
-                    <button
-                        type="button"
+                        accent="sky"
+                    />
+                    <ActionButton
+                        label="Maila"
+                        icon={Mail}
                         onClick={openEmailModal}
                         disabled={isStale}
-                        className={`shadow-md/30 text-xs text-gray bg-blue-200 px-4 py-[5px] ml-3 w-20 ${isStale ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-300'}`}>
-                        Maila
-                    </button>
+                        accent="indigo"
+                    />
                     {/* <button
                         type="button"
                         onClick={openExampleModal}
@@ -192,7 +194,7 @@ export default function PdfPanel({ onOpenFileModal = null, topOffset = '0px' }) 
                     </div>
                 )}
 
-                <div className="relative ml-3 mr-5 mt-5 mb-3 overflow-auto" style={{ height: 'calc(100% - 100px)' }}>
+                <div className="h-[calc(100%-100px)] overflow-auto px-3 pb-3">
                     {showPdfPanel && !pdfUrl ? null : null}
 
                     {pdfUrl && (
@@ -211,7 +213,7 @@ export default function PdfPanel({ onOpenFileModal = null, topOffset = '0px' }) 
                             {getPageNumbers().map((pageNumber) => (
                                 <div
                                     key={`wrapper_${pageNumber}`}
-                                    className=""
+                                    className="my-3 overflow-hidden border border-gray-200 shadow-sm"
                                     style={{
                                         background: 'transparent',
                                         visibility: showDoc ? 'visible' : 'hidden'

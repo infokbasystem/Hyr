@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
 using System.Text;
 
 using Hyr.Api.Data;
@@ -10,6 +11,8 @@ using Hyr.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 const string FrontendCorsPolicy = "FrontendCorsPolicy";
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 // Add services to the container.
 
@@ -24,6 +27,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<ICalcPriceTypeArticleService, CalcPriceTypeArticleService>();
+builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
+builder.Services.AddScoped<IReservationPdfService, ReservationPdfService>();
 
 // JWT Configuration
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "D8C73B12-A68F-4708-8D64-ACA28121F156";

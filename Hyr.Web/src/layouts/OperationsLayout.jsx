@@ -17,7 +17,7 @@ const OperationsLayoutContent = () => {
             : "";
 
     return (
-        <PdfProvider>
+        <>
             <div className="relative flex flex-col min-h-screen">
                 <Header />
                 <div className="sticky top-0 z-50">
@@ -31,8 +31,7 @@ const OperationsLayoutContent = () => {
                 </div>
             </div>
             {showPdfPanel && <PdfPanel topOffset="107px" />}
-
-        </PdfProvider>
+        </>
     )
 }
 
