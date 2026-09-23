@@ -4,8 +4,8 @@ Detta är ett monorepo som innehåller både backend och frontend för Hyr-appli
 
 ## 🏗 Projektstruktur
 
-- **/Hyr.Api**: Backend byggd med .NET 9. Innehåller REST API-logik och databasintegrationer.
-- **/Hyr.Web**: Frontend byggd med React (JavaScript).
+- **/backend**: Backend byggd med .NET 9. Innehåller REST API-logik och databasintegrationer.
+- **/frontend**: Frontend byggd med React (JavaScript).
 
 ## 🚀 Komma igång
 
@@ -30,15 +30,15 @@ Detta kommer att:
 ## 🛠 Utveckling
 
 ### Backend (API)
-- Projektfil: `Hyr.Api/Hyr.Api.csproj`
+- Projektfil: `backend/backend.csproj`
 - Solution: `Hyr.sln`
 - Dokumentation: Nås via `/swagger` vid körning.
 - Tester: Kan köras via `dotnet test`.
 
 ### Frontend (Web)
 - Baserad på React.
-- Hanteras via npm inuti mappen `Hyr.Web`.
-- För att installera paket: `cd Hyr.Web && npm install`.
+- Hanteras via npm inuti mappen `frontend`.
+- För att installera paket: `cd frontend && npm install`.
 
 ## 🤖 AI Context (för Claude/GitHub Copilot)
-Detta projekt är ett monorepo. Vid ändringar som rör datamodeller, se till att uppdatera både C#-klasserna i `Hyr.Api` och motsvarande API-anrop/logik i `Hyr.Web`.
+Detta projekt är ett monorepo. Vid ändringar som rör datamodeller, se till att uppdatera både C#-klasserna i `backend` och motsvarande API-anrop/logik i `frontend`.

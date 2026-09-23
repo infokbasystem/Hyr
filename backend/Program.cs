@@ -1,0 +1,122 @@
+
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
+using System.Text;
+
+using Backend.Data;
+using Backend.Middleware;
+using Backend.Models;
+using Backend.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+const string FrontendCorsPolicy = "FrontendCorsPolicy";
+
+QuestPDF.Settings.License = LicenseType.Community;
+
+// Add services to the container.
+
+builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.AddControllers();
+
+builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DbConnection")));
+
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<ICalcPriceTypeArticleService, CalcPriceTypeArticleService>();
+builder.Services.AddScoped<ISystemAccountService, SystemAccountService>();
+builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
+builder.Services.AddScoped<IReservationPdfService, ReservationPdfService>();
+builder.Services.AddScoped<ISecretProtector, SecretProtector>();
+builder.Services.AddScoped<ITinkPaymentService, TinkPaymentService>();
+builder.Services.AddScoped<IEmailSender, MailKitEmailSender>();
+builder.Services.AddScoped<ISmsSender, PixieSmsSender>();
+
+builder.Services.AddDataProtection();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient(TinkPaymentService.HttpClientName);
+builder.Services.AddHttpClient(PixieSmsSender.HttpClientName);
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<SmsSettings>(builder.Configuration.GetSection("Sms"));
+builder.Services.Configure<TinkSettings>(builder.Configuration.GetSection("Tink"));
+
+// JWT Configuration
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "D8C73B12-A68F-4708-8D64-ACA28121F156";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "HyrApi";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "HyrApi";
+
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// Add JWT settings to DI
+builder.Services.Configure<JwtSettings>(options =>
+{
+    options.Key = jwtKey;
+    options.Issuer = jwtIssuer;
+    options.Audience = jwtAudience;
+    options.ExpirationMinutes = 60;
+});
+
+// CORS Configuration
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(FrontendCorsPolicy, policy =>
+    {
+        policy.WithOrigins(
+                "https://hyrsys.se",
+                "https://www.hyrsys.se",
+                "http://localhost:5173",
+                                "https://localhost:5173",
+                                "http://localhost:5174",
+                                "https://localhost:5174")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .WithExposedHeaders(SlidingSessionMiddleware.RenewedTokenHeader);
+    });
+});
+
+
+var app = builder.Build();
+
+
+// Configure the HTTP request pipeline.c
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.UseHttpsRedirection();
+app.UseCors(FrontendCorsPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseMiddleware<SlidingSessionMiddleware>();
+app.MapControllers();
+
+// Apply migrations and seed data
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+}
+
+app.Run();

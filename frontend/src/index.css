@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@theme {
+  --text-tiny: 0.63rem;
+  --text-xs: 0.7rem;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:focus {
+  transition: background-color 0s 600000s, color 0s 600000s !important;
+}
+
+.react-switch-selector-wrapper {}
+
+.react-switch-selector-option {
+  padding: 3px;
+  color: white;
+}
+
+.vehicle-timeline-time {
+  flex-shrink: 0;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.vehicle-timeline-time-compact {
+  display: none;
+}
+
+@container (max-width: 110px) {
+  .vehicle-timeline-time-full {
+    display: none;
+  }
+
+  .vehicle-timeline-time-compact {
+    display: inline;
+  }
+}
+
+@container (max-width: 48px) {
+  .vehicle-timeline-time-compact {
+    display: none;
+  }
+}
+
+
+.daypicker .rdp-root {
+  --rdp-accent-color: var(--color-green-600);
+  --rdp-day-width: 40px;
+  --rdp-day-height: 40px;
+  --rdp-day_button-width: 28px;
+  --rdp-day_button-height: 28px;
+  --rdp-week_number-width: 30px;
+  --rdp-week_number-height: 30px;
+  --rdp-nav_button-width: 22px;
+  --rdp-nav_button-height: 22px;
+  --rdp-nav-height: 30px;
+  --rdp-day_button-border-radius: 9999px;
+}
+
+.daypicker .rdp-day,
+.daypicker .rdp-week_number {
+  padding: 0;
+  vertical-align: middle;
+}
+
+.daypicker .rdp-day_button {
+  margin: 0 auto;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: #1f2937;
+}
+
+.daypicker .rdp-month_caption {
+  font-size: 0.88rem;
+  font-weight: 500;
+  height: 30px;
+  margin: 5px 10px 5px 10px;
+  text-transform: capitalize;
+  color: #1f2937;
+}
+
+.daypicker .rdp-button_next,
+.daypicker .rdp-button_previous {
+  color: var(--color-green-700);
+  margin-top: 10px;
+}
+
+.daypicker .rdp-chevron {
+  width: 14px;
+  height: 14px;
+}
+
+.daypicker .rdp-weekday {
+  font-size: 0.62rem;
+  padding: 0.2rem 0;
+  color: #6b7280;
+}
+
+.daypicker .rdp-week_number {
+  font-size: 0.62rem;
+  opacity: 1;
+  color: #64748b;
+}
+
+.daypicker .rdp-outside .rdp-day_button {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+.daypicker .rdp-selected {
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.daypicker .rdp-selected .rdp-day_button {
+  background-color: var(--color-lime-600);
+  border-color: var(--color-lime-700);
+  border-width: 1px;
+  color: var(--color-emerald-50);
+}
+
+.daypicker .rdp-today:not(.rdp-outside):not(.rdp-selected) .rdp-day_button {
+  border: 2px solid var(--color-teal-500);
+}

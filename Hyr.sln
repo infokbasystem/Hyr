@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyr.Api", "Hyr.Api\Hyr.Api.csproj", "{FA5FB229-5143-481A-B803-0AC17675AAB4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "backend", "backend\backend.csproj", "{FA5FB229-5143-481A-B803-0AC17675AAB4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hyr.AccToSql", "Hyr.AccToSql\Hyr.AccToSql.csproj", "{4126284E-C8C5-43E1-8C53-53AD8EEEEEAF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "acc-to-sql", "acc-to-sql\acc-to-sql.csproj", "{4126284E-C8C5-43E1-8C53-53AD8EEEEEAF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
