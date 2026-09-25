@@ -2,6 +2,7 @@ using Backend.Data;
 using Backend.Dtos;
 using Backend.Models;
 using Backend.Services;
+using Backend.Utils.Fortnox;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -299,6 +300,98 @@ public class OfficeController : ControllerBase
             TinkRecipientAccountNumber = office.TinkRecipientAccountNumber,
             TinkRecipientAccountType = office.TinkRecipientAccountType,
             TinkPaymentScheme = office.TinkPaymentScheme,
+        };
+    }
+
+    [HttpGet("settings/fortnox")]
+    public async Task<IActionResult> GetFortnoxSettings()
+    {
+        var office = await GetCurrentOfficeAsync();
+        if (office == null)
+        {
+            return BadRequest(new { message = "Office not found" });
+        }
+
+        return Ok(MapFortnoxSettings(office));
+    }
+
+    [HttpPut("settings/fortnox")]
+    public async Task<IActionResult> UpdateFortnoxSettings([FromBody] OfficeFortnoxSettingsUpdateDto dto)
+    {
+        var office = await GetCurrentOfficeAsync();
+        if (office == null)
+        {
+            return BadRequest(new { message = "Office not found" });
+        }
+
+        office.UseFortnox = dto.UseFortnox;
+        await _context.SaveChangesAsync();
+
+        return Ok(MapFortnoxSettings(office));
+    }
+
+    [HttpPost("settings/fortnox/start-pairing")]
+    public async Task<IActionResult> StartFortnoxPairing([FromBody] OfficeFortnoxStartPairingDto dto)
+    {
+        var office = await GetCurrentOfficeAsync();
+        if (office == null)
+        {
+            return BadRequest(new { message = "Office not found" });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.RedirectUrl))
+        {
+            return BadRequest(new { message = "Missing redirectUrl" });
+        }
+
+        var fortnoxAuthClient = new Fortnox.SDK.FortnoxAuthClient();
+        var authWorkflow = fortnoxAuthClient.StandardAuthWorkflow;
+        var scopes = new List<Fortnox.SDK.Auth.Scope>
+        {
+            Fortnox.SDK.Auth.Scope.Article,
+            Fortnox.SDK.Auth.Scope.Bookkeeping,
+            Fortnox.SDK.Auth.Scope.CostCenter,
+            Fortnox.SDK.Auth.Scope.Currency,
+            Fortnox.SDK.Auth.Scope.Customer,
+            Fortnox.SDK.Auth.Scope.Invoice,
+            Fortnox.SDK.Auth.Scope.Payment,
+        };
+        var authorizeUrl = authWorkflow.BuildAuthUri(
+            FortnoxAppCredentials.ClientId,
+            scopes,
+            office.Name,
+            dto.RedirectUrl).AbsoluteUri;
+
+        return Ok(new { redirectUrl = authorizeUrl });
+    }
+
+    [HttpPost("settings/fortnox/clear-token")]
+    public async Task<IActionResult> ClearFortnoxToken()
+    {
+        var office = await GetCurrentOfficeAsync();
+        if (office == null)
+        {
+            return BadRequest(new { message = "Office not found" });
+        }
+
+        office.FortnoxAccessToken = string.Empty;
+        office.FortnoxRefreshToken = string.Empty;
+        office.FortnoxTokenCreated = null;
+        office.FortnoxTokenExpiresInSeconds = null;
+        await _context.SaveChangesAsync();
+
+        return Ok(MapFortnoxSettings(office));
+    }
+
+    private static OfficeFortnoxSettingsDto MapFortnoxSettings(Office office)
+    {
+        return new OfficeFortnoxSettingsDto
+        {
+            UseFortnox = office.UseFortnox,
+            HasAccessToken = !string.IsNullOrEmpty(office.FortnoxAccessToken),
+            HasRefreshToken = !string.IsNullOrEmpty(office.FortnoxRefreshToken),
+            FortnoxTokenCreated = office.FortnoxTokenCreated,
+            FortnoxTokenExpiresInSeconds = office.FortnoxTokenExpiresInSeconds,
         };
     }
 

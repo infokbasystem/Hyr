@@ -19,6 +19,10 @@ public class InvoicePaymentSubset
     [JsonProperty]
     public decimal? Amount { get; set; }
 
+    ///<summary> Amount in the specified currency of the payment </summary>
+    [JsonProperty]
+    public decimal? AmountCurrency { get; set; }
+
     ///<summary> If the payment is booked or not </summary>
     [ReadOnly]
     [JsonProperty]
@@ -46,6 +50,10 @@ public class InvoicePaymentSubset
     [ReadOnly]
     [JsonProperty]
     public long? Number { get; private set; }
+
+    ///<summary> Code of the mode of payment </summary>
+    [JsonProperty]
+    public string? ModeOfPayment { get; set; }
 
     ///<summary> Date of the payment </summary>
     [JsonProperty]

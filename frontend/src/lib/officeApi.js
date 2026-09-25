@@ -51,6 +51,33 @@ export function updateTinkSettings(settings) {
   })
 }
 
+export function getFortnoxSettings() {
+  return requestJson('/office/settings/fortnox')
+}
+
+export function updateFortnoxSettings(settings) {
+  return requestJson('/office/settings/fortnox', {
+    method: 'PUT',
+    body: {
+      useFortnox: Boolean(settings?.useFortnox),
+    },
+  })
+}
+
+export function startFortnoxPairing(redirectUrl) {
+  return requestJson('/office/settings/fortnox/start-pairing', {
+    method: 'POST',
+    body: { redirectUrl },
+  })
+}
+
+export function clearFortnoxToken() {
+  return requestJson('/office/settings/fortnox/clear-token', {
+    method: 'POST',
+  })
+}
+
+
 export async function updateOfficeItemTypeSettings(body) {
   const data = await requestJson('/office/settings/item-types', {
     method: 'PUT',

@@ -19,6 +19,7 @@ namespace Backend.Data
         public DbSet<InvoiceRow> InvoiceRows { get; set; } = null!;
         public DbSet<Payment> Payments { get; set; } = null!;
         public DbSet<TinkPaymentRequest> TinkPaymentRequests { get; set; } = null!;
+        public DbSet<IntegrationSchedule> IntegrationSchedules { get; set; } = null!;
         public DbSet<Account> Accounts { get; set; } = null!;
         public DbSet<Article> Articles { get; set; } = null!;
         public DbSet<VatRate> VatRates { get; set; } = null!;
@@ -548,6 +549,13 @@ namespace Backend.Data
                 entity.Property(e => e.PaymentMethod).HasMaxLength(100);
                 entity.Property(e => e.Reference).HasMaxLength(200);
                 entity.Property(e => e.Note).HasMaxLength(1000);
+                entity.Property(e => e.FortnoxPaymentNumber).HasMaxLength(50);
+                entity.Property(e => e.FortnoxInvoiceNumber).HasMaxLength(50);
+                entity.Property(e => e.AmountCurrency).HasPrecision(18, 5);
+                entity.Property(e => e.Currency).HasMaxLength(10);
+                entity.Property(e => e.CurrencyRate).HasPrecision(18, 6);
+                entity.Property(e => e.CurrencyUnit).HasPrecision(18, 6);
+                entity.Property(e => e.FortnoxSource).HasMaxLength(50);
 
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.Payments)
@@ -562,6 +570,28 @@ namespace Backend.Data
                 entity.HasIndex(e => e.OfficeId);
                 entity.HasIndex(e => e.InvoiceId);
                 entity.HasIndex(e => e.PaymentDate);
+                entity.HasIndex(e => new { e.OfficeId, e.FortnoxPaymentNumber })
+                    .IsUnique()
+                    .HasFilter("[FortnoxPaymentNumber] IS NOT NULL");
+                entity.HasIndex(e => new { e.OfficeId, e.FortnoxInvoiceNumber });
+                entity.HasIndex(e => new { e.OfficeId, e.InvoiceId });
+            });
+
+            modelBuilder.Entity<IntegrationSchedule>(entity =>
+            {
+                entity.ToTable("IntegrationSchedule");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Integration).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Variable).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Value).HasMaxLength(2000).IsRequired();
+
+                entity.HasIndex(e => new { e.OfficeId, e.Integration, e.Variable })
+                    .IsUnique();
+
+                entity.HasOne(e => e.Office)
+                    .WithMany(e => e.IntegrationSchedules)
+                    .HasForeignKey(e => e.OfficeId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<TinkPaymentRequest>(entity =>

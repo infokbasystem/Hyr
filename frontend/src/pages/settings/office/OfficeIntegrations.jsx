@@ -1,23 +1,47 @@
 import { useEffect, useState } from 'react'
-import { Save } from 'lucide-react'
+import { Plug, Save, Trash2 } from 'lucide-react'
 
 import ActionButton from '../../../components/ActionButton'
 import LabeledCheckbox from '../../../components/LabeledCheckbox'
 import LabeledInput from '../../../components/LabeledInput'
 import LabeledSelect from '../../../components/LabeledSelect'
 import { getSharedRequest } from '../../../lib/sharedRequest'
-import { getTinkSettings, updateTinkSettings } from '../../../lib/officeApi'
+import {
+    clearFortnoxToken,
+    getFortnoxSettings,
+    getTinkSettings,
+    startFortnoxPairing,
+    updateFortnoxSettings,
+    updateTinkSettings,
+} from '../../../lib/officeApi'
 
 const ACCOUNT_TYPES = [
     { id: 'iban', name: 'IBAN' },
     { id: 'se', name: 'Svenskt kontonummer (BBAN)' },
 ]
 
+function formatDateTime(value) {
+    if (!value) return '-'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleString('sv-SE')
+}
+
+function formatExpiry(createdAt, expiresInSeconds) {
+    if (!createdAt || !Number.isFinite(expiresInSeconds)) return '-'
+    const created = new Date(createdAt)
+    if (Number.isNaN(created.getTime())) return '-'
+    return formatDateTime(new Date(created.getTime() + expiresInSeconds * 1000))
+}
+
 export default function OfficeIntegrations() {
     const [settings, setSettings] = useState(null)
     const [clientSecret, setClientSecret] = useState('')
     const [messages, setMessages] = useState([])
     const [isSaving, setIsSaving] = useState(false)
+    const [fortnoxSettings, setFortnoxSettings] = useState(null)
+    const [isPairingFortnox, setIsPairingFortnox] = useState(false)
+    const [isClearingFortnoxToken, setIsClearingFortnoxToken] = useState(false)
 
     useEffect(() => {
         let isActive = true
@@ -35,9 +59,30 @@ export default function OfficeIntegrations() {
         return () => { isActive = false }
     }, [])
 
+    useEffect(() => {
+        let isActive = true
+
+        getSharedRequest('office:fortnox-settings', () => getFortnoxSettings())
+            .then((data) => {
+                if (isActive) setFortnoxSettings(data)
+            })
+            .catch((error) => {
+                if (!isActive) return
+                const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte hämta Fortnox-inställningar.'
+                setMessages([{ type: 'error', text: errorText }])
+            })
+
+        return () => { isActive = false }
+    }, [])
+
     function updateField(field, value) {
         setMessages((previous) => previous.filter((message) => message.type !== 'success'))
         setSettings((previous) => ({ ...previous, [field]: value }))
+    }
+
+    function updateFortnoxField(field, value) {
+        setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+        setFortnoxSettings((previous) => ({ ...previous, [field]: value }))
     }
 
     async function handleSubmit(event) {
@@ -46,15 +91,51 @@ export default function OfficeIntegrations() {
 
         setIsSaving(true)
         try {
-            const saved = await updateTinkSettings({ ...settings, tinkClientSecret: clientSecret })
-            setSettings(saved)
+            const [savedTink, savedFortnox] = await Promise.all([
+                updateTinkSettings({ ...settings, tinkClientSecret: clientSecret }),
+                fortnoxSettings ? updateFortnoxSettings(fortnoxSettings) : Promise.resolve(fortnoxSettings),
+            ])
+            setSettings(savedTink)
             setClientSecret('')
-            setMessages([{ type: 'success', text: 'Tink-inställningar sparade.' }])
+            if (savedFortnox) setFortnoxSettings(savedFortnox)
+            setMessages([{ type: 'success', text: 'Integrationsinställningar sparade.' }])
         } catch (error) {
-            const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte spara Tink-inställningar.'
+            const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte spara integrationsinställningar.'
             setMessages([{ type: 'error', text: errorText }])
         } finally {
             setIsSaving(false)
+        }
+    }
+
+    async function handleStartFortnoxPairing() {
+        setIsPairingFortnox(true)
+        setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+        try {
+            const redirectUrl = `${window.location.origin}/settings/fortnoxredirect`
+            const response = await startFortnoxPairing(redirectUrl)
+            if (response?.redirectUrl) {
+                window.location.href = response.redirectUrl
+            }
+        } catch (error) {
+            const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte starta parkoppling med Fortnox.'
+            setMessages([{ type: 'error', text: errorText }])
+        } finally {
+            setIsPairingFortnox(false)
+        }
+    }
+
+    async function handleClearFortnoxToken() {
+        setIsClearingFortnoxToken(true)
+        setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+        try {
+            const saved = await clearFortnoxToken()
+            setFortnoxSettings(saved)
+            setMessages([{ type: 'success', text: 'Fortnox-token rensad.' }])
+        } catch (error) {
+            const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte rensa Fortnox-token.'
+            setMessages([{ type: 'error', text: errorText }])
+        } finally {
+            setIsClearingFortnoxToken(false)
         }
     }
 
@@ -80,7 +161,70 @@ export default function OfficeIntegrations() {
                 )}
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-5 max-w-[560px]">
+            <form onSubmit={handleSubmit} className="mt-5 max-w-[600px]">
+                <h2 className="mb-2 text-xs uppercase tracking-[0.12em] text-gray-600">Fortnox</h2>
+
+                <div className="flex items-center gap-6">
+                    <LabeledCheckbox
+                        label="Använd Fortnox"
+                        checked={Boolean(fortnoxSettings?.useFortnox)}
+                        onChange={(checked) => updateFortnoxField('useFortnox', checked)}
+                        color="cyan"
+                        uncheckedBorderColor="#d1d5db"
+                    />
+
+                    <ActionButton
+                        label="Starta parkoppling"
+                        icon={Plug}
+                        onClick={handleStartFortnoxPairing}
+                        disabled={!fortnoxSettings?.useFortnox || isPairingFortnox}
+                    />
+
+                    <ActionButton
+                        label="Rensa Fortnox-token"
+                        icon={Trash2}
+                        onClick={handleClearFortnoxToken}
+                        disabled={isClearingFortnoxToken || (!fortnoxSettings?.hasAccessToken && !fortnoxSettings?.hasRefreshToken)}
+                        accent='rose'
+                    />
+
+                </div>
+
+                {fortnoxSettings?.useFortnox && (
+                    <>
+                        <LabeledInput
+                            label="Fortnox-token"
+                            labelWidth="w-40"
+                            margintop="2"
+                            disabled
+                            value=""
+                            placeholder={fortnoxSettings?.hasAccessToken && fortnoxSettings?.hasRefreshToken ? '•••••••• (sparad)' : 'Ej sparad'}
+                        />
+
+                        <LabeledInput
+                            label="Token skapad"
+                            labelWidth="w-40"
+                            margintop="0"
+                            disabled
+                            value={fortnoxSettings?.fortnoxTokenCreated ? formatDateTime(fortnoxSettings.fortnoxTokenCreated) : ''}
+                            placeholder="-"
+                        />
+
+                        <LabeledInput
+                            label="Token går ut"
+                            labelWidth="w-40"
+                            margintop="0"
+                            disabled
+                            value={fortnoxSettings?.fortnoxTokenCreated
+                                ? formatExpiry(fortnoxSettings.fortnoxTokenCreated, fortnoxSettings.fortnoxTokenExpiresInSeconds)
+                                : ''}
+                            placeholder="-"
+                        />
+                    </>
+                )}
+
+                <div className="h-6" />
+
                 <h2 className="mb-2 text-xs uppercase tracking-[0.12em] text-gray-600">Tink</h2>
 
                 <LabeledCheckbox

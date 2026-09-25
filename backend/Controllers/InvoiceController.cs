@@ -27,6 +27,7 @@ namespace Backend.Controllers
         private readonly ICurrentUserService _currentUserService;
         private readonly ICalcPriceTypeArticleService _calcPriceTypeArticleService;
         private readonly ISystemAccountService _systemAccountService;
+        private readonly IFortnoxInvoicePaymentSyncService _fortnoxInvoicePaymentSyncService;
         // private readonly OldApplicationDbContext _context;
 
         private static readonly InvoicePaymentMethodOptionDto[] PaymentMethodOptions =
@@ -41,12 +42,18 @@ namespace Backend.Controllers
             new InvoicePaymentMethodOptionDto { Value = "INVOICE", Label = "Faktura" },
         ];
 
-        public InvoiceController(ApplicationDbContext context, ICurrentUserService currentUserService, ICalcPriceTypeArticleService calcPriceTypeArticleService, ISystemAccountService systemAccountService)
+        public InvoiceController(
+            ApplicationDbContext context,
+            ICurrentUserService currentUserService,
+            ICalcPriceTypeArticleService calcPriceTypeArticleService,
+            ISystemAccountService systemAccountService,
+            IFortnoxInvoicePaymentSyncService fortnoxInvoicePaymentSyncService)
         {
             _context = context;
             _currentUserService = currentUserService;
             _calcPriceTypeArticleService = calcPriceTypeArticleService;
             _systemAccountService = systemAccountService;
+            _fortnoxInvoicePaymentSyncService = fortnoxInvoicePaymentSyncService;
             // _context = oldContext;
         }
 
@@ -736,7 +743,9 @@ namespace Backend.Controllers
 
         [HttpPost("account")]
         [Authorize]
-        public async Task<IActionResult> AccountInvoice([FromBody] int invoiceId)
+        public async Task<IActionResult> AccountInvoice(
+            [FromBody] int invoiceId,
+            CancellationToken cancellationToken)
         {
             try
             {
@@ -784,24 +793,22 @@ namespace Backend.Controllers
                 if (!TokenIsValid)
                 {
 #if DEBUG
-                    var redirectUrl = "http://localhost:5173/settings/fortnoxredirect";
+                    var redirectUrl = "http://localhost:5174/settings/fortnoxredirect";
 #else
                             var redirectUrl = "https://hyrsys.se/settings/fortnoxredirect";
 #endif
 
                     // redirectUrl = "https://hyrsys.se/settings/fortnoxredirect";
 
-                    var scopes = new List<Scope>()
-                                    {
-                                        //Scope.Article,
-                                        Scope.Bookkeeping,
-                                        Scope.CostCenter,
-                                        Scope.Currency,
-                                        Scope.Customer,
-                                        Scope.Invoice,
-                                        //Scope.Order,
-                                        Scope.Payment,
-                                    };
+                    var scopes = new List<Scope>
+                    {
+                        Scope.Bookkeeping,
+                        Scope.CostCenter,
+                        Scope.Currency,
+                        Scope.Customer,
+                        Scope.Invoice,
+                        Scope.Payment,
+                    };
                     var uri = authWorkflow.BuildAuthUri("lbiXtlx8rx0I", scopes, office.Name, redirectUrl);
                     // System.Diagnostics.Process.Start(uri.AbsoluteUri);
                     return Ok(new { status = "FORTNOX_PAIRING_IN_PROGRESS", action = "alert", message = "Fortnox-koppling pågår, prova igen :)", redirecturl = uri.AbsoluteUri });
@@ -812,6 +819,30 @@ namespace Backend.Controllers
                 string Info = "";
                 var authorization = new StandardAuth(office.FortnoxAccessToken);
                 var fortnoxClient = new FortnoxClient(authorization);
+
+                try
+                {
+                    var paymentSync = await _fortnoxInvoicePaymentSyncService.SyncAsync(
+                        office.Id,
+                        office.FortnoxAccessToken,
+                        cancellationToken);
+                    if (!paymentSync.Skipped)
+                    {
+                        // Info +=
+                        //     $"Fortnox-betalningar synkroniserade: {paymentSync.InsertedPayments} nya och "
+                        //     + $"{paymentSync.UpdatedPayments} uppdaterade";
+                    }
+
+                    // foreach (var warning in paymentSync.Warnings)
+                    // {
+                    //     Info += (!string.IsNullOrWhiteSpace(Info) ? ". " : "") + warning;
+                    // }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Info += "Fakturan exporterades, men Fortnox-betalningar kunde inte synkroniseras: " + ex.Message;
+                }
+
                 //
                 // Om kund ej finns i Fortnox så skapa denna
                 //
@@ -1016,12 +1047,12 @@ namespace Backend.Controllers
                 }
 
                 invoice.AccountedDate = DateTime.Today;
-                _context.SaveChanges();
+                await _context.SaveChangesAsync(cancellationToken);
                 string Result = "Ok" + (string.IsNullOrWhiteSpace(Info) ? "" : ". " + Info);
 
                 return Ok(new { message = Result });
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 return BadRequest(new { message = "Fel", error = ex.Message });
             }

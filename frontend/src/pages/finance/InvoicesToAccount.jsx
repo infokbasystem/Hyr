@@ -140,7 +140,9 @@ const InvoicesToAccount = () => {
         }
         setProcessing(false);
 
-        if (currentPage < totalPages) {
+        const bookedAllInvoicesOnPage = batchInvoices.length === invoices.length;
+
+        if (currentPage < totalPages && bookedAllInvoicesOnPage) {
             setBookingPrompt({
                 currentPage,
                 nextPage: currentPage + 1,

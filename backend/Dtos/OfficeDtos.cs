@@ -27,6 +27,25 @@ public class OfficeTinkSettingsUpdateDto
     public string? TinkPaymentScheme { get; set; }
 }
 
+public class OfficeFortnoxSettingsDto
+{
+    public bool UseFortnox { get; set; }
+    public bool HasAccessToken { get; set; }
+    public bool HasRefreshToken { get; set; }
+    public DateTime? FortnoxTokenCreated { get; set; }
+    public int? FortnoxTokenExpiresInSeconds { get; set; }
+}
+
+public class OfficeFortnoxSettingsUpdateDto
+{
+    public bool UseFortnox { get; set; }
+}
+
+public class OfficeFortnoxStartPairingDto
+{
+    public string? RedirectUrl { get; set; }
+}
+
 public class OfficeCompanyInfoDto
 {
     public int Id { get; set; }

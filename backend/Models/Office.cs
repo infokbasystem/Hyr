@@ -34,6 +34,7 @@ namespace Backend.Models
         public string Iban { get; set; } = string.Empty;
         public string CrediflowId { get; set; } = string.Empty;
         public string GlnNr { get; set; } = string.Empty;
+        public bool UseFortnox { get; set; }
         public string FortnoxAccessToken { get; set; } = string.Empty;
         public string FortnoxRefreshToken { get; set; } = string.Empty;
         public DateTime? FortnoxTokenCreated { get; set; }
@@ -64,6 +65,7 @@ namespace Backend.Models
         public virtual ICollection<InvoiceRow> InvoiceRows { get; set; } = new List<InvoiceRow>();
         public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
         public virtual ICollection<TinkPaymentRequest> TinkPaymentRequests { get; set; } = new List<TinkPaymentRequest>();
+        public virtual ICollection<IntegrationSchedule> IntegrationSchedules { get; set; } = new List<IntegrationSchedule>();
         public virtual ICollection<Account> Accounts { get; set; } = new List<Account>();
         public virtual ICollection<Article> Articles { get; set; } = new List<Article>();
         public virtual ICollection<VatRate> VatRates { get; set; } = new List<VatRate>();

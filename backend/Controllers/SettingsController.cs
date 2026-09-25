@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Backend.Data;
 using Backend.Models;
 using Backend.Filters;
+using Backend.Services;
+using Backend.Utils.Fortnox;
 
 using Fortnox.SDK;
 using Fortnox.SDK.Auth;
@@ -21,10 +23,12 @@ namespace Backend.Controllers
     public class SettingsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserService _currentUserService;
 
-        public SettingsController(ApplicationDbContext context)
+        public SettingsController(ApplicationDbContext context, ICurrentUserService currentUserService)
         {
             _context = context;
+            _currentUserService = currentUserService;
         }
 
 
@@ -42,22 +46,26 @@ namespace Backend.Controllers
                 {
                     return BadRequest(new { message = "Missing code or state" });
                 }
-                var office = _context.Offices.Find(3);
+                var currentUser = await _currentUserService.GetCurrentUserAsync(User);
+                if (currentUser?.OfficeId == null)
+                {
+                    return BadRequest("No Fortnox settings found");
+                }
+                var office = await _context.Offices.FirstOrDefaultAsync(o => o.Id == currentUser.OfficeId.Value);
                 if (office == null)
                 {
                     return BadRequest("No Fortnox settings found");
                 }
-                var clientId = "lbiXtlx8rx0I";
-                var clientSecret = "fX3OelQ883";
                 var fortnoxAuthClient = new Fortnox.SDK.FortnoxAuthClient();
                 var authWorkflow = fortnoxAuthClient.StandardAuthWorkflow;
-                var token = await authWorkflow.GetTokenAsync(request.Code, clientId, clientSecret, request.RedirectUrl);
+                var token = await authWorkflow.GetTokenAsync(request.Code, FortnoxAppCredentials.ClientId, FortnoxAppCredentials.ClientSecret, request.RedirectUrl);
 
                 office.FortnoxAccessToken = token.AccessToken;
                 office.FortnoxRefreshToken = token.RefreshToken;
                 office.FortnoxTokenCreated = DateTime.UtcNow;
                 office.FortnoxTokenExpiresInSeconds = token.ExpiresIn;
-                _context.SaveChanges();
+                office.UseFortnox = true;
+                await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
