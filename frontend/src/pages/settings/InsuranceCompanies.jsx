@@ -534,7 +534,7 @@ export default function InsuranceCompanies() {
                         : 'text-gray-800 hover:bg-lime-100'
                     }`}
                   >
-                    <div className="grid grid-cols-[92px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+                    <div className="grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-2">
                       <span>{entry.id ?? '-'}</span>
                       <span className="truncate">{entry.name || '-'}</span>
                       <span className="truncate">{entry.organizationNr || '-'}</span>

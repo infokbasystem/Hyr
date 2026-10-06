@@ -7,7 +7,14 @@
     "AccToSql_ImportInvoices": {
       "commandName": "Project",
       "commandLineArgs": "ImportInvoices 3 \"C:\\Arkiv\\Support\\MrLift\\HL_data.mdb\" \"Server=192.168.1.4;Database=HyrFlex;User Id=sa;Password=Losenord101;TrustServerCertificate=True;\""
-
+    },
+    "Hyr - Check connection": {
+      "commandName": "Project",
+      "commandLineArgs": "\"HYR\" \"CheckConnectionAndReadCompany\" 1 \"X:\\Support\\Xcentus\\HL_data.mdb\" \"Server=192.168.1.253;Database=HyrFlex;User Id=sa;Password=Losenord101;TrustServerCertificate=True;\""
+    },
+    "Hyr - Import": {
+      "commandName": "Project",
+      "commandLineArgs": "\"HYR\" \"ImportAllTables\" 1 \"X:\\Support\\Xcentus\\HL_data.mdb\" \"Server=10.4.0.209;Database=HyrFlex;User Id=sa;Password=Losenord101;TrustServerCertificate=True;\""
     }
   }
 }

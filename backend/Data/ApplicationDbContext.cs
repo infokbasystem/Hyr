@@ -145,6 +145,7 @@ namespace Backend.Data
                 entity.Property(e => e.EfakturaVatHomeTown).HasMaxLength(200);
                 entity.Property(e => e.EfakturaVatRegistration).HasMaxLength(200);
                 entity.Property(e => e.CreditLimit).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.DiscountPercent).HasColumnType("decimal(5,2)");
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.Customers)
                     .HasForeignKey(e => e.OfficeId)

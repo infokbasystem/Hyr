@@ -34,6 +34,7 @@ const EMPTY_CUSTOMER = {
     isCompany: false,
     nrOfInvoiceDays: null,
     creditLimit: null,
+    discountPercent: null,
     pgNr: '',
     bgNr: '',
     keyFortnox: '',
@@ -214,6 +215,11 @@ export default function Customer() {
 
         if (!customer.customerName?.trim()) {
             setMessages([{ type: 'error', text: 'Namn måste anges.' }])
+            return
+        }
+
+        if (customer.discountPercent != null && (customer.discountPercent < 0 || customer.discountPercent > 100)) {
+            setMessages([{ type: 'error', text: 'Rabatt måste vara mellan 0 och 100 %.' }])
             return
         }
 
@@ -560,6 +566,16 @@ export default function Customer() {
                                     type="number"
                                     value={customer.creditLimit}
                                     onChange={(value) => handleChange('creditLimit', value)}
+                                    labelWidth="w-28"
+                                    margintop="0"
+                                    autoComplete="off"
+                                />
+                                <LabeledInput
+                                    name="discountPercent"
+                                    label="Rabatt (%)"
+                                    type="number"
+                                    value={customer.discountPercent}
+                                    onChange={(value) => handleChange('discountPercent', value)}
                                     labelWidth="w-28"
                                     margintop="0"
                                     autoComplete="off"

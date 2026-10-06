@@ -33,6 +33,8 @@ export default function useVehicleTimelineDrag({
     setBookings,
     statusColors,
     totalDays,
+    minimumDay = -totalDays,
+    maximumDay = totalDays,
     visibleCars,
 }) {
     const [dragging, setDragging] = useState(null);
@@ -128,8 +130,8 @@ export default function useVehicleTimelineDrag({
                 const duration = drag.origEnd - drag.origStart;
                 finalStart = clamp(
                     geometrySnapshot.snapDay(drag.origStart + dayDelta),
-                    -totalDays,
-                    totalDays - duration
+                    Math.min(minimumDay, drag.origStart),
+                    Math.max(maximumDay, drag.origEnd) - duration
                 );
                 finalEnd = finalStart + duration;
             } else if (drag.type === 'resize-right') {
@@ -137,12 +139,12 @@ export default function useVehicleTimelineDrag({
                 finalEnd = clamp(
                     geometrySnapshot.snapDay(drag.origEnd + dayDelta),
                     drag.origStart + minimumDuration,
-                    totalDays
+                    Math.max(maximumDay, drag.origEnd)
                 );
             } else {
                 finalStart = clamp(
                     geometrySnapshot.snapDay(drag.origStart + dayDelta),
-                    0,
+                    totalDays === undefined ? Math.min(minimumDay, drag.origStart) : 0,
                     drag.origEnd - minimumDuration
                 );
                 finalEnd = drag.origEnd;
@@ -211,7 +213,7 @@ export default function useVehicleTimelineDrag({
         };
         window.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
-    }, [cancelAnimationFrame, geometry, gridRef, headerHeight, layout, minimumDuration, onCommit, setBookings, totalDays, visibleCars]);
+    }, [cancelAnimationFrame, geometry, gridRef, headerHeight, layout, maximumDay, minimumDay, minimumDuration, onCommit, setBookings, totalDays, visibleCars]);
 
     const onBookingMouseDown = useCallback((event, booking, type) => {
         event.stopPropagation();

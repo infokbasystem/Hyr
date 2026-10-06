@@ -1,0 +1,228 @@
+.reports-page {
+    display: grid;
+    width: 100%;
+    min-height: 100%;
+    place-items: center;
+    padding: 48px 28px;
+}
+
+.reports-content {
+    display: grid;
+    width: min(100%, 1080px);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+    align-items: center;
+    gap: clamp(32px, 7vw, 96px);
+}
+
+.reports-copy {
+    max-width: 480px;
+}
+
+.reports-eyebrow {
+    margin: 0 0 14px;
+    color: #b45309;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.reports-copy h1 {
+    margin: 0;
+    color: #183c36;
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-weight: 650;
+    line-height: 1.08;
+}
+
+.reports-description {
+    max-width: 410px;
+    margin: 20px 0 0;
+    color: #52635e;
+    font-size: 1rem;
+    line-height: 1.65;
+}
+
+.reports-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 28px;
+    color: #36564f;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.reports-status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #e69b27;
+    box-shadow: 0 0 0 4px rgb(230 155 39 / 16%);
+    animation: reports-pulse 1.8s ease-in-out infinite;
+}
+
+.reports-scene {
+    position: relative;
+    width: 100%;
+    max-width: 440px;
+    aspect-ratio: 1.12;
+    justify-self: center;
+    overflow: hidden;
+    border-bottom: 2px solid #36564f;
+}
+
+.reports-sun {
+    position: absolute;
+    top: 11%;
+    right: 14%;
+    width: 68px;
+    aspect-ratio: 1;
+    border: 1px solid rgb(180 83 9 / 24%);
+    border-radius: 50%;
+    background: rgb(245 190 90 / 25%);
+}
+
+.reports-scaffold {
+    position: absolute;
+    bottom: 16%;
+    display: flex;
+    width: 55%;
+    height: 56%;
+    justify-content: space-between;
+    border-top: 5px solid #49756b;
+    border-bottom: 5px solid #49756b;
+}
+
+.reports-scaffold::before,
+.reports-scaffold::after,
+.reports-scaffold span {
+    position: absolute;
+    top: 0;
+    width: 5px;
+    height: 100%;
+    background: #49756b;
+    content: "";
+}
+
+.reports-scaffold::before {
+    left: 0;
+}
+
+.reports-scaffold::after {
+    right: 0;
+}
+
+.reports-scaffold span:nth-child(1) {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.reports-scaffold span:nth-child(2),
+.reports-scaffold span:nth-child(3) {
+    top: 30%;
+    width: 100%;
+    height: 4px;
+}
+
+.reports-scaffold span:nth-child(3) {
+    top: 67%;
+}
+
+.reports-scaffold-back {
+    right: 9%;
+    opacity: 0.36;
+    transform: translateY(-14px) scale(0.9);
+}
+
+.reports-scaffold-front {
+    left: 8%;
+    animation: reports-build 3.2s ease-in-out infinite alternate;
+}
+
+.reports-platform {
+    position: absolute;
+    z-index: 2;
+    right: 8%;
+    bottom: 43%;
+    width: 62%;
+    height: 9px;
+    background: #d88a23;
+    transform: rotate(-5deg);
+    transform-origin: right;
+}
+
+.reports-hardhat {
+    position: absolute;
+    z-index: 3;
+    right: 26%;
+    bottom: 35%;
+    display: grid;
+    width: 104px;
+    height: 94px;
+    place-items: center;
+    color: #a54b1d;
+    animation: reports-bob 2.4s ease-in-out infinite;
+}
+
+.reports-ground {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 16%;
+    background: linear-gradient(180deg, transparent, rgb(46 89 77 / 8%));
+}
+
+.reports-tape {
+    position: absolute;
+    right: -6%;
+    bottom: 5%;
+    left: -6%;
+    height: 11px;
+    background: repeating-linear-gradient(135deg, #d88a23 0 14px, #f3d18b 14px 28px);
+    transform: rotate(-2deg);
+    animation: reports-tape-shift 3s linear infinite;
+}
+
+@keyframes reports-bob {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-12px) rotate(3deg); }
+}
+
+@keyframes reports-build {
+    from { transform: translateY(0); }
+    to { transform: translateY(-5px); }
+}
+
+@keyframes reports-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgb(230 155 39 / 16%); }
+    50% { box-shadow: 0 0 0 7px rgb(230 155 39 / 8%); }
+}
+
+@keyframes reports-tape-shift {
+    to { background-position: 28px 0; }
+}
+
+@media (max-width: 700px) {
+    .reports-page {
+        padding: 36px 22px;
+    }
+
+    .reports-content {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+
+    .reports-scene {
+        width: min(100%, 370px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reports-status-dot,
+    .reports-scaffold-front,
+    .reports-hardhat,
+    .reports-tape {
+        animation: none;
+    }
+}

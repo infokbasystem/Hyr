@@ -51,7 +51,7 @@ export async function getPlanningReservations({ vehicleIds = [], from = '', to =
 
   const queryString = query.toString()
   const path = queryString ? `/planning/reservations?${queryString}` : '/planning/reservations'
-  const data = await requestJson(path)
+  const data = await getSharedRequest(`planning-reservations:${queryString}`, () => requestJson(path))
   const rows = Array.isArray(data) ? data : []
 
   return rows.map((reservation) => ({

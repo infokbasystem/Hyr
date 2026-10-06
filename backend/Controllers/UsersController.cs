@@ -38,7 +38,9 @@ namespace Backend.Controllers
                 return Forbid();
             }
 
-            var query = _context.Users.AsNoTracking();
+            var query = _context.Users
+                .AsNoTracking()
+                .Where(user => user.OfficeId == currentUser!.OfficeId);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -72,7 +74,7 @@ namespace Backend.Controllers
 
             var user = await _context.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(item => item.Id == id);
+                .FirstOrDefaultAsync(item => item.Id == id && item.OfficeId == currentUser!.OfficeId);
 
             if (user == null)
             {
@@ -104,6 +106,7 @@ namespace Backend.Controllers
 
             var user = new User
             {
+                OfficeId = currentUser!.OfficeId,
                 Name = request.Name.Trim(),
                 Email = normalizedEmail,
                 PasswordHash = _passwordHasher.HashPassword(request.Password),
@@ -130,7 +133,7 @@ namespace Backend.Controllers
                 return Forbid();
             }
 
-            var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == id);
+            var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == id && item.OfficeId == currentUser!.OfficeId);
             if (user == null)
             {
                 return NotFound(new { message = "Användaren hittades inte." });
@@ -166,7 +169,7 @@ namespace Backend.Controllers
                 return BadRequest(new { message = "Du kan inte radera ditt eget konto." });
             }
 
-            var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == id);
+            var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == id && item.OfficeId == currentUser!.OfficeId);
             if (user == null)
             {
                 return NotFound(new { message = "Användaren hittades inte." });
@@ -220,7 +223,7 @@ namespace Backend.Controllers
                 return Forbid();
             }
 
-            var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == id);
+            var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == id && item.OfficeId == currentUser!.OfficeId);
             if (user == null)
             {
                 return NotFound(new { message = "Användaren hittades inte." });
@@ -234,7 +237,7 @@ namespace Backend.Controllers
 
         private static bool IsAdmin(User? user)
         {
-            return user != null && string.Equals(user.Role, AdminRole, StringComparison.OrdinalIgnoreCase);
+            return user?.OfficeId != null && string.Equals(user.Role, AdminRole, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string NormalizeRole(string role)

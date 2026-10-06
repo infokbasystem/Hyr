@@ -54,6 +54,8 @@ import Accounts from './pages/settings/Accounts';
 import Users from './pages/settings/Users';
 import Pricing from './pages/settings/Pricing';
 import TinkPaymentDone from './pages/pay/TinkPaymentDone';
+import Reports from './pages/Reports';
+import Management from './pages/Management';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -62,6 +64,8 @@ const router = createBrowserRouter(
       </Route> */}
       <Route path="/" element={< MainLayout />}>
         <Route index element={<ProtectedRoute>< Overview /></ProtectedRoute>} />
+        <Route path="reports" element={<ProtectedRoute>< Reports /></ProtectedRoute>} />
+        <Route path="management" element={<ProtectedRoute>< Management /></ProtectedRoute>} />
       </Route>
       <Route path="operations" element={< OperationsLayout />}>
         <Route index element={<ProtectedRoute>< OperationsOverview /></ProtectedRoute>} />

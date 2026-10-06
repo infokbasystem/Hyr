@@ -212,6 +212,7 @@ namespace Backend.Controllers
                 NrOfInvoiceDays = customer.NrOfInvoiceDays,
                 Note = customer.Note,
                 CreditLimit = customer.CreditLimit,
+                DiscountPercent = customer.DiscountPercent,
                 ImportId = customer.ImportId,
                 ImportSource = customer.ImportSource,
                 KeySpcs = customer.KeySpcs,
@@ -259,6 +260,7 @@ namespace Backend.Controllers
             target.NrOfInvoiceDays = source.NrOfInvoiceDays;
             target.Note = source.Note ?? string.Empty;
             target.CreditLimit = source.CreditLimit;
+            target.DiscountPercent = source.DiscountPercent;
             target.ImportId = source.ImportId;
             target.ImportSource = source.ImportSource ?? string.Empty;
             target.KeySpcs = source.KeySpcs ?? string.Empty;

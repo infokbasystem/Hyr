@@ -122,6 +122,7 @@ namespace Backend.Controllers
             var query = _context.Items
                 .AsNoTracking()
                 .Where(item => item.OfficeId == user.OfficeId)
+                .Where(item => item.ItemTypeCode.ToUpper() != VehicleItemTypeCode)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchTerm))

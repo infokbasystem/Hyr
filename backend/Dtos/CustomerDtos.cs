@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Backend.Dtos;
 
 public class CustomerDto
@@ -18,6 +20,7 @@ public class CustomerDto
     public int? NrOfInvoiceDays { get; set; }
     public string Note { get; set; } = string.Empty;
     public decimal? CreditLimit { get; set; }
+    public decimal? DiscountPercent { get; set; }
     public int? ImportId { get; set; }
     public string ImportSource { get; set; } = string.Empty;
     public string KeySpcs { get; set; } = string.Empty;
@@ -38,7 +41,7 @@ public class CustomerDto
     public string EfakturaVatHomeTown { get; set; } = string.Empty;
     public string EfakturaVatRegistration { get; set; } = string.Empty;
     public int? CrediflowPartyId { get; set; }
-    public int? GLNnr { get; set; }
+    public long? GLNnr { get; set; }
     public int? DefaultPriceListId { get; set; }
 
     // Audit / tracking fields
@@ -64,6 +67,8 @@ public class CustomerUpsertDto
     public int? NrOfInvoiceDays { get; set; }
     public string Note { get; set; } = string.Empty;
     public decimal? CreditLimit { get; set; }
+    [Range(typeof(decimal), "0", "100")]
+    public decimal? DiscountPercent { get; set; }
     public int? ImportId { get; set; }
     public string ImportSource { get; set; } = string.Empty;
     public string KeySpcs { get; set; } = string.Empty;
@@ -84,6 +89,6 @@ public class CustomerUpsertDto
     public string EfakturaVatHomeTown { get; set; } = string.Empty;
     public string EfakturaVatRegistration { get; set; } = string.Empty;
     public int? CrediflowPartyId { get; set; }
-    public int? GLNnr { get; set; }
+    public long? GLNnr { get; set; }
     public int? DefaultPriceListId { get; set; }
 }
