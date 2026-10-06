@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPlanningRangeLoader, mergePlanningReservations } from './useProgressivePlanningReservations.js';
 
-function createHarness(fetchRange = async () => []) {
+function createHarness(fetchRange = async () => [], busyKinds = null) {
     const requests = [];
     const publications = [];
     const errors = [];
@@ -12,7 +12,7 @@ function createHarness(fetchRange = async () => []) {
         initialRange: { startDay: -16, endDay: 47 },
         fetchRange: range => { requests.push(range); return fetchRange(range); },
         publish: (range, rows, replace) => publications.push({ range, rows, replace }),
-        isBusy: () => busy,
+        isBusy: kind => busy && (!busyKinds || busyKinds.includes(kind)),
         getRevision: () => revision,
         onError: error => errors.push(error.message),
         onLoading: () => {},
@@ -135,6 +135,22 @@ test('a new initial load survives a revision change from the old view', async ()
     resolveRequest([]);
     await request;
     assert.equal(harness.publications.length, 1);
+});
+
+test('extensions publish during gestures that only block replacing refreshes', async () => {
+    const harness = createHarness(async () => [], ['replace']);
+    await harness.loader.start();
+    harness.setBusy(true);
+    await harness.loader.extend(3, 31, 1);
+    assert.equal(harness.publications.length, 2);
+    assert.equal(harness.publications.at(-1).replace, false);
+    harness.loader.refresh();
+    assert.equal(harness.requests.length, 2);
+    harness.setBusy(false);
+    harness.loader.flush();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(harness.requests.length, 3);
 });
 
 test('a failed resize coverage request does not trigger an automatic retry loop', async () => {

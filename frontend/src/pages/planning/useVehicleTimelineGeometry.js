@@ -55,6 +55,55 @@ export function getTimelineRenderWindow(geometry, scrollX, previousWindow = null
     };
 }
 
+export function getAutoScrollDelta(position, minimum, maximum, edge = 48, maxSpeed = 20) {
+    const zone = Math.min(edge, Math.max(0, (maximum - minimum) / 2));
+    if (zone <= 0) return 0;
+    if (position < minimum + zone) {
+        const depth = Math.min(1, (minimum + zone - position) / zone);
+        return -Math.max(1, Math.round(depth * maxSpeed));
+    }
+    if (position > maximum - zone) {
+        const depth = Math.min(1, (position - (maximum - zone)) / zone);
+        return Math.max(1, Math.round(depth * maxSpeed));
+    }
+    return 0;
+}
+
+function findRowIndexAt(offsets, y) {
+    let low = 0;
+    let high = offsets.length - 2;
+    while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (offsets[middle] <= y) low = middle;
+        else high = middle - 1;
+    }
+    return low;
+}
+
+// offsets[i] is the top of row i relative to the first row; offsets[rowCount] is the total height.
+export function getRowRenderWindow(offsets, viewTop, viewHeight, previousWindow = null) {
+    const rowCount = offsets.length - 1;
+    if (rowCount <= 0) return { startIndex: 0, endIndex: 0 };
+
+    const totalHeight = offsets[rowCount];
+    const height = Math.max(1, viewHeight);
+    const guard = height / 2;
+    const neededTop = Math.max(0, viewTop - guard);
+    const neededBottom = Math.min(totalHeight, viewTop + height + guard);
+
+    if (previousWindow
+        && previousWindow.endIndex <= rowCount
+        && offsets[previousWindow.startIndex] <= neededTop
+        && offsets[previousWindow.endIndex] >= neededBottom) {
+        return previousWindow;
+    }
+
+    return {
+        startIndex: findRowIndexAt(offsets, Math.max(0, viewTop - height)),
+        endIndex: findRowIndexAt(offsets, Math.min(totalHeight - 1, viewTop + height * 2)) + 1,
+    };
+}
+
 function resolveMinimumDayWidth(daysVisible) {
     if (daysVisible <= 3) return 120;
     if (daysVisible <= 7) return 100;

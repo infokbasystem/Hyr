@@ -219,7 +219,8 @@ namespace Branches.HYR
                     var invoiceFee = reader.IsDBNull("FaktAvg") ? false : Convert.ToBoolean(reader["FaktAvg"]);
                     var note = reader.IsDBNull("KundNot") ? string.Empty : reader["KundNot"]?.ToString()?.Trim() ?? string.Empty;
                     var creditLimit = reader.IsDBNull("Kreditlimit") ? (decimal?)null : Convert.ToDecimal(reader["Kreditlimit"]);
-                    var orgNr = reader.IsDBNull("Org_Nr2") ? string.Empty : reader["Org_Nr2"]?.ToString()?.Trim() ?? string.Empty;
+                    var orgNrRaw = reader.IsDBNull("Org_Nr2") ? string.Empty : reader["Org_Nr2"]?.ToString()?.Trim() ?? string.Empty;
+                    var orgNr = orgNrRaw == "0" ? string.Empty : orgNrRaw;
                     var vatRegistered = reader.IsDBNull("Momspliktig") ? false : Convert.ToBoolean(reader["Momspliktig"]);
                     var priceListVersionId = SafeToInt32(
                         string.IsNullOrEmpty(priceListVersionColumn) || reader.IsDBNull(priceListVersionColumn) ? null : reader[priceListVersionColumn],

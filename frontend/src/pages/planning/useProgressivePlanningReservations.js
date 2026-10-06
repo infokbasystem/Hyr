@@ -19,8 +19,8 @@ export function createPlanningRangeLoader({ initialRange, fetchRange, publish, i
     let failedRequest = null;
 
     const flush = () => {
-        if (!active || isBusy()) return;
-        if (staged) {
+        if (!active) return;
+        if (staged && !isBusy(staged.replace ? 'replace' : 'extend')) {
             const result = staged;
             staged = null;
             if (result.initial || !result.replace || result.revision === getRevision()) {
@@ -29,7 +29,7 @@ export function createPlanningRangeLoader({ initialRange, fetchRange, publish, i
                 ready = true;
             }
         }
-        if (refreshQueued && ready && !inFlight) {
+        if (refreshQueued && ready && !inFlight && !staged && !isBusy('replace')) {
             refreshQueued = false;
             void load(range, true, range);
         }
@@ -82,7 +82,7 @@ export function createPlanningRangeLoader({ initialRange, fetchRange, publish, i
             }
         },
         refresh() {
-            if (!ready || inFlight || staged || isBusy()) {
+            if (!ready || inFlight || staged || isBusy('replace')) {
                 refreshQueued = true;
                 return;
             }

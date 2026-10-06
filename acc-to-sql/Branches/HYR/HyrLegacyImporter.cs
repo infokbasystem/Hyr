@@ -15,9 +15,9 @@ public sealed class HyrLegacyImporter
             //HyrPricelistVersionImporter.ImportPriceListVersions(officeId, accessConnectionString, sqlServerConnectionString);
             //Console.WriteLine("PriceLists import completed.");
 
-            //Console.WriteLine("Starting import of Customers...");
-            //HyrCustomerImporter.ImportCustomers(officeId, accessConnectionString, sqlServerConnectionString);
-            //Console.WriteLine("Customers import completed.");
+            Console.WriteLine("Starting import of Customers...");
+            HyrCustomerImporter.ImportCustomers(officeId, accessConnectionString, sqlServerConnectionString);
+            Console.WriteLine("Customers import completed.");
 
             //Console.WriteLine("Starting import of InsuranceCompanies...");
             //HyrInsuranceCompanyImporter.ImportInsuranceCompanies(officeId, accessConnectionString, sqlServerConnectionString);

@@ -1,23 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { getAutoScrollDelta } from './useVehicleTimelineGeometry.js';
 
 const DRAG_THRESHOLD = 5;
-const DROP_TARGET_PROBE_PX = 10;
 
 function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
 }
 
-function getRowIndex(clientY, gridTop, layout, headerHeight) {
-    const relativeY = clientY - gridTop - headerHeight;
-    if (relativeY < 0) return 0;
-
-    let accumulatedY = 0;
-    for (let index = 0; index < layout.length; index += 1) {
-        accumulatedY += layout[index].rowH;
-        if (relativeY < accumulatedY) return index;
-    }
-
-    return layout.length - 1;
+function findCarIdAt(x, y) {
+    const row = document.elementFromPoint(x, y)?.closest('[data-timeline-car-id]');
+    return row ? Number(row.dataset.timelineCarId) : null;
 }
 
 export default function useVehicleTimelineDrag({
@@ -26,43 +18,38 @@ export default function useVehicleTimelineDrag({
     gridRef,
     headerHeight,
     labelWidth,
-    layout,
     minimumDuration,
     onCommit,
     pendingScrollXRef,
+    scheduleScrollXRef,
+    formatRange,
     setBookings,
     statusColors,
-    totalDays,
-    minimumDay = -totalDays,
-    maximumDay = totalDays,
-    visibleCars,
+    minimumDay,
+    maximumDay,
 }) {
     const [dragging, setDragging] = useState(null);
     const [ghost, setGhost] = useState(null);
     const pendingCleanupRef = useRef(null);
     const activeCleanupRef = useRef(null);
-    const dragPointerRef = useRef({ x: 0, y: 0 });
-    const dragRafIdRef = useRef(null);
     const ghostRef = useRef(null);
     const ghostTextRef = useRef(null);
     const suppressReservationClickRef = useRef(false);
+    const boundsRef = useRef({ minimumDay, maximumDay });
 
-    const cancelAnimationFrame = useCallback(() => {
-        if (dragRafIdRef.current !== null) {
-            window.cancelAnimationFrame(dragRafIdRef.current);
-            dragRafIdRef.current = null;
-        }
-    }, []);
+    useLayoutEffect(() => {
+        boundsRef.current = { minimumDay, maximumDay };
+    }, [maximumDay, minimumDay]);
 
     const beginActiveDrag = useCallback((drag, pointer) => {
         const geometrySnapshot = geometry;
-        const layoutSnapshot = layout;
-        const visibleCarsSnapshot = visibleCars;
-        let lastDropTargetProbeY = pointer.y;
-        let lastSnappedDayDelta = null;
-        let targetCarIndex = drag.origCarIdx;
+        let pointerX = pointer.x;
+        let pointerY = pointer.y;
+        let lastDayDelta = null;
+        let targetCarId = drag.originalBooking.carId;
         let finalStart = drag.origStart;
         let finalEnd = drag.origEnd;
+        let frameId = null;
 
         setDragging(drag);
         suppressReservationClickRef.current = true;
@@ -84,122 +71,128 @@ export default function useVehicleTimelineDrag({
             if (ghostRef.current) {
                 ghostRef.current.style.width = `${Math.max(drag.width, 8)}px`;
             }
+            if (ghostTextRef.current) {
+                ghostTextRef.current.textContent = formatRange(drag.origStart, drag.origEnd);
+            }
         }
 
-        const handleMove = (event) => {
-            const dayDelta = geometrySnapshot.dayDeltaFromPixels(event.clientX - drag.startX);
+        const update = () => {
+            const scrollDelta = pendingScrollXRef.current - drag.startScrollX;
+            const dayDelta = geometrySnapshot.dayDeltaFromPixels(pointerX - drag.startX + scrollDelta);
 
             if (drag.type === 'move') {
-                dragPointerRef.current = { x: event.clientX, y: event.clientY };
-                if (dragRafIdRef.current === null) {
-                    dragRafIdRef.current = window.requestAnimationFrame(() => {
-                        dragRafIdRef.current = null;
-                        const currentPointer = dragPointerRef.current;
-                        if (ghostRef.current) {
-                            const ghostX = currentPointer.x - (drag.clickOffsetX ?? 0);
-                            const ghostY = currentPointer.y - (drag.clickOffsetY ?? 0);
-                            ghostRef.current.style.transform = `translate3d(${ghostX}px, ${ghostY}px, 0)`;
-                        }
-                        if (ghostTextRef.current) {
-                            const clampedX = clamp(currentPointer.x, 170, window.innerWidth - 170);
-                            const textY = Math.max(8, currentPointer.y - 34);
-                            ghostTextRef.current.style.transform = `translate3d(${clampedX}px, ${textY}px, 0) translateX(-50%)`;
-                        }
-                    });
+                if (ghostRef.current) {
+                    ghostRef.current.style.transform = `translate3d(${pointerX - drag.clickOffsetX}px, ${pointerY - drag.clickOffsetY}px, 0)`;
                 }
-
-                const gridElement = gridRef.current;
-                if (gridElement && Math.abs(event.clientY - lastDropTargetProbeY) >= DROP_TARGET_PROBE_PX) {
-                    lastDropTargetProbeY = event.clientY;
-                    const nextTarget = getRowIndex(
-                        event.clientY,
-                        gridElement.getBoundingClientRect().top,
-                        layoutSnapshot,
-                        headerHeight
-                    );
-                    if (nextTarget !== targetCarIndex) {
-                        targetCarIndex = nextTarget;
-                    }
+                if (ghostTextRef.current) {
+                    const textX = clamp(pointerX, 170, window.innerWidth - 170);
+                    ghostTextRef.current.style.transform = `translate3d(${textX}px, ${Math.max(8, pointerY - 34)}px, 0) translateX(-50%)`;
                 }
+                const carId = findCarIdAt(pointerX, pointerY);
+                if (carId !== null) targetCarId = carId;
             }
 
-            if (dayDelta === lastSnappedDayDelta) return;
-            lastSnappedDayDelta = dayDelta;
+            if (dayDelta === lastDayDelta) return;
+            lastDayDelta = dayDelta;
+            const bounds = boundsRef.current;
 
             if (drag.type === 'move') {
                 const duration = drag.origEnd - drag.origStart;
                 finalStart = clamp(
                     geometrySnapshot.snapDay(drag.origStart + dayDelta),
-                    Math.min(minimumDay, drag.origStart),
-                    Math.max(maximumDay, drag.origEnd) - duration
+                    Math.min(bounds.minimumDay, drag.origStart),
+                    Math.max(bounds.maximumDay, drag.origEnd) - duration
                 );
                 finalEnd = finalStart + duration;
-            } else if (drag.type === 'resize-right') {
-                finalStart = drag.origStart;
+                if (ghostTextRef.current) ghostTextRef.current.textContent = formatRange(finalStart, finalEnd);
+                return;
+            }
+
+            if (drag.type === 'resize-right') {
                 finalEnd = clamp(
                     geometrySnapshot.snapDay(drag.origEnd + dayDelta),
                     drag.origStart + minimumDuration,
-                    Math.max(maximumDay, drag.origEnd)
+                    Math.max(bounds.maximumDay, drag.origEnd)
                 );
             } else {
                 finalStart = clamp(
                     geometrySnapshot.snapDay(drag.origStart + dayDelta),
-                    totalDays === undefined ? Math.min(minimumDay, drag.origStart) : 0,
+                    Math.min(bounds.minimumDay, drag.origStart),
                     drag.origEnd - minimumDuration
                 );
-                finalEnd = drag.origEnd;
             }
 
-            setBookings((currentBookings) => currentBookings.map((booking) => {
-                if (booking.id !== drag.bookingId) return booking;
-
-                if (drag.type === 'move') {
-                    return booking.start === finalStart && booking.end === finalEnd
-                        ? booking
-                        : { ...booking, start: finalStart, end: finalEnd };
-                }
-
-                if (drag.type === 'resize-right') {
-                    return booking.end === finalEnd ? booking : { ...booking, end: finalEnd };
-                }
-
-                return booking.start === finalStart ? booking : { ...booking, start: finalStart };
-            }));
+            setBookings((currentBookings) => currentBookings.map((booking) => (
+                booking.id === drag.bookingId && (booking.start !== finalStart || booking.end !== finalEnd)
+                    ? { ...booking, start: finalStart, end: finalEnd }
+                    : booking
+            )));
         };
 
-        const handleUp = () => {
+        const autoScroll = () => {
+            const grid = gridRef.current;
+            if (!grid) return false;
+            const rect = grid.getBoundingClientRect();
+            const insideRows = pointerY >= rect.top && pointerY <= rect.bottom;
+            const insideColumns = pointerX >= rect.left && pointerX <= rect.right;
+            const dx = insideRows ? getAutoScrollDelta(pointerX, rect.left + labelWidth, rect.right) : 0;
+            const dy = drag.type === 'move' && insideColumns
+                ? getAutoScrollDelta(pointerY, rect.top + headerHeight, rect.bottom)
+                : 0;
+            if (dx !== 0) scheduleScrollXRef.current?.(previous => previous + dx);
+            if (dy !== 0) grid.scrollTop += dy;
+            return dx !== 0 || dy !== 0;
+        };
+
+        const tick = () => {
+            frameId = null;
+            const isScrolling = autoScroll();
+            update();
+            if (isScrolling) frameId = window.requestAnimationFrame(tick);
+        };
+
+        const handleMove = (event) => {
+            pointerX = event.clientX;
+            pointerY = event.clientY;
+            if (frameId === null) frameId = window.requestAnimationFrame(tick);
+        };
+
+        const finish = (shouldCommit) => {
             activeCleanupRef.current?.();
             activeCleanupRef.current = null;
 
-            const targetCar = drag.type === 'move' && targetCarIndex !== null
-                ? visibleCarsSnapshot[targetCarIndex]
-                : null;
-            const finalBooking = {
-                ...drag.originalBooking,
-                carId: targetCar?.id ?? drag.originalBooking.carId,
-                start: finalStart,
-                end: finalEnd,
-            };
-            setBookings((currentBookings) => currentBookings.map((booking) => (
-                booking.id === drag.bookingId ? finalBooking : booking
-            )));
+            if (shouldCommit) {
+                update();
+                const finalBooking = {
+                    ...drag.originalBooking,
+                    carId: drag.type === 'move' ? targetCarId : drag.originalBooking.carId,
+                    start: finalStart,
+                    end: finalEnd,
+                };
+                const hasChanged = finalBooking.carId !== drag.originalBooking.carId
+                    || finalBooking.start !== drag.originalBooking.start
+                    || finalBooking.end !== drag.originalBooking.end;
 
-            const hasChanged = finalBooking.carId !== drag.originalBooking.carId
-                || finalBooking.start !== drag.originalBooking.start
-                || finalBooking.end !== drag.originalBooking.end;
-            if (hasChanged) {
-                Promise.resolve(onCommit?.(finalBooking, drag.originalBooking)).catch(() => {
-                    setBookings((currentBookings) => currentBookings.map((booking) => {
-                        if (booking.id !== drag.bookingId) return booking;
-                        const stillShowsFailedChange = booking.carId === finalBooking.carId
-                            && booking.start === finalBooking.start
-                            && booking.end === finalBooking.end;
-                        return stillShowsFailedChange ? drag.originalBooking : booking;
-                    }));
-                });
+                if (hasChanged) {
+                    setBookings((currentBookings) => currentBookings.map((booking) => (
+                        booking.id === drag.bookingId ? finalBooking : booking
+                    )));
+                    Promise.resolve(onCommit?.(finalBooking, drag.originalBooking)).catch(() => {
+                        setBookings((currentBookings) => currentBookings.map((booking) => {
+                            if (booking.id !== drag.bookingId) return booking;
+                            const stillShowsFailedChange = booking.carId === finalBooking.carId
+                                && booking.start === finalBooking.start
+                                && booking.end === finalBooking.end;
+                            return stillShowsFailedChange ? drag.originalBooking : booking;
+                        }));
+                    });
+                }
+            } else if (drag.type !== 'move') {
+                setBookings((currentBookings) => currentBookings.map((booking) => (
+                    booking.id === drag.bookingId ? drag.originalBooking : booking
+                )));
             }
 
-            cancelAnimationFrame();
             setDragging(null);
             setGhost(null);
             window.setTimeout(() => {
@@ -207,13 +200,24 @@ export default function useVehicleTimelineDrag({
             }, 0);
         };
 
+        const handleUp = () => finish(true);
+        const handleKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            finish(false);
+        };
+
         activeCleanupRef.current = () => {
             window.removeEventListener('mousemove', handleMove);
             window.removeEventListener('mouseup', handleUp);
+            window.removeEventListener('keydown', handleKeyDown);
+            if (frameId !== null) window.cancelAnimationFrame(frameId);
+            frameId = null;
         };
         window.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
-    }, [cancelAnimationFrame, geometry, gridRef, headerHeight, layout, maximumDay, minimumDay, minimumDuration, onCommit, setBookings, totalDays, visibleCars]);
+        window.addEventListener('keydown', handleKeyDown);
+    }, [formatRange, geometry, gridRef, headerHeight, labelWidth, minimumDuration, onCommit, pendingScrollXRef, scheduleScrollXRef, setBookings]);
 
     const onBookingMouseDown = useCallback((event, booking, type) => {
         event.stopPropagation();
@@ -224,7 +228,6 @@ export default function useVehicleTimelineDrag({
 
         const color = statusColors[booking.status] || statusColors.booked;
         const width = geometry.durationToPixels(booking.end - booking.start);
-        const carIndex = visibleCars.findIndex((car) => car.id === booking.carId);
         const barRect = event.currentTarget.getBoundingClientRect();
         const gridRect = gridRef.current?.getBoundingClientRect();
         const barLeft = booking.start * geometry.dayWidth - pendingScrollXRef.current;
@@ -233,9 +236,9 @@ export default function useVehicleTimelineDrag({
             type,
             startX: event.clientX,
             startY: event.clientY,
+            startScrollX: pendingScrollXRef.current,
             origStart: booking.start,
             origEnd: booking.end,
-            origCarIdx: carIndex,
             color,
             customer: booking.customer,
             width,
@@ -268,22 +271,22 @@ export default function useVehicleTimelineDrag({
         };
         window.addEventListener('mousemove', handlePendingMove);
         window.addEventListener('mouseup', handlePendingUp);
-    }, [beginActiveDrag, daysVisible, geometry, gridRef, labelWidth, pendingScrollXRef, statusColors, visibleCars]);
+    }, [beginActiveDrag, daysVisible, geometry, gridRef, labelWidth, pendingScrollXRef, statusColors]);
 
-    const beginResize = useCallback((event, booking, carIndex) => {
+    const beginResize = useCallback((event, booking) => {
         beginActiveDrag({
             bookingId: booking.id,
             type: 'resize-right',
             startX: event.clientX,
+            startScrollX: pendingScrollXRef.current,
             origStart: booking.start,
             origEnd: booking.end,
-            origCarIdx: carIndex,
             color: statusColors[booking.status] || statusColors.booked,
             customer: booking.customer,
             width: geometry.durationToPixels(booking.end - booking.start),
             originalBooking: { ...booking },
         }, { x: event.clientX, y: event.clientY });
-    }, [beginActiveDrag, geometry, statusColors]);
+    }, [beginActiveDrag, geometry, pendingScrollXRef, statusColors]);
 
     const isReservationClickSuppressed = useCallback(
         () => suppressReservationClickRef.current,
@@ -293,8 +296,7 @@ export default function useVehicleTimelineDrag({
     useEffect(() => () => {
         pendingCleanupRef.current?.();
         activeCleanupRef.current?.();
-        cancelAnimationFrame();
-    }, [cancelAnimationFrame]);
+    }, []);
 
     return {
         beginResize,

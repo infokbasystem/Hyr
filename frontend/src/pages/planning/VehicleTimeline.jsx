@@ -9,7 +9,7 @@ import DateRangePicker from '../../components/DaterangePicker';
 import ActionButton from '../../components/ActionButton';
 import { getPlanningCategories, getPlanningReservations, getPlanningVehicles, updatePlanningReservation } from '../../lib/planningApi';
 import useVehicleTimelineDrag from './useVehicleTimelineDrag';
-import useVehicleTimelineGeometry, { getTimelineRenderWindow } from './useVehicleTimelineGeometry';
+import useVehicleTimelineGeometry, { getRowRenderWindow, getTimelineRenderWindow } from './useVehicleTimelineGeometry';
 import useProgressivePlanningReservations from './useProgressivePlanningReservations';
 import bg from "../../assets/content.png";
 // ---------------------------------------------------------------------------
@@ -325,7 +325,7 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
                 boxShadow: `0 2px 6px ${color.bg}44`,
                 transition: isMoving ? "none" : "box-shadow 0.15s",
                 zIndex: 1,
-                opacity: isMoving ? 0 : 1,
+                opacity: isMoving ? 0.4 : 1,
                 pointerEvents: isMoving ? "none" : "auto",
                 userSelect: "none",
                 WebkitUserSelect: "none",
@@ -417,10 +417,7 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
 
 const VehicleTimelineRowContent = memo(function VehicleTimelineRowContent({
     row,
-    dayLabels,
     dayW,
-    hourTicks,
-    theme,
     renderWindow,
     timelineViewportWidth,
     movingId,
@@ -432,13 +429,6 @@ const VehicleTimelineRowContent = memo(function VehicleTimelineRowContent({
 }) {
     return (
         <div style={{ position: "absolute", inset: 0, transform: "translateX(calc(-1 * var(--timeline-scroll-x)))" }}>
-            {dayLabels.map(({ dayIdx, ...label }) => (
-                <div key={dayIdx} data-timeline-day={dayIdx} style={{ position: "absolute", left: dayIdx * dayW, top: 0, bottom: 0, width: dayW, borderRight: `1px solid ${theme.gridLine}`, background: label.isToday ? theme.todayBg : label.isWeekend ? theme.weekendRow : "transparent", pointerEvents: "none" }}>
-                    {hourTicks.map(hour => (
-                        <div key={hour} style={{ position: "absolute", top: 0, bottom: 0, left: (hour / 24) * dayW, width: 1, background: theme.hourGridLine }} />
-                    ))}
-                </div>
-            ))}
             {row.bookings.filter(booking => (
                 booking.id === draggingId
                 || booking.id === hoveredBooking
@@ -469,6 +459,22 @@ const arrowBtnBase = {
     display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
     transition: "background 0.15s, border-color 0.15s, color 0.15s",
 };
+
+// One gradient tile per day keeps hour lines aligned; fractional repeating tiles drift over long ranges.
+function buildGridBackground(dayW, hourTicks, theme) {
+    const stops = [];
+    for (const hour of hourTicks) {
+        const x = (hour / 24) * dayW;
+        stops.push(`transparent ${x}px`, `${theme.hourGridLine} ${x}px`, `${theme.hourGridLine} ${x + 1}px`, `transparent ${x + 1}px`);
+    }
+    stops.push(`transparent ${dayW - 1}px`, `${theme.gridLine} ${dayW - 1}px`, `${theme.gridLine} ${dayW}px`);
+    return {
+        backgroundImage: `linear-gradient(to right, transparent 0px, ${stops.join(', ')})`,
+        backgroundSize: `${dayW}px 100%`,
+        backgroundRepeat: "repeat",
+        backgroundPositionX: "calc(-1 * var(--timeline-scroll-x))",
+    };
+}
 
 // Kept outside the component so the view survives navigating away and back.
 const timelineViewState = {
@@ -528,7 +534,7 @@ function VehicleTimeline(props) {
     const scrollFrameRef = useRef(null);
     const scrollCommitTimeoutRef = useRef(null);
     const scrollDirectionRef = useRef(0);
-    const interactionRef = useRef(false);
+    const gestureRef = useRef(null);
     const pendingSavesRef = useRef(0);
     const bookingRevisionRef = useRef(0);
     const [renderWindowState, setRenderWindowState] = useState(null);
@@ -556,7 +562,11 @@ function VehicleTimeline(props) {
     const [categoryOptions, setCategoryOptions] = useState(EMPTY_VEHICLES);
     const [visibleCars, setVisibleCars] = useState(EMPTY_VEHICLES);
 
-    const isPlanningBusy = useCallback(() => interactionRef.current || pendingSavesRef.current > 0, []);
+    const isPlanningBusy = useCallback((kind) => (
+        kind === 'replace'
+            ? gestureRef.current !== null || pendingSavesRef.current > 0
+            : gestureRef.current === 'thumb'
+    ), []);
     const getBookingRevision = useCallback(() => bookingRevisionRef.current, []);
     const setEditedBookings = useCallback((update) => {
         bookingRevisionRef.current += 1;
@@ -779,7 +789,7 @@ function VehicleTimeline(props) {
         };
         const finishInteraction = () => {
             queueMicrotask(() => {
-                interactionRef.current = false;
+                gestureRef.current = null;
                 flush();
             });
         };
@@ -851,6 +861,11 @@ function VehicleTimeline(props) {
         });
     }, [dayW, extend, geometry, maxScrollX, minScrollX, scrollRangeX, thumbRatio, viewportDays]);
 
+    const scheduleScrollXRef = useRef(scheduleScrollX);
+    useLayoutEffect(() => {
+        scheduleScrollXRef.current = scheduleScrollX;
+    }, [scheduleScrollX]);
+
     useEffect(() => {
         return () => {
             if (scrollFrameRef.current !== null) {
@@ -878,6 +893,60 @@ function VehicleTimeline(props) {
     const headerH = TIMELINE_HEADER_H;
 
     const layout = useMemo(() => computeRowLayout(bookings, visibleCars), [bookings, visibleCars]);
+
+    const rowOffsets = useMemo(() => {
+        const offsets = new Array(layout.length + 1);
+        offsets[0] = 0;
+        for (let index = 0; index < layout.length; index++) {
+            offsets[index + 1] = offsets[index] + layout[index].rowH;
+        }
+        return offsets;
+    }, [layout]);
+    const gridViewRef = useRef({ top: 0, height: 800 });
+    const [rowWindowState, setRowWindowState] = useState(null);
+    const rowWindow = useMemo(() => (
+        rowWindowState?.offsets === rowOffsets
+            ? rowWindowState.window
+            : getRowRenderWindow(rowOffsets, gridViewRef.current.top, gridViewRef.current.height)
+    ), [rowOffsets, rowWindowState]);
+    const rowWindowRef = useRef({ offsets: rowOffsets, window: rowWindow });
+    useLayoutEffect(() => {
+        rowWindowRef.current = { offsets: rowOffsets, window: rowWindow };
+    }, [rowOffsets, rowWindow]);
+
+    useEffect(() => {
+        const grid = gridRef.current;
+        if (!grid) return;
+        let frameId = null;
+        const measure = () => {
+            frameId = null;
+            const view = { top: grid.scrollTop, height: Math.max(1, grid.clientHeight - TIMELINE_HEADER_H) };
+            gridViewRef.current = view;
+            const { offsets, window: previousWindow } = rowWindowRef.current;
+            const nextWindow = getRowRenderWindow(offsets, view.top, view.height, previousWindow);
+            if (nextWindow !== previousWindow) {
+                rowWindowRef.current = { offsets, window: nextWindow };
+                flushSync(() => setRowWindowState({ offsets, window: nextWindow }));
+            }
+        };
+        const scheduleMeasure = () => {
+            if (frameId === null) frameId = window.requestAnimationFrame(measure);
+        };
+        grid.addEventListener('scroll', scheduleMeasure, { passive: true });
+        const observer = new ResizeObserver(scheduleMeasure);
+        observer.observe(grid);
+        scheduleMeasure();
+        return () => {
+            grid.removeEventListener('scroll', scheduleMeasure);
+            observer.disconnect();
+            if (frameId !== null) window.cancelAnimationFrame(frameId);
+        };
+    }, []);
+
+    const renderedCars = visibleCars.slice(rowWindow.startIndex, rowWindow.endIndex);
+    const rowsTopSpacer = rowOffsets[rowWindow.startIndex] ?? 0;
+    const rowsBottomSpacer = (rowOffsets[rowOffsets.length - 1] ?? 0) - (rowOffsets[rowWindow.endIndex] ?? 0);
+    const gridBackground = useMemo(() => buildGridBackground(dayW, hourTicks, T), [dayW, hourTicks, T]);
 
     // Computed once (only when the date range actually changes) instead of once per day PER CAR ROW.
     // getDayLabel() does toLocaleDateString() calls, which are expensive - previously this ran
@@ -931,6 +1000,7 @@ function VehicleTimeline(props) {
     // Draggable scrollbar thumb
     const onScrollbarMouseDown = useCallback((e) => {
         e.preventDefault();
+        gestureRef.current = 'thumb';
         const track = scrollbarRef.current;
         if (!track) return;
         const trackRect = track.getBoundingClientRect();
@@ -972,7 +1042,7 @@ function VehicleTimeline(props) {
         const onMove = (me) => {
             if (!panRef.current) return;
             const dx = panRef.current.startX - me.clientX;
-            scheduleScrollX(panRef.current.startScrollX + dx);
+            scheduleScrollXRef.current(panRef.current.startScrollX + dx);
         };
         const onUp = () => {
             panRef.current = null;
@@ -981,7 +1051,7 @@ function VehicleTimeline(props) {
         };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
-    }, [isPanMode, scheduleScrollX]);
+    }, [isPanMode]);
 
     useEffect(() => {
         scheduleScrollX(prev => prev);
@@ -1022,6 +1092,11 @@ function VehicleTimeline(props) {
         });
     }, [flush, startDate]);
 
+    const formatDragRange = useCallback(
+        (start, end) => `${formatTimelineDateTime(start, startDate)} -> ${formatTimelineDateTime(end, startDate)}`,
+        [startDate]
+    );
+
     const {
         beginResize,
         dragging,
@@ -1036,15 +1111,15 @@ function VehicleTimeline(props) {
         gridRef,
         headerHeight: headerH,
         labelWidth: LABEL_W,
-        layout,
         minimumDuration: MIN_DUR,
         onCommit: handleBookingCommit,
         pendingScrollXRef,
+        scheduleScrollXRef,
+        formatRange: formatDragRange,
         setBookings: setEditedBookings,
         statusColors: STATUS_COLORS,
         minimumDay: loadedRange.startDay,
         maximumDay: loadedRange.endDay,
-        visibleCars,
     });
 
     const handleOpenReservationInNewTab = useCallback((e, reservationId) => {
@@ -1060,27 +1135,14 @@ function VehicleTimeline(props) {
         const id = nextId.current++;
         const booking = { id, carId, start: snappedDay, end: snappedDay + MIN_DUR, customer: "New Booking", status: "pending" };
         setEditedBookings(prev => [...prev, booking]);
-        beginResize(e, booking, visibleCars.findIndex(c => c.id === carId));
+        beginResize(e, booking);
     };
 
     const movingId = dragging?.type === "move" ? dragging.bookingId : null;
-    const draggingBooking = useMemo(
-        () => (dragging ? bookings.find(booking => booking.id === dragging.bookingId) ?? null : null),
-        [dragging, bookings]
-    );
-    const dragRangeText = draggingBooking
-        ? `${formatTimelineDateTime(draggingBooking.start, startDate)} -> ${formatTimelineDateTime(draggingBooking.end, startDate)}`
-        : (ghost ? `${formatTimelineDateTime(ghost.start, startDate)} -> ${formatTimelineDateTime(ghost.end, startDate)}` : '');
     const isMoveGhostActive = Boolean(ghost && dragging?.type === "move");
     const ghostWidth = Math.max(ghost?.width ?? 8, 8);
     const ghostArrowSize = Math.min(10, Math.max(4, ghostWidth / 4));
-    const ghostClipPath = ghost?.isCappedLeft && ghost?.isCappedRight
-        ? `polygon(${ghostArrowSize}px 0, calc(100% - ${ghostArrowSize}px) 0, 100% 50%, calc(100% - ${ghostArrowSize}px) 100%, ${ghostArrowSize}px 100%, 0 50%)`
-        : ghost?.isCappedLeft
-            ? `polygon(${ghostArrowSize}px 0, 100% 0, 100% 100%, ${ghostArrowSize}px 100%, 0 50%)`
-            : ghost?.isCappedRight
-                ? `polygon(0 0, calc(100% - ${ghostArrowSize}px) 0, 100% 50%, calc(100% - ${ghostArrowSize}px) 100%, 0 100%)`
-                : undefined;
+    const ghostClipPath = `polygon(${ghostArrowSize}px 0, calc(100% - ${ghostArrowSize}px) 0, 100% 50%, calc(100% - ${ghostArrowSize}px) 100%, ${ghostArrowSize}px 100%, 0 50%)`;
 
 
     return (
@@ -1227,7 +1289,7 @@ function VehicleTimeline(props) {
             <div
                 style={{ position: "relative" }}
                 onMouseDownCapture={(event) => {
-                    if (event.button === 0) interactionRef.current = true;
+                    if (event.button === 0) gestureRef.current = 'pointer';
                 }}
             >
                 <div
@@ -1254,10 +1316,11 @@ function VehicleTimeline(props) {
                                     </span>
                                 </div>
                             </div>
-                            {visibleCars.map((car, i) => {
-                                const row = layout[i];
+                            {rowsTopSpacer > 0 && <div style={{ height: rowsTopSpacer }} />}
+                            {renderedCars.map((car, i) => {
+                                const row = layout[rowWindow.startIndex + i];
                                 return (
-                                    <div key={car.id} style={{ height: row.rowH, background: "#AAB8E4", borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", paddingLeft: 16, paddingRight: 8, gap: 8, transition: "background 0.1s, height 0.2s" }}>
+                                    <div key={car.id} data-timeline-car-id={car.id} style={{ height: row.rowH, background: "#AAB8E4", borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", paddingLeft: 16, paddingRight: 8, gap: 8, transition: "background 0.1s, height 0.2s" }}>
                                         <div className="text-xs" style={{ minWidth: 0, color: 'black', overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                             {car.category}
                                         </div>
@@ -1280,10 +1343,19 @@ function VehicleTimeline(props) {
                                     </div>
                                 );
                             })}
+                            {rowsBottomSpacer > 0 && <div style={{ height: rowsBottomSpacer }} />}
                         </div>
 
                         {/* Timeline */}
-                        <div style={{ flex: 1, position: "relative" }}>
+                        <div style={{ flex: 1, position: "relative", background: T.bg }}>
+
+                            <div style={{ position: "absolute", top: headerH, left: 0, right: 0, bottom: 0, overflow: "hidden", pointerEvents: "none", ...gridBackground }}>
+                                <div style={{ position: "absolute", inset: 0, transform: "translateX(calc(-1 * var(--timeline-scroll-x)))" }}>
+                                    {dayLabels.filter(label => label.isToday || label.isWeekend).map(label => (
+                                        <div key={label.dayIdx} style={{ position: "absolute", top: 0, bottom: 0, left: label.dayIdx * dayW, width: dayW, background: label.isToday ? T.todayBg : T.weekendRow }} />
+                                    ))}
+                                </div>
+                            </div>
 
                             {/* Header */}
                             <div style={{ height: headerH, position: "sticky", top: 0, zIndex: 20, width: "100%", overflow: "hidden", borderBottom: `1px solid ${T.border}`, background: `url(${bg})` }}>
@@ -1350,11 +1422,13 @@ function VehicleTimeline(props) {
                             </div>
 
                             {/* Car rows */}
-                            {visibleCars.map((car, rowIdx) => {
-                                const row = layout[rowIdx];
+                            {rowsTopSpacer > 0 && <div style={{ height: rowsTopSpacer }} />}
+                            {renderedCars.map((car, i) => {
+                                const row = layout[rowWindow.startIndex + i];
                                 return (
                                     <div key={car.id}
-                                        style={{ height: row.rowH, borderBottom: `1px solid ${T.border}`, position: "relative", overflow: "hidden", background: rowIdx % 2 === 0 ? T.bg : T.bgAlt, width: "100%", cursor: dragging?.type === "move" ? "grabbing" : "default", transition: "background 0.1s, height 0.2s" }}
+                                        data-timeline-car-id={car.id}
+                                        style={{ height: row.rowH, borderBottom: `1px solid ${T.border}`, position: "relative", overflow: "hidden", width: "100%", cursor: dragging?.type === "move" ? "grabbing" : "default", transition: "height 0.2s" }}
                                         onMouseDown={(e) => {
                                             if (isPanMode) { onGridMouseDown(e); return; }
                                             if (dragging) return;
@@ -1364,10 +1438,7 @@ function VehicleTimeline(props) {
                                     >
                                         <VehicleTimelineRowContent
                                             row={row}
-                                            dayLabels={dayLabels}
                                             dayW={dayW}
-                                            hourTicks={hourTicks}
-                                            theme={T}
                                             renderWindow={renderWindow}
                                             timelineViewportWidth={timelineViewportWidth}
                                             movingId={row.laneMap.has(movingId) ? movingId : null}
@@ -1380,6 +1451,7 @@ function VehicleTimeline(props) {
                                     </div>
                                 );
                             })}
+                            {rowsBottomSpacer > 0 && <div style={{ height: rowsBottomSpacer }} />}
 
                             {/* Today line */}
                             {/* {(() => {
@@ -1424,15 +1496,7 @@ function VehicleTimeline(props) {
                 display: isMoveGhostActive ? "flex" : "none", alignItems: "center", overflow: "hidden",
                 boxShadow: `0 2px 6px ${(ghost?.color?.bg ?? STATUS_COLORS.booked.bg)}44`,
                 fontSize: 11, fontWeight: 600, color: "#fff", whiteSpace: "nowrap",
-            }}>
-                <span style={{ width: 14, height: "100%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <ChevronLeft className="h-3 w-3" strokeWidth={2.4} />
-                </span>
-                <span style={{ flex: 1 }} />
-                <span style={{ width: 14, height: "100%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <ChevronRight className="h-3 w-3" strokeWidth={2.4} />
-                </span>
-            </div>
+            }} />
             <div ref={ghostTextRef} style={{
                 position: "fixed",
                 left: 0,
@@ -1453,9 +1517,7 @@ function VehicleTimeline(props) {
                 pointerEvents: "none",
                 zIndex: 10000,
                 display: isMoveGhostActive ? "block" : "none",
-            }}>
-                {dragRangeText}
-            </div>
+            }} />
 
             {/* Footer */}
             {/* <div style={{ padding: "10px 24px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 24, alignItems: "center" }}>

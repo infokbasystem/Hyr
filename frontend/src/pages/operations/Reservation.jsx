@@ -2,13 +2,13 @@ import React from 'react'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useBlocker } from "react-router";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CheckCircle2, Euro, Printer, Search, Save, Trash2, RotateCcw, Wrench, HandCoins } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Euro, Printer, Save, Trash2, RotateCcw, Wrench, HandCoins } from 'lucide-react';
 
 import ActionButton from '../../components/ActionButton';
 import { usePdf } from '../../contexts/PdfContext';
 import { formatUserName } from '../../utils/nameFormatters';
 import ConfirmationModal from '../../components/ConfirmationModal';
-import CustomerSearchModal from '../../components/CustomerSearchModal';
+import SearchCustomer from '../../components/SearchCustomer';
 import AccessorySelectModal from '../../modals/AccessorySelectModal';
 import CarSearchModal from '../../modals/CarSearchModal';
 
@@ -25,6 +25,7 @@ import ReservationItemAlu from './ReservationItemAlu';
 import ReservationItemAccessory from './ReservationItemAccessory';
 import ReservationItemTool from './ReservationItemTool';
 import apiClient from '../../lib/apiClient';
+import { getCustomerById } from '../../lib/customerApi';
 import { getSharedRequest } from '../../lib/sharedRequest';
 import NumberInput from '../../components/NumberInput';
 
@@ -322,7 +323,13 @@ const Reservation = () => {
     const [messages, setMessages] = useState(initialMessages);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
-    const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+    const handleOpenCustomer = () => {
+        if (!reservation?.customerId) {
+            return;
+        }
+
+        window.open(`/customer/${reservation.customerId}`, '_blank', 'noopener,noreferrer');
+    };
     const [showCarSearchModal, setShowCarSearchModal] = useState(false);
     const [showAccessorySelectModal, setShowAccessorySelectModal] = useState(false);
     const [showNoInvoiceItemsModal, setShowNoInvoiceItemsModal] = useState(false);
@@ -793,19 +800,47 @@ const Reservation = () => {
         setShowDeleteConfirm(true);
     };
 
-    const handleSelectCustomer = (customerData) => {
+    const handleCustomerSelect = async (customer) => {
         markStale();
         setMessages(prev => prev.filter(msg => msg.type !== 'success'));
-        setReservation(prev => ({
-            ...prev,
-            customerId: customerData.id,
-            customerOrgNr: customerData.orgNr || '',
-            customerName: customerData.customerName,
-            address: customerData.street1 || '',
-            zipCode: customerData.zipCode || '',
-            email: customerData.email || '',
-            mobilePhone: customerData.mobilePhone || '',
-        }));
+
+        if (!customer?.id) {
+            setReservation(prev => ({
+                ...prev,
+                customerId: null,
+                customerName: '',
+                customerOrgNr: '',
+                address: '',
+                zipCode: '',
+                email: '',
+                mobilePhone: '',
+            }));
+            return;
+        }
+
+        try {
+            const selectedCustomer = await getCustomerById(customer.id);
+
+            setReservation(prev => ({
+                ...prev,
+                customerId: selectedCustomer?.id ?? customer.id,
+                customerName: selectedCustomer?.customerName ?? customer.customerName ?? '',
+                customerOrgNr: selectedCustomer?.orgNr ?? customer.organizationNr ?? '',
+                address: selectedCustomer?.street1 ?? '',
+                zipCode: selectedCustomer?.zipCode ?? '',
+                email: selectedCustomer?.email ?? '',
+                mobilePhone: selectedCustomer?.mobilePhone ?? '',
+            }));
+        } catch (error) {
+            console.error('Error selecting customer:', error);
+
+            setReservation(prev => ({
+                ...prev,
+                customerId: customer.id,
+                customerName: customer.customerName ?? prev?.customerName ?? '',
+                customerOrgNr: customer.organizationNr ?? '',
+            }));
+        }
     };
 
     const handleChange = (field, value) => {
@@ -1830,13 +1865,6 @@ const Reservation = () => {
     return (
         <div className="flex h-full min-h-full w-full flex-1 flex-col px-0 py-0 md:px-[clamp(4px,3vw,6vw)]">
 
-            {/* Customer Search Modal */}
-            <CustomerSearchModal
-                isOpen={showCustomerSearch}
-                onClose={() => setShowCustomerSearch(false)}
-                onSelectCustomer={handleSelectCustomer}
-            />
-
             <AccessorySelectModal
                 isOpen={showAccessorySelectModal}
                 onClose={closeAccessorySelectModal}
@@ -1990,12 +2018,6 @@ const Reservation = () => {
                                             accent="sky"
                                         />
                                     )}
-                                    <ActionButton
-                                        label="Välj kund"
-                                        icon={Search}
-                                        onClick={() => setShowCustomerSearch(true)}
-                                        accent="teal"
-                                    />
                                     <div className='ml-20 flex items-center flex-wrap gap-3'>
                                         <ActionButton
                                             label="Lämna ut"
@@ -2043,11 +2065,13 @@ const Reservation = () => {
 
                             <div className='grid grid-cols-[320px_auto_250px_200px_auto] gap-15'>
                                 <span>
-                                    <LabeledInput
-                                        label="Namn"
-                                        value={reservation?.customerName || ''}
-                                        labelWidth="w-20"
-                                        disabled={true} />
+                                    <SearchCustomer
+                                        selectedCustomerName={reservation?.customerName ?? ''}
+                                        onCustomerSelect={handleCustomerSelect}
+                                        onOpenCustomer={reservation?.customerId ? handleOpenCustomer : undefined}
+                                        width="w-full"
+                                        className="min-w-0 mb-2"
+                                    />
                                     <LabeledInput
                                         label="Pers./org.nr"
                                         value={reservation?.customerOrgNr || ''}

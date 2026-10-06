@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getInitialTimelineRange, getTimelineRangeExtension, getTimelineRenderWindow, getTimelineScrollBounds } from './useVehicleTimelineGeometry.js';
+import {
+    getAutoScrollDelta,
+    getInitialTimelineRange,
+    getRowRenderWindow,
+    getTimelineRangeExtension,
+    getTimelineRenderWindow,
+    getTimelineScrollBounds,
+} from './useVehicleTimelineGeometry.js';
+
+function makeOffsets(heights) {
+    const offsets = [0];
+    for (const height of heights) offsets.push(offsets.at(-1) + height);
+    return offsets;
+}
 
 function makeGeometry(daysVisible, viewportWidth = 1970) {
     return {
@@ -70,6 +83,37 @@ test('progressive ranges start near two screens and add only the approached inte
             endDay: range.startDay,
         });
     }
+});
+
+test('auto-scroll speed grows towards each edge and is zero in the middle', () => {
+    assert.equal(getAutoScrollDelta(500, 0, 1000), 0);
+    assert.ok(getAutoScrollDelta(40, 0, 1000) < 0);
+    assert.ok(getAutoScrollDelta(5, 0, 1000) < getAutoScrollDelta(40, 0, 1000));
+    assert.equal(getAutoScrollDelta(-200, 0, 1000), -20);
+    assert.equal(getAutoScrollDelta(1200, 0, 1000), 20);
+    assert.ok(getAutoScrollDelta(960, 0, 1000) > 0);
+    assert.equal(getAutoScrollDelta(10, 0, 0), 0);
+});
+
+test('row window covers the viewport with overscan for variable row heights', () => {
+    const heights = Array.from({ length: 400 }, (_, index) => (index % 7 === 0 ? 53 : 27));
+    const offsets = makeOffsets(heights);
+    for (const viewTop of [0, 137, 4000, offsets.at(-1) - 600]) {
+        const window = getRowRenderWindow(offsets, viewTop, 600);
+        assert.ok(offsets[window.startIndex] <= Math.max(0, viewTop - 300));
+        assert.ok(offsets[window.endIndex] >= Math.min(offsets.at(-1), viewTop + 900));
+        assert.ok(window.endIndex - window.startIndex < 120);
+    }
+    assert.deepEqual(getRowRenderWindow([0], 0, 600), { startIndex: 0, endIndex: 0 });
+    assert.deepEqual(getRowRenderWindow(makeOffsets([27, 27]), 0, 600), { startIndex: 0, endIndex: 2 });
+});
+
+test('row window reuses the previous window for small scrolls and replaces it for jumps', () => {
+    const offsets = makeOffsets(Array(400).fill(27));
+    const initial = getRowRenderWindow(offsets, 2000, 600);
+    assert.equal(getRowRenderWindow(offsets, 2100, 600, initial), initial);
+    assert.notEqual(getRowRenderWindow(offsets, 6000, 600, initial), initial);
+    assert.notEqual(getRowRenderWindow(makeOffsets(Array(10).fill(27)), 0, 600, initial), initial);
 });
 
 test('range growth preserves coordinates and uses the real viewport for scroll limits', () => {

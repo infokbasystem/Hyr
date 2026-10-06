@@ -7,7 +7,7 @@ import SegmentedFilter from '../../components/SegmentedFilter';
 import DateRangePicker from '../../components/DaterangePicker';
 import ActionButton from '../../components/ActionButton';
 import { getPlanningCategories, getPlanningReservations, getPlanningVehicles, updatePlanningReservation } from '../../lib/planningApi';
-import useVehicleTimelineDrag from './useVehicleTimelineDrag';
+import useVehicleTimelineDrag from './useVehicleTimelineDrag2';
 import useVehicleTimelineGeometry from './useVehicleTimelineGeometry';
 import bg from "../../assets/content.png";
 // ---------------------------------------------------------------------------
