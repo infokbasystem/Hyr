@@ -507,18 +507,17 @@ export default function Customer() {
                             </div>
 
                             <div>
-                                <div className="flex space-x-1 w-full pb-[1px]">
-                                    <p className="w-22 text-xs pt-2 text-gray-700">Besöksadress</p>
+                                <div className="flex w-full pb-[1px]">
+                                    <p className="min-w-22 text-xs pt-2 text-gray-700">Besöksadress</p>
                                     <div className="">
                                         <Input name="invoiceStreet1" value={customer.street1} onChange={(e) => handleChange('street1', e.target.value)} autoComplete="section-invoice billing address-line1" />
                                         <Input name="invoiceStreet2" value={customer.street2} onChange={(e) => handleChange('street2', e.target.value)} className="mt-[1px]" autoComplete="section-invoice billing address-line2" />
-                                        <div className="flex space-x-1 w-full mt-[1px]">
-                                            <Input name="invoiceZip" value={customer.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} className="w-1/3" autoComplete="section-invoice billing postal-code" />
-                                            <Input name="invoiceCity" value={customer.city} onChange={(e) => handleChange('city', e.target.value)} className="w-2/3" autoComplete="section-invoice billing address-level2" />
+                                        <div className="flex mt-[1px] grid grid-cols-[1fr_2fr] gap-1">
+                                            <Input name="invoiceZip" value={customer.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} autoComplete="section-invoice billing postal-code" />
+                                            <Input name="invoiceCity" value={customer.city} onChange={(e) => handleChange('city', e.target.value)} autoComplete="section-invoice billing address-level2" />
                                         </div>
                                     </div>
                                 </div>
-
 
                                 <LabeledTextArea
                                     name="note"
@@ -527,7 +526,7 @@ export default function Customer() {
                                     onChange={(value) => handleChange('note', value)}
                                     labelWidth="w-22"
                                     margintop="2"
-                                    height="h-[130px]"
+                                    height="h-[80px]"
                                 />
                             </div>
 
