@@ -190,11 +190,23 @@ namespace Backend.Controllers
                 })
                 .ToListAsync();
 
+            var cabinTypes = await _context.CabinTypes
+                .AsNoTracking()
+                .OrderBy(cabinType => cabinType.SortNr)
+                .ThenBy(cabinType => cabinType.Name)
+                .Select(cabinType => new CabinTypeOptionDto
+                {
+                    Code = cabinType.Code,
+                    Name = cabinType.Name,
+                })
+                .ToListAsync();
+
             return new ItemFormOptionsDto
             {
                 ItemTypes = itemTypes,
                 ItemCategories = itemCategories,
                 ItemModels = itemModels,
+                CabinTypes = cabinTypes,
             };
         }
 
@@ -315,6 +327,11 @@ namespace Backend.Controllers
 
             var officeId = user.OfficeId.Value;
 
+            if (!await IsValidCabinTypeCodeAsync(itemDto.CabinTypeCode))
+            {
+                return BadRequest(new { message = "Invalid cabin type code" });
+            }
+
             var newItem = new Item
             {
                 OfficeId = officeId,
@@ -378,6 +395,11 @@ namespace Backend.Controllers
             if (existingItem == null)
             {
                 return NotFound(new { message = "Item not found" });
+            }
+
+            if (!await IsValidCabinTypeCodeAsync(itemDto.CabinTypeCode))
+            {
+                return BadRequest(new { message = "Invalid cabin type code" });
             }
 
             ApplyItemChanges(existingItem, itemDto);
@@ -473,6 +495,58 @@ namespace Backend.Controllers
                 UnavailableTo = item.UnavailableTo,
                 AccountNr = item.AccountNr,
                 CostCenterNr = item.CostCenterNr,
+                CabinTypeCode = item.CabinTypeCode,
+                LengthMm = item.LengthMm,
+                WidthMm = item.WidthMm,
+                HeightMm = item.HeightMm,
+                InternalHeightMm = item.InternalHeightMm,
+                InternalFloorAreaM2 = item.InternalFloorAreaM2,
+                MaxLoadKg = item.MaxLoadKg,
+                NrOfModules = item.NrOfModules,
+                NrOfSockets = item.NrOfSockets,
+                HasResidualCurrentDevice = item.HasResidualCurrentDevice,
+                HasDistributionBoard = item.HasDistributionBoard,
+                ElectricalPhase = item.ElectricalPhase,
+                PowerConnectionType = item.PowerConnectionType,
+                HasElectricRadiator = item.HasElectricRadiator,
+                HasHeatPump = item.HasHeatPump,
+                HasUnderfloorHeating = item.HasUnderfloorHeating,
+                HasAirConditioning = item.HasAirConditioning,
+                HasLighting = item.HasLighting,
+                HasVentilation = item.HasVentilation,
+                ToiletType = item.ToiletType,
+                HasSink = item.HasSink,
+                HasWaterHeater = item.HasWaterHeater,
+                HasWaterTank = item.HasWaterTank,
+                HasFridge = item.HasFridge,
+                HasMicrowave = item.HasMicrowave,
+                HasCoffeeMaker = item.HasCoffeeMaker,
+                HasKitchenSink = item.HasKitchenSink,
+                HasDryingCabinet = item.HasDryingCabinet,
+                NrOfLockers = item.NrOfLockers,
+                NrOfTables = item.NrOfTables,
+                NrOfChairs = item.NrOfChairs,
+                NrOfBenches = item.NrOfBenches,
+                NrOfSeats = item.NrOfSeats,
+                IsInsulated = item.IsInsulated,
+                IsWinterRated = item.IsWinterRated,
+                NrOfWindows = item.NrOfWindows,
+                DoorType = item.DoorType,
+                LockType = item.LockType,
+                HasLoadBearingRoof = item.HasLoadBearingRoof,
+                HasLiftingEyes = item.HasLiftingEyes,
+                HasForkliftPockets = item.HasForkliftPockets,
+                IsStackable = item.IsStackable,
+                RequiresSupportLegs = item.RequiresSupportLegs,
+                PlacementRequirements = item.PlacementRequirements,
+                PurchasePrice = item.PurchasePrice,
+                PurchaseDate = item.PurchaseDate,
+                BookValue = item.BookValue,
+                DepreciationPeriodMonths = item.DepreciationPeriodMonths,
+                IsRentedIn = item.IsRentedIn,
+                OwnerName = item.OwnerName,
+                RentedInCostPerMonth = item.RentedInCostPerMonth,
+                RentedInAgreementRef = item.RentedInAgreementRef,
                 PackageItemIds = item.PackageItems
                     ?.Select(link => link.PackageItemId)
                     .Distinct()
@@ -538,6 +612,71 @@ namespace Backend.Controllers
             target.UnavailableTo = source.UnavailableTo;
             target.AccountNr = source.AccountNr?.Trim() ?? string.Empty;
             target.CostCenterNr = source.CostCenterNr?.Trim() ?? string.Empty;
+
+            var cabinTypeCode = source.CabinTypeCode?.Trim().ToUpper();
+            target.CabinTypeCode = string.IsNullOrEmpty(cabinTypeCode) ? null : cabinTypeCode;
+            target.LengthMm = source.LengthMm;
+            target.WidthMm = source.WidthMm;
+            target.HeightMm = source.HeightMm;
+            target.InternalHeightMm = source.InternalHeightMm;
+            target.InternalFloorAreaM2 = source.InternalFloorAreaM2;
+            target.MaxLoadKg = source.MaxLoadKg;
+            target.NrOfModules = source.NrOfModules;
+            target.NrOfSockets = source.NrOfSockets;
+            target.HasResidualCurrentDevice = source.HasResidualCurrentDevice;
+            target.HasDistributionBoard = source.HasDistributionBoard;
+            target.ElectricalPhase = source.ElectricalPhase?.Trim() ?? string.Empty;
+            target.PowerConnectionType = source.PowerConnectionType?.Trim() ?? string.Empty;
+            target.HasElectricRadiator = source.HasElectricRadiator;
+            target.HasHeatPump = source.HasHeatPump;
+            target.HasUnderfloorHeating = source.HasUnderfloorHeating;
+            target.HasAirConditioning = source.HasAirConditioning;
+            target.HasLighting = source.HasLighting;
+            target.HasVentilation = source.HasVentilation;
+            target.ToiletType = source.ToiletType?.Trim() ?? string.Empty;
+            target.HasSink = source.HasSink;
+            target.HasWaterHeater = source.HasWaterHeater;
+            target.HasWaterTank = source.HasWaterTank;
+            target.HasFridge = source.HasFridge;
+            target.HasMicrowave = source.HasMicrowave;
+            target.HasCoffeeMaker = source.HasCoffeeMaker;
+            target.HasKitchenSink = source.HasKitchenSink;
+            target.HasDryingCabinet = source.HasDryingCabinet;
+            target.NrOfLockers = source.NrOfLockers;
+            target.NrOfTables = source.NrOfTables;
+            target.NrOfChairs = source.NrOfChairs;
+            target.NrOfBenches = source.NrOfBenches;
+            target.NrOfSeats = source.NrOfSeats;
+            target.IsInsulated = source.IsInsulated;
+            target.IsWinterRated = source.IsWinterRated;
+            target.NrOfWindows = source.NrOfWindows;
+            target.DoorType = source.DoorType?.Trim() ?? string.Empty;
+            target.LockType = source.LockType?.Trim() ?? string.Empty;
+            target.HasLoadBearingRoof = source.HasLoadBearingRoof;
+            target.HasLiftingEyes = source.HasLiftingEyes;
+            target.HasForkliftPockets = source.HasForkliftPockets;
+            target.IsStackable = source.IsStackable;
+            target.RequiresSupportLegs = source.RequiresSupportLegs;
+            target.PlacementRequirements = source.PlacementRequirements?.Trim() ?? string.Empty;
+            target.PurchasePrice = source.PurchasePrice;
+            target.PurchaseDate = source.PurchaseDate;
+            target.BookValue = source.BookValue;
+            target.DepreciationPeriodMonths = source.DepreciationPeriodMonths;
+            target.IsRentedIn = source.IsRentedIn;
+            target.OwnerName = source.OwnerName?.Trim() ?? string.Empty;
+            target.RentedInCostPerMonth = source.RentedInCostPerMonth;
+            target.RentedInAgreementRef = source.RentedInAgreementRef?.Trim() ?? string.Empty;
+        }
+
+        private async Task<bool> IsValidCabinTypeCodeAsync(string? cabinTypeCode)
+        {
+            var code = cabinTypeCode?.Trim().ToUpper();
+            if (string.IsNullOrEmpty(code))
+            {
+                return true;
+            }
+
+            return await _context.CabinTypes.AnyAsync(cabinType => cabinType.Code == code);
         }
 
         private static bool IsAluItemType(string? itemTypeCode)

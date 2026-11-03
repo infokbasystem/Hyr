@@ -17,7 +17,7 @@ const columns = [
   { key: 'itemNr', label: 'Namn', align: 'left', width: 'w-[220px]', sortable: true, sortField: 'itemnr' },
   { key: 'machineNr', label: 'Nr', align: 'left', width: 'w-[120px]', sortable: true, sortField: 'machinenr' },
   { key: 'itemCategoryName', label: 'Kategori', align: 'left', width: 'w-[10%]', sortable: true, sortField: 'itemcategoryname' },
-  { key: 'itemModelName', label: 'Modell', align: 'left', width: 'w-[10%]', sortable: true, sortField: 'itemmodelname' },
+  { key: 'itemModelName', label: 'Modell', align: 'left', width: 'w-[13%]', sortable: true, sortField: 'itemmodelname' },
   { key: 'manufacturer', label: 'Fabrikat', align: 'left', width: 'w-[10%]', sortable: true, sortField: 'manufacturer' },
   { key: 'itemTypeName', label: 'Objekttyp', align: 'left', width: 'w-[80px]', sortable: true, sortField: 'itemtypename' },
   { key: 'regNr', label: 'Regnr', align: 'left', width: 'w-80px]', sortable: true, sortField: 'regnr' },

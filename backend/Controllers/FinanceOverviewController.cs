@@ -245,6 +245,47 @@ namespace Backend.Controllers
             });
         }
 
+        [HttpGet("latest")]
+        [Authorize]
+        public async Task<ActionResult<IReadOnlyList<LatestInvoiceDto>>> GetLatest([FromQuery] int count = 10)
+        {
+            count = Math.Clamp(count, 1, 50);
+
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            var invoiceRows = await _context.Invoices
+                .AsNoTracking()
+                .Where(i => i.OfficeId == user.OfficeId && !i.IsCancelled)
+                .OrderByDescending(i => i.Id)
+                .Take(count)
+                .Select(i => new
+                {
+                    i.Id,
+                    i.InvoiceNr,
+                    i.CustomerName,
+                    i.InvoiceDate,
+                    TotSum = i.TotSum ?? 0m,
+                })
+                .ToListAsync();
+
+            var items = invoiceRows
+                .Select(invoice => new LatestInvoiceDto
+                {
+                    Id = invoice.Id,
+                    Fakturanr = invoice.InvoiceNr,
+                    Fakturadatum = invoice.InvoiceDate,
+                    Kund = invoice.CustomerName,
+                    Belopp = invoice.TotSum,
+                })
+                .ToList();
+
+            return Ok(items);
+        }
+
         private static DateTime StartOfIsoWeek(DateTime date)
         {
             var dayOfWeek = (int)date.DayOfWeek;
@@ -282,6 +323,15 @@ namespace Backend.Controllers
             public int Id { get; set; }
             public int? Fakturanr { get; set; }
             public DateTime Forfaller { get; set; }
+            public string Kund { get; set; } = string.Empty;
+            public decimal Belopp { get; set; }
+        }
+
+        public class LatestInvoiceDto
+        {
+            public int Id { get; set; }
+            public int? Fakturanr { get; set; }
+            public DateTime? Fakturadatum { get; set; }
             public string Kund { get; set; } = string.Empty;
             public decimal Belopp { get; set; }
         }

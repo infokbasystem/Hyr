@@ -1,8 +1,9 @@
 import { memo, useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { CalendarSearch, Calendar, ChevronLeft, ChevronRight, LoaderCircle, RotateCw, X } from 'lucide-react';
+import { CalendarSearch, Calendar, ChevronLeft, ChevronRight, Info, LoaderCircle, RotateCw, X } from 'lucide-react';
 import CarSearchModal from '../../modals/CarSearchModal';
+import ItemInfoModal from '../../modals/ItemInfoModal';
 import FilterSelect from '../../components/FilterSelect';
 import SegmentedFilter from '../../components/SegmentedFilter';
 import DateRangePicker from '../../components/DaterangePicker';
@@ -155,10 +156,10 @@ const TIMELINE_MAX_HEIGHT = "calc(100vh - 189px)";
 const TIMELINE_HEADER_H = 88;
 
 const PERIOD_OPTIONS = [
-    { value: 3, label: '3 dagar' },
-    { value: 7, label: '7 dagar' },
-    { value: 31, label: '31 dagar' },
-    { value: 90, label: '3 månader' },
+    { value: 3, label: '3 dgr' },
+    { value: 7, label: '7 dgr' },
+    { value: 31, label: '31 dgr' },
+    { value: 90, label: '3 mån' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -556,6 +557,8 @@ function VehicleTimeline(props) {
 
     const [carSearchOpen, setCarSearchOpen] = useState(false);
     const [dateSelectOpen, setDateSelectOpen] = useState(false);
+    const [infoItemId, setInfoItemId] = useState(null);
+    const closeItemInfo = useCallback(() => setInfoItemId(null), []);
     const dateSelectRef = useRef(null);
     const [searchSelection, setSearchSelection] = useState(timelineViewState.searchSelection);
     const [selectedCategories, setSelectedCategories] = useState(timelineViewState.selectedCategories);
@@ -619,6 +622,8 @@ function VehicleTimeline(props) {
             categoryIds,
             categoryName: searchSelection?.category ?? '',
             modelName: searchSelection?.model ?? '',
+            availableFrom: searchSelection?.from ?? '',
+            availableTo: searchSelection?.to ?? '',
         })
             .then(vehicles => {
                 if (isActive) setVisibleCars(vehicles);
@@ -629,11 +634,6 @@ function VehicleTimeline(props) {
 
         return () => { isActive = false; };
     }, [selectedCategoryKey, searchSelection]);
-
-    const visibleVehicleKey = useMemo(
-        () => visibleCars.map(vehicle => vehicle.id).join(','),
-        [visibleCars]
-    );
 
     const handleCarSearch = (params) => {
         const from = toIsoDateTime(params?.period?.from);
@@ -698,6 +698,11 @@ function VehicleTimeline(props) {
     }, [dateSelectOpen]);
 
     const handleOpenNewReservation = (car) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
         navigate('/operations/reservation/new', {
             state: {
                 newReservationPrefill: {
@@ -711,7 +716,7 @@ function VehicleTimeline(props) {
                     },
                     period: searchSelection?.from && searchSelection?.to
                         ? { from: searchSelection.from, to: searchSelection.to }
-                        : null,
+                        : { from: today, to: tomorrow },
                 },
             },
         });
@@ -739,9 +744,9 @@ function VehicleTimeline(props) {
     const viewportDays = baseGeometry.timelineViewportWidth > 0
         ? baseGeometry.timelineViewportWidth / baseGeometry.dayWidth
         : daysVisible;
-    const currentQueryKey = `${visibleVehicleKey}|${startDate.getTime()}|${daysVisible}`;
+    const currentQueryKey = `categories:${selectedCategoryKey}|${startDate.getTime()}|${daysVisible}`;
     const progressive = useProgressivePlanningReservations({
-        vehicleKey: visibleVehicleKey,
+        categoryKey: selectedCategoryKey,
         startDate,
         daysVisible,
         viewportDays,
@@ -774,10 +779,9 @@ function VehicleTimeline(props) {
     } = geometry;
 
     useEffect(() => {
-        if (!visibleVehicleKey) return;
         timelineViewState.loadedRange = loadedRange;
         timelineViewState.loadedRangeQueryKey = queryKey;
-    }, [loadedRange, queryKey, visibleVehicleKey]);
+    }, [loadedRange, queryKey]);
 
     useEffect(() => {
         ensureCoverage(pendingScrollXRef.current / dayW, viewportDays);
@@ -1149,6 +1153,8 @@ function VehicleTimeline(props) {
         <div className="px-4" style={{ position: "relative" }}>
             <div ref={containerRef} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 0, pointerEvents: "none" }} />
 
+            <ItemInfoModal itemId={infoItemId} onClose={closeItemInfo} />
+
             <CarSearchModal
                 isOpen={carSearchOpen}
                 onClose={() => setCarSearchOpen(false)}
@@ -1156,17 +1162,19 @@ function VehicleTimeline(props) {
             />
 
             {/* ── Top Bar ── */}
-            <div className="flex flex-row items-center justify-between pt-6 pb-7 px-30">
+            <div className="flex flex-row items-center justify-between pt-6 pb-7 2xl:px-10">
 
                 <div className="flex flex-row items-center gap-5">
 
+                    {props.typeSelector && <div className="shrink-0">{props.typeSelector}</div>}
+
                     {/* Days selector */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="shrink-0" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <SegmentedFilter
                             value={daysVisible}
                             onChange={handleDaysVisibleChange}
                             options={PERIOD_OPTIONS}
-                            theme="sky"
+                            theme="green"
                         />
                     </div>
 
@@ -1241,7 +1249,7 @@ function VehicleTimeline(props) {
                             <span className="text-xs text-lime-900">
                                 {[
                                     searchSelection.category || 'Alla kategorier',
-                                    searchSelection.model || 'Alla modeller',
+                                    // searchSelection.model || 'Alla modeller',
                                     searchSelection.from && searchSelection.to
                                         ? `${formatSelectionDate(searchSelection.from)} – ${formatSelectionDate(searchSelection.to)}`
                                         : '',
@@ -1320,24 +1328,38 @@ function VehicleTimeline(props) {
                             {renderedCars.map((car, i) => {
                                 const row = layout[rowWindow.startIndex + i];
                                 return (
-                                    <div key={car.id} data-timeline-car-id={car.id} style={{ height: row.rowH, background: "#AAB8E4", borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", paddingLeft: 16, paddingRight: 8, gap: 8, transition: "background 0.1s, height 0.2s" }}>
+                                    <div key={car.id} data-timeline-car-id={car.id} style={{ height: row.rowH, background: "#d4defc", borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", paddingLeft: 16, paddingRight: 8, gap: 8, transition: "background 0.1s, height 0.2s" }}>
                                         <div className="text-xs" style={{ minWidth: 0, color: 'black', overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                             {car.category}
                                         </div>
                                         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                                            <button
-                                                type="button"
-                                                tabIndex={-1}
-                                                className="text-tiny cursor-pointer hover:underline"
-                                                title="Skapa ny bokning"
-                                                onMouseDown={(e) => {
-                                                    e.preventDefault();
-                                                }}
-                                                onClick={() => handleOpenNewReservation(car)}
-                                                style={{ color: 'black', background: "none", border: "none", padding: 0 }}
-                                            >
-                                                {car.regNr}
-                                            </button>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                                <button
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    className="text-tiny cursor-pointer hover:underline"
+                                                    title="Skapa ny bokning"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                    }}
+                                                    onClick={() => handleOpenNewReservation(car)}
+                                                    style={{ color: 'black', background: "none", border: "none", padding: 0 }}
+                                                >
+                                                    {car.regNr}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    className="cursor-pointer text-gray-400 hover:text-black"
+                                                    title="Visa information"
+                                                    aria-label="Visa information"
+                                                    onMouseDown={(e) => e.preventDefault()}
+                                                    onClick={() => setInfoItemId(car.id)}
+                                                    style={{ background: "none", border: "none", padding: 0, display: "flex" }}
+                                                >
+                                                    <Info className="h-3.5 w-3.5" strokeWidth={2} />
+                                                </button>
+                                            </div>
                                             {row.laneCount > 1 && <span style={{ fontSize: 9, color: T.textDim, background: T.overlapBg, padding: "1px 5px", borderRadius: 4 }}>{row.laneCount} overlaps</span>}
                                         </div>
                                     </div>

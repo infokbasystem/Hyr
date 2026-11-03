@@ -139,7 +139,7 @@ public sealed class CategoryGuaranteePricingSectionDto
 public sealed class ExecuteReservationPricingRequestDto
 {
     public int ReservationId { get; set; }
-    public DateTime CalculateToDate { get; set; }
+    public DateTime? CalculateToDate { get; set; }
     public string? PriceType { get; set; }
 }
 

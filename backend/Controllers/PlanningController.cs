@@ -122,6 +122,82 @@ namespace Backend.Controllers
             return Ok(vehicles);
         }
 
+        [HttpGet("cabin-types")]
+        [Authorize]
+        public async Task<ActionResult<List<PlanningCabinTypeOptionDto>>> GetCabinTypes()
+        {
+            var cabinTypes = await _context.CabinTypes
+                .AsNoTracking()
+                .OrderBy(ct => ct.SortNr)
+                .ThenBy(ct => ct.Name)
+                .Select(ct => new PlanningCabinTypeOptionDto
+                {
+                    Code = ct.Code,
+                    Name = ct.Name,
+                })
+                .ToListAsync();
+
+            return Ok(cabinTypes);
+        }
+
+        [HttpGet("cabins")]
+        [Authorize]
+        public async Task<ActionResult<List<PlanningCabinDto>>> GetCabins([FromQuery] PlanningCabinFilter filter)
+        {
+            var user = await _currentUserService.GetCurrentUserAsync(User);
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            var query = _context.Items
+                .AsNoTracking()
+                .Where(i => i.OfficeId == user.OfficeId && i.ItemTypeCode.ToUpper() == "CABIN");
+
+            if (filter.IsActive.HasValue)
+            {
+                query = query.Where(i => i.IsActive == filter.IsActive.Value);
+            }
+
+            var cabinTypeCodes = NormalizeCodes(filter.CabinTypeCodes);
+            if (cabinTypeCodes.Count > 0)
+            {
+                query = query.Where(i => i.CabinTypeCode != null && cabinTypeCodes.Contains(i.CabinTypeCode));
+            }
+
+            if (filter.AvailableFrom.HasValue && filter.AvailableTo.HasValue)
+            {
+                var availableFrom = filter.AvailableFrom.Value;
+                var availableTo = filter.AvailableTo.Value;
+
+                query = query.Where(i => !_context.ReservationItems.Any(ri =>
+                    ri.ItemId == i.Id &&
+                    (ri.ActualFrom ?? ri.BookedFrom) != null &&
+                    (ri.ActualTo ?? ri.BookedTo) != null &&
+                    (ri.ActualFrom ?? ri.BookedFrom)! <= availableTo &&
+                    (ri.ActualTo ?? ri.BookedTo)! >= availableFrom));
+            }
+
+            var cabins = await query
+                .OrderBy(i => i.CabinType != null ? i.CabinType.SortNr : int.MaxValue)
+                .ThenBy(i => i.ItemNr)
+                .Select(i => new PlanningCabinDto
+                {
+                    Id = i.Id,
+                    ItemNr = i.ItemNr,
+                    SerialNr = i.SerialNr,
+                    CabinTypeCode = i.CabinTypeCode,
+                    CabinTypeName = i.CabinType != null ? i.CabinType.Name : string.Empty,
+                    ItemCategoryId = i.ItemCategoryId,
+                    ItemCategoryName = i.ItemCategory != null ? i.ItemCategory.Name : string.Empty,
+                    Manufacturer = i.Manufacturer,
+                    ItemModelName = i.ItemModel != null ? i.ItemModel.Name : string.Empty,
+                })
+                .ToListAsync();
+
+            return Ok(cabins);
+        }
+
         [HttpGet("reservations")]
         [Authorize]
         public async Task<ActionResult<List<PlanningReservationDto>>> GetReservations([FromQuery] PlanningReservationFilter filter)
@@ -132,13 +208,33 @@ namespace Backend.Controllers
                 return Unauthorized(new { message = "User not found" });
             }
 
+            var itemTypeCode = string.IsNullOrWhiteSpace(filter.ItemTypeCode)
+                ? "VEHICLE"
+                : filter.ItemTypeCode.Trim().ToUpper();
+
             var query = _context.ReservationItems
                 .AsNoTracking()
                 .Where(item => item.OfficeId == user.OfficeId
                     && item.ItemId.HasValue
+                    && item.Item != null
+                    && item.Item.OfficeId == user.OfficeId
+                    && item.Item.ItemTypeCode.ToUpper() == itemTypeCode
                     && item.BookedFrom.HasValue
                     && item.BookedTo.HasValue
                     && item.Reservation != null);
+
+            var cabinTypeCodes = NormalizeCodes(filter.CabinTypeCodes);
+            if (cabinTypeCodes.Count > 0)
+            {
+                query = query.Where(item => item.Item!.CabinTypeCode != null
+                    && cabinTypeCodes.Contains(item.Item.CabinTypeCode));
+            }
+
+            if (filter.CategoryIds != null && filter.CategoryIds.Count > 0)
+            {
+                query = query.Where(item => item.Item!.ItemCategoryId.HasValue
+                    && filter.CategoryIds.Contains(item.Item.ItemCategoryId.Value));
+            }
 
             if (filter.VehicleIds != null && filter.VehicleIds.Count > 0)
             {
@@ -165,6 +261,7 @@ namespace Backend.Controllers
                     VehicleId = item.ItemId!.Value,
                     ReservationNr = item.Reservation!.ReservationNr,
                     Customer = item.Reservation.CustomerName,
+                    DeliveryPlace = item.Reservation.DeliveryPlace,
                     item.BookedFrom,
                     item.BookedTo,
                     item.ActualFrom,
@@ -183,6 +280,7 @@ namespace Backend.Controllers
                 Customer = string.IsNullOrWhiteSpace(item.Customer)
                     ? $"Reservation {item.ReservationNr?.ToString() ?? item.Id.ToString()}"
                     : item.Customer,
+                DeliveryPlace = item.DeliveryPlace ?? string.Empty,
                 Start = item.BookedFrom,
                 End = item.BookedTo,
                 Status = ResolvePlanningReservationStatus(item.ActualFrom, item.ActualTo, item.BookedFrom, item.BookedTo, now),
@@ -210,20 +308,25 @@ namespace Backend.Controllers
             }
 
             var reservationItem = await _context.ReservationItems
+                .Include(item => item.Item)
                 .FirstOrDefaultAsync(item => item.Id == id && item.OfficeId == user.OfficeId, cancellationToken);
             if (reservationItem == null)
             {
                 return NotFound(new { message = "Bokningen hittades inte" });
             }
 
-            var vehicleExists = await _context.Items.AnyAsync(item =>
+            var currentItemTypeCode = string.IsNullOrWhiteSpace(reservationItem.Item?.ItemTypeCode)
+                ? "VEHICLE"
+                : reservationItem.Item.ItemTypeCode.Trim().ToUpper();
+
+            var targetItemExists = await _context.Items.AnyAsync(item =>
                 item.Id == request.VehicleId
                 && item.OfficeId == user.OfficeId
-                && item.ItemTypeCode.ToUpper() == "VEHICLE",
+                && item.ItemTypeCode.ToUpper() == currentItemTypeCode,
                 cancellationToken);
-            if (!vehicleExists)
+            if (!targetItemExists)
             {
-                return BadRequest(new { message = "Fordonet hittades inte" });
+                return BadRequest(new { message = "Objektet hittades inte eller är av fel typ" });
             }
 
             reservationItem.ItemId = request.VehicleId;
@@ -239,6 +342,15 @@ namespace Backend.Controllers
                 DateTime.Now);
 
             return Ok(new UpdatePlanningReservationResponse(status));
+        }
+
+        private static List<string> NormalizeCodes(List<string>? codes)
+        {
+            return codes?
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .Select(code => code.Trim().ToUpper())
+                .Distinct()
+                .ToList() ?? [];
         }
 
         private static string ResolvePlanningReservationStatus(

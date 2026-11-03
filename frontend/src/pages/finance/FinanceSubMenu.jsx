@@ -39,7 +39,7 @@ const items = [
 export default function FinanceSubMenu({ activeOverridePath = "" }) {
     return (
         <nav
-            className="sticky top-[52px] z-20 flex items-end justify-center gap-0 px-8 pt-2 pb-4"
+            className="sticky top-[48px] z-20 flex items-end justify-center gap-0 px-8 pt-2 pb-4"
             style={{ backgroundImage: `url(${bg})` }}
         >
             {items.map((item) => {

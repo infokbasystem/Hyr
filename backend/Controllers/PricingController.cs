@@ -469,112 +469,104 @@ namespace Backend.Controllers
                 return NotFound(new { message = "Reservation not found" });
             }
 
-            if (!reservation.PriceListId.HasValue)
-            {
-                return BadRequest(new { message = "Reservation has no PriceListId" });
-            }
-
-            var vehicleItems = reservation.ReservationItems
-                .Where(item => string.Equals(item.ItemTypeCode, VehicleItemTypeCode, StringComparison.OrdinalIgnoreCase))
+            var reservationItems = reservation.ReservationItems
                 .OrderBy(item => item.SortNr ?? int.MaxValue)
                 .ThenBy(item => item.Id)
                 .ToList();
 
-            if (vehicleItems.Count == 0)
+            if (reservationItems.Count == 0)
             {
-                return BadRequest(new { message = "Reservation must contain one VEHICLE item" });
+                return BadRequest(new { message = "Bokningen saknar artiklar att prisberäkna." });
             }
+
+            if (reservationItems.Any(item => item.Item == null || item.Item.OfficeId != officeId))
+            {
+                return BadRequest(new { message = "Alla bokningsrader måste ha en vald artikel från det aktuella kontoret." });
+            }
+
+            var vehicleItems = reservationItems
+                .Where(item => string.Equals(item.Item!.ItemTypeCode, VehicleItemTypeCode, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             if (vehicleItems.Count > 1)
             {
                 return BadRequest(new { message = "Multiple VEHICLE items are not yet supported" });
             }
 
-            var vehicleItem = vehicleItems[0];
-
-            if (!vehicleItem.ActualFrom.HasValue)
+            if (vehicleItems.Count > 0 && !reservation.PriceListId.HasValue)
             {
-                return BadRequest(new { message = "VEHICLE item must have ActualFrom before pricing can be calculated" });
+                return BadRequest(new { message = "Välj prislista innan priset för fordonet beräknas." });
             }
 
-            if (!vehicleItem.Item?.ItemCategoryId.HasValue ?? true)
+            if (vehicleItems.Count > 0 && !await _context.PriceLists.AnyAsync(list => list.Id == reservation.PriceListId && list.OfficeId == officeId))
             {
-                return BadRequest(new { message = "VEHICLE item must have an ItemCategory to use category pricing" });
+                return BadRequest(new { message = "Prislistan måste tillhöra det aktuella kontoret." });
             }
 
-            // TODO: derive INSURANCECOMPANY/INTERNAL receivers once that logic is defined.
-            var receiverTypeCode = ReceiverTypeCodes.Customer;
-
-            // Recalculation should replace non-invoiced calcs, while preserving invoiced history.
-            var uninvoicedCalcs = reservation.ReservationCalcs
-                .Where(calc => !(calc.ReservationCalcItems ?? [])
-                    .Any(calcItem => (calcItem.InvoiceRows ?? [])
-                        .Any(invoiceRow => invoiceRow.InvoiceId.HasValue)))
-                .ToList();
-
-            if (uninvoicedCalcs.Count > 0)
+            if (vehicleItems.Count == 0 && normalizedRequestedPriceType != null)
             {
-                var uninvoicedCalcItems = uninvoicedCalcs
-                    .SelectMany(calc => calc.ReservationCalcItems ?? [])
-                    .ToList();
+                return BadRequest(new { message = "Val av pristyp stöds endast för fordon." });
+            }
 
-                if (uninvoicedCalcItems.Count > 0)
+            var quotes = new List<(ReservationItem Item, DateTime From, DateTime To, string PriceType, IReadOnlyList<VehiclePriceRow> Rows)>();
+            foreach (var reservationItem in reservationItems)
+            {
+                var isVehicle = vehicleItems.Contains(reservationItem);
+                var periodStart = isVehicle ? reservationItem.ActualFrom : reservationItem.ActualFrom ?? reservationItem.BookedFrom;
+                var periodEnd = isVehicle
+                    ? request.CalculateToDate ?? reservationItem.ActualTo ?? reservationItem.BookedTo
+                    : reservationItem.ActualTo ?? reservationItem.BookedTo;
+                var itemLabel = reservationItem.Item!.ItemNr;
+
+                if (!periodStart.HasValue || !periodEnd.HasValue || periodEnd <= periodStart)
                 {
-                    _context.ReservationCalcItems.RemoveRange(uninvoicedCalcItems);
+                    return BadRequest(new { message = $"Artikel {itemLabel}: ange en giltig hyresperiod. Fordon kräver Faktisk från." });
                 }
 
-                _context.ReservationCalcs.RemoveRange(uninvoicedCalcs);
+                if (!isVehicle)
+                {
+                    try
+                    {
+                        var directRows = DirectItemPricingCalculator.Calculate(reservationItem.Item, periodStart.Value, periodEnd.Value, reservation.PricingCalendarCode)
+                            .Select(row => new VehiclePriceRow("DIRECT", CalcPriceTypeCodes.Rent, row.Text, row.Qty, row.UnitPrice, row.Sum))
+                            .ToList();
+                        quotes.Add((reservationItem, periodStart.Value, periodEnd.Value, "DIRECT", directRows));
+                    }
+                    catch (ArgumentException error)
+                    {
+                        return BadRequest(new { message = $"Artikel {itemLabel}: {error.Message}" });
+                    }
+
+                    continue;
+                }
+
+                if (!reservationItem.Item.ItemCategoryId.HasValue)
+                {
+                    return BadRequest(new { message = "VEHICLE item must have an ItemCategory to use category pricing" });
+                }
+
+                var drivenKilometers = reservationItem.KmOut.HasValue && reservationItem.KmIn.HasValue
+                    ? Math.Max(0, reservationItem.KmIn.Value - reservationItem.KmOut.Value)
+                    : 0m;
+                var candidates = await BuildVehiclePriceCandidatesAsync(
+                    reservation.PriceListId!.Value,
+                    reservationItem.Item.ItemCategoryId.Value,
+                    CalculateChargeableDays(periodStart.Value, periodEnd.Value),
+                    CalculateChargeableHours(periodStart.Value, periodEnd.Value),
+                    CountChargeableWeekends(periodStart.Value, periodEnd.Value),
+                    drivenKilometers,
+                    normalizedRequestedPriceType);
+
+                if (candidates.Count == 0)
+                {
+                    return BadRequest(new { message = "No matching category price configuration found for the selected period and price type" });
+                }
+
+                var selectedCandidate = normalizedRequestedPriceType == null
+                    ? candidates.OrderBy(candidate => candidate.Sum).ThenBy(candidate => candidate.SortPriority).First()
+                    : candidates.First(candidate => string.Equals(candidate.PriceType, normalizedRequestedPriceType, StringComparison.OrdinalIgnoreCase));
+                quotes.Add((reservationItem, periodStart.Value, periodEnd.Value, selectedCandidate.PriceType, selectedCandidate.Rows));
             }
-
-            var invoicedCalcsForReceiver = reservation.ReservationCalcs
-                .Except(uninvoicedCalcs)
-                .Where(calc => string.Equals(
-                    ReceiverTypeCodes.NormalizeOrDefault(calc.ReceiverTypeCode),
-                    receiverTypeCode,
-                    StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            var priorInvoicedTotal = invoicedCalcsForReceiver
-                .SelectMany(calc => calc.ReservationCalcItems ?? [])
-                .Sum(calcItem => calcItem.Sum ?? 0m);
-
-            var periodStart = vehicleItem.ActualFrom.Value;
-            var periodEnd = request.CalculateToDate;
-            if (periodEnd <= periodStart)
-            {
-                return BadRequest(new { message = "CalculateToDate must be later than calculated period start" });
-            }
-
-            var rentalDays = CalculateChargeableDays(periodStart, periodEnd);
-            var rentalHours = CalculateChargeableHours(periodStart, periodEnd);
-            var weekendCount = CountChargeableWeekends(periodStart, periodEnd);
-            var drivenKilometers = 0m;
-
-            if (vehicleItem.KmOut.HasValue && vehicleItem.KmIn.HasValue)
-            {
-                drivenKilometers = Math.Max(0, vehicleItem.KmIn.Value - vehicleItem.KmOut.Value);
-            }
-
-            var candidates = await BuildVehiclePriceCandidatesAsync(
-                reservation.PriceListId.Value,
-                vehicleItem.Item!.ItemCategoryId!.Value,
-                rentalDays,
-                rentalHours,
-                weekendCount,
-                drivenKilometers,
-                normalizedRequestedPriceType);
-
-            if (candidates.Count == 0)
-            {
-                return BadRequest(new { message = "No matching category price configuration found for the selected period and price type" });
-            }
-
-            var selectedCandidate = normalizedRequestedPriceType == null
-                ? candidates
-                    .OrderBy(candidate => candidate.Sum)
-                    .ThenBy(candidate => candidate.SortPriority)
-                    .First()
-                : candidates.First(candidate => string.Equals(candidate.PriceType, normalizedRequestedPriceType, StringComparison.OrdinalIgnoreCase));
 
             var defaultVat = await _context.VatRates
                 .AsNoTracking()
@@ -590,52 +582,74 @@ namespace Backend.Controllers
 
             var reservationCalcVatId = defaultVat?.Id;
             var reservationCalcVatRate = defaultVat?.Rate ?? 25m;
-
-            var newReservationCalc = new ReservationCalc
+            var receiverTypeCode = ReceiverTypeCodes.Customer;
+            var uninvoicedCalcs = reservation.ReservationCalcs
+                .Where(calc => !calc.ReservationCalcItems.Any(row => (row.InvoiceRows ?? []).Any(invoiceRow => invoiceRow.InvoiceId.HasValue)))
+                .ToList();
+            var priorTotalsByItem = reservation.ReservationCalcs
+                .Except(uninvoicedCalcs)
+                .Where(calc => ReceiverTypeCodes.NormalizeOrDefault(calc.ReceiverTypeCode) == receiverTypeCode)
+                .SelectMany(calc => calc.ReservationCalcItems)
+                .Where(row => row.ItemId.HasValue)
+                .GroupBy(row => row.ItemId!.Value)
+                .ToDictionary(group => group.Key, group => group.Sum(row => row.Sum ?? 0m));
+            var newCalcs = new List<ReservationCalc>();
+            foreach (var quote in quotes)
             {
-                OfficeId = officeId,
-                ReservationId = reservation.Id,
-                DateTimeFrom = periodStart,
-                DateTimeTo = periodEnd,
-                ReceiverTypeCode = receiverTypeCode,
-            };
-
-            foreach (var row in selectedCandidate.Rows)
-            {
-                newReservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                var priceListId = quote.PriceType == "DIRECT" ? null : reservation.PriceListId;
+                var newReservationCalc = new ReservationCalc
                 {
                     OfficeId = officeId,
-                    ItemId = vehicleItem.ItemId,
-                    PriceListId = reservation.PriceListId,
-                    VatId = reservationCalcVatId,
-                    VatRate = RoundMoney(reservationCalcVatRate),
-                    CalcPriceTypeCode = row.CalcPriceTypeCode,
-                    Text = row.Text,
-                    Qty = RoundMoney(row.Qty),
-                    UnitPrice = RoundMoney(row.UnitPrice),
-                    Sum = RoundMoney(row.Sum),
-                });
-            }
+                    ReservationId = reservation.Id,
+                    DateTimeFrom = quote.From,
+                    DateTimeTo = quote.To,
+                    ReceiverTypeCode = receiverTypeCode,
+                };
 
-            if (priorInvoicedTotal != 0m)
-            {
-                var priorInvoicedDeduction = RoundMoney(-priorInvoicedTotal);
-                newReservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                foreach (var row in quote.Rows)
                 {
-                    OfficeId = officeId,
-                    ItemId = vehicleItem.ItemId,
-                    PriceListId = reservation.PriceListId,
-                    VatId = reservationCalcVatId,
-                    VatRate = RoundMoney(reservationCalcVatRate),
-                    CalcPriceTypeCode = CalcPriceTypeCodes.Rent,
-                    Text = "Avdrag tidigare fakturerat",
-                    Qty = 1m,
-                    UnitPrice = priorInvoicedDeduction,
-                    Sum = priorInvoicedDeduction,
-                });
+                    newReservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                    {
+                        OfficeId = officeId,
+                        ItemId = quote.Item.ItemId,
+                        PriceListId = priceListId,
+                        VatId = reservationCalcVatId,
+                        VatRate = RoundMoney(reservationCalcVatRate),
+                        CalcPriceTypeCode = row.CalcPriceTypeCode,
+                        Text = row.Text,
+                        Qty = RoundMoney(row.Qty),
+                        UnitPrice = RoundMoney(row.UnitPrice),
+                        Sum = RoundMoney(row.Sum),
+                    });
+                }
+
+                if (priorTotalsByItem.Remove(quote.Item.ItemId!.Value, out var priorTotal) && priorTotal != 0m)
+                {
+                    var deduction = RoundMoney(-priorTotal);
+                    newReservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                    {
+                        OfficeId = officeId,
+                        ItemId = quote.Item.ItemId,
+                        PriceListId = priceListId,
+                        VatId = reservationCalcVatId,
+                        VatRate = RoundMoney(reservationCalcVatRate),
+                        CalcPriceTypeCode = CalcPriceTypeCodes.Rent,
+                        Text = "Avdrag tidigare fakturerat",
+                        Qty = 1m,
+                        UnitPrice = deduction,
+                        Sum = deduction,
+                    });
+                }
+
+                if (newReservationCalc.ReservationCalcItems.Count > 0)
+                {
+                    newCalcs.Add(newReservationCalc);
+                }
             }
 
-            _context.ReservationCalcs.Add(newReservationCalc);
+            _context.ReservationCalcItems.RemoveRange(uninvoicedCalcs.SelectMany(calc => calc.ReservationCalcItems));
+            _context.ReservationCalcs.RemoveRange(uninvoicedCalcs);
+            _context.ReservationCalcs.AddRange(newCalcs);
             await _context.SaveChangesAsync();
 
             var allReservationCalcs = await _context.ReservationCalcs
@@ -649,10 +663,10 @@ namespace Backend.Controllers
             return Ok(new ExecuteReservationPricingResponseDto
             {
                 ReservationId = reservation.Id,
-                NewReservationCalcId = newReservationCalc.Id,
-                PriceTypeUsed = selectedCandidate.PriceType,
-                PeriodFrom = periodStart,
-                PeriodTo = periodEnd,
+                NewReservationCalcId = newCalcs.FirstOrDefault()?.Id ?? 0,
+                PriceTypeUsed = vehicleItems.Count > 0 ? quotes.First(quote => quote.PriceType != "DIRECT").PriceType : "DIRECT",
+                PeriodFrom = quotes.Min(quote => quote.From),
+                PeriodTo = quotes.Max(quote => quote.To),
                 ReservationCalcs = MapReservationCalcs(allReservationCalcs),
             });
         }

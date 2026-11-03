@@ -109,7 +109,7 @@ function rangeDate(origin, day) {
 }
 
 export default function useProgressivePlanningReservations({
-    vehicleKey,
+    categoryKey,
     startDate,
     daysVisible,
     viewportDays,
@@ -122,7 +122,7 @@ export default function useProgressivePlanningReservations({
     isBusy,
     getRevision,
 }) {
-    const queryKey = `${vehicleKey}|${startDate.getTime()}|${daysVisible}`;
+    const queryKey = `categories:${categoryKey}|${startDate.getTime()}|${daysVisible}`;
     const initialRange = useMemo(() => (
         restoredQueryKey === queryKey && restoredRange
             ? restoredRange
@@ -135,20 +135,16 @@ export default function useProgressivePlanningReservations({
     const configRef = useRef(null);
 
     useLayoutEffect(() => {
-        configRef.current = { initialRange, vehicleKey, startDate, fetchReservations, setBookings, isBusy, getRevision };
-    }, [fetchReservations, getRevision, initialRange, isBusy, setBookings, startDate, vehicleKey]);
+        configRef.current = { initialRange, categoryKey, startDate, fetchReservations, setBookings, isBusy, getRevision };
+    }, [categoryKey, fetchReservations, getRevision, initialRange, isBusy, setBookings, startDate]);
 
     useEffect(() => {
         if (!enabled) return;
         const config = configRef.current;
-        const vehicleIds = config.vehicleKey ? config.vehicleKey.split(',').map(Number) : [];
+        const categoryIds = config.categoryKey ? config.categoryKey.split(',').map(Number) : [];
         config.setBookings([]);
         setRangeState({ queryKey, range: config.initialRange });
         setError(null);
-        if (vehicleIds.length === 0) {
-            setLoading(false);
-            return;
-        }
 
         const controller = createPlanningRangeLoader({
             initialRange: config.initialRange,
@@ -161,7 +157,8 @@ export default function useProgressivePlanningReservations({
             },
             fetchRange: async (range) => {
                 const rows = await config.fetchReservations({
-                    vehicleIds,
+                    categoryIds,
+                    filterKey: config.categoryKey,
                     from: rangeDate(config.startDate, range.startDay),
                     to: rangeDate(config.startDate, range.endDay),
                 });

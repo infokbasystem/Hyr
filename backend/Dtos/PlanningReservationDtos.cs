@@ -7,6 +7,7 @@ public class PlanningReservationDto
     public int VehicleId { get; set; }
     public int? ReservationNr { get; set; }
     public string Customer { get; set; } = string.Empty;
+    public string DeliveryPlace { get; set; } = string.Empty;
     public DateTime? Start { get; set; }
     public DateTime? End { get; set; }
     public string Status { get; set; } = string.Empty;

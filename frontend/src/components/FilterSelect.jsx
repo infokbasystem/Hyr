@@ -4,7 +4,7 @@ function getFilterSelectStyles() {
   return {
     control: (base, state) => ({
       ...base,
-      minHeight: 28,
+      minHeight: 26,
       height: 'auto',
       borderRadius: state.isMulti && state.hasValue ? 14 : 9999,
       borderColor: state.isFocused ? '#65a30d' : '#84cc16',
@@ -16,15 +16,15 @@ function getFilterSelectStyles() {
     }),
     valueContainer: (base) => ({
       ...base,
-      minHeight: 28,
+      minHeight: 26,
       height: 'auto',
       flexWrap: 'wrap',
-      padding: '1px 12px',
-      fontSize: '12px',
+      padding: '0px 12px',
+      fontSize: '0.7rem',
     }),
     indicatorsContainer: (base) => ({
       ...base,
-      minHeight: 28,
+      minHeight: 26,
       alignItems: 'center',
     }),
     clearIndicator: (base, state) => ({
@@ -51,17 +51,17 @@ function getFilterSelectStyles() {
       ...base,
       margin: 0,
       padding: 0,
-      fontSize: '12px',
+      fontSize: '0.7rem',
     }),
     option: (base, state) => ({
       ...base,
-      fontSize: '12px',
+      fontSize: '0.7rem',
       backgroundColor: state.isFocused ? '#f7fee7' : 'white',
       color: '#374151',
     }),
     singleValue: (base) => ({
       ...base,
-      fontSize: '12px',
+      fontSize: '0.7rem',
       color: '#374151',
     }),
     multiValue: (base) => ({
@@ -87,7 +87,7 @@ function getFilterSelectStyles() {
     }),
     placeholder: (base) => ({
       ...base,
-      fontSize: '12px',
+      fontSize: '0.7rem',
       color: '#374151',
       fontWeight: 400,
     }),

@@ -110,6 +110,32 @@ namespace Backend.Migrations
                     b.ToTable("Article", (string)null);
                 });
 
+            modelBuilder.Entity("Backend.Models.CabinType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("SortNr")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CabinType", (string)null);
+                });
+
             modelBuilder.Entity("Backend.Models.Currency", b =>
                 {
                     b.Property<int>("Id")
@@ -766,6 +792,13 @@ namespace Backend.Migrations
                     b.Property<decimal?>("BasePrice")
                         .HasColumnType("decimal(10,5)");
 
+                    b.Property<decimal?>("BookValue")
+                        .HasColumnType("decimal(18,5)");
+
+                    b.Property<string>("CabinTypeCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<bool>("CalculatePriceFromPartPrices")
                         .HasColumnType("bit");
 
@@ -779,6 +812,19 @@ namespace Backend.Migrations
 
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("int");
+
+                    b.Property<int?>("DepreciationPeriodMonths")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DoorType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ElectricalPhase")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Equipment")
                         .IsRequired()
@@ -796,6 +842,66 @@ namespace Backend.Migrations
                     b.Property<decimal?>("FuelConsumptionLitresPerKm")
                         .HasColumnType("decimal(10,5)");
 
+                    b.Property<bool>("HasAirConditioning")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasCoffeeMaker")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasDistributionBoard")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasDryingCabinet")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasElectricRadiator")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasForkliftPockets")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasFridge")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasHeatPump")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasKitchenSink")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasLiftingEyes")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasLighting")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasLoadBearingRoof")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasMicrowave")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasResidualCurrentDevice")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasSink")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasUnderfloorHeating")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasVentilation")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasWaterHeater")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasWaterTank")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("HeightMm")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("HourMeter")
                         .HasColumnType("decimal(10,5)");
 
@@ -807,13 +913,31 @@ namespace Backend.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<decimal?>("InternalFloorAreaM2")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int?>("InternalHeightMm")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsInsulated")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsPartOfPackage")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsRentedIn")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsStackable")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsStorageItem")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsWinterRated")
                         .HasColumnType("bit");
 
                     b.Property<int?>("ItemCategoryId")
@@ -834,6 +958,14 @@ namespace Backend.Migrations
                     b.Property<int?>("KmReading")
                         .HasColumnType("int");
 
+                    b.Property<int?>("LengthMm")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LockType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("MachineNr")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -844,16 +976,53 @@ namespace Backend.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<decimal?>("MaxLoadKg")
+                        .HasColumnType("decimal(10,5)");
+
                     b.Property<string>("Note")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<int?>("NrOfBenches")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfChairs")
+                        .HasColumnType("int");
+
                     b.Property<int?>("NrOfItemsTotal")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfLockers")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfModules")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfSeats")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfSockets")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfTables")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NrOfWindows")
                         .HasColumnType("int");
 
                     b.Property<int>("OfficeId")
                         .HasColumnType("int");
+
+                    b.Property<string>("OwnerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PlacementRequirements")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int?>("PlatformHeightMm")
                         .HasColumnType("int");
@@ -865,6 +1034,11 @@ namespace Backend.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PowerConnectionType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<decimal?>("PricePerDay")
                         .HasColumnType("decimal(10,5)");
@@ -881,13 +1055,30 @@ namespace Backend.Migrations
                     b.Property<decimal?>("PricePerWeek")
                         .HasColumnType("decimal(10,5)");
 
+                    b.Property<DateTime?>("PurchaseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("PurchasePrice")
+                        .HasColumnType("decimal(18,5)");
+
                     b.Property<string>("RegNr")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("RentedInAgreementRef")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("RentedInCostPerMonth")
+                        .HasColumnType("decimal(18,5)");
+
                     b.Property<decimal?>("ReplacementCost")
                         .HasColumnType("decimal(10,5)");
+
+                    b.Property<bool>("RequiresSupportLegs")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SerialNr")
                         .IsRequired()
@@ -899,6 +1090,11 @@ namespace Backend.Migrations
 
                     b.Property<int?>("SortNr")
                         .HasColumnType("int");
+
+                    b.Property<string>("ToiletType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("UnavailableForReservation")
                         .HasColumnType("bit");
@@ -923,12 +1119,17 @@ namespace Backend.Migrations
                     b.Property<decimal?>("WeightKg")
                         .HasColumnType("decimal(10,5)");
 
+                    b.Property<int?>("WidthMm")
+                        .HasColumnType("int");
+
                     b.Property<string>("YearModel")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CabinTypeCode");
 
                     b.HasIndex("CreatedBy");
 
@@ -2811,6 +3012,12 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.Item", b =>
                 {
+                    b.HasOne("Backend.Models.CabinType", "CabinType")
+                        .WithMany("Items")
+                        .HasForeignKey("CabinTypeCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Backend.Models.User", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedBy")
@@ -2842,6 +3049,8 @@ namespace Backend.Migrations
                         .WithMany()
                         .HasForeignKey("UpdatedBy")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CabinType");
 
                     b.Navigation("CreatedByUser");
 
@@ -3333,6 +3542,11 @@ namespace Backend.Migrations
             modelBuilder.Entity("Backend.Models.Article", b =>
                 {
                     b.Navigation("InvoiceRows");
+                });
+
+            modelBuilder.Entity("Backend.Models.CabinType", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Backend.Models.Customer", b =>

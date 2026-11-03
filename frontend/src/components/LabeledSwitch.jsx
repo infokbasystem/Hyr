@@ -7,11 +7,11 @@ const LabeledSwitch = ({
     field,
     value,
     onChange,
-    onClick,
     label,
     labelWidth,
     marginTop,
     marginLeft,
+    checkedColor,
     disabled = false,
     containerClassName = '',
 }) => {
@@ -20,20 +20,28 @@ const LabeledSwitch = ({
 
     return (
         <div
-            className={`flex items-center space-x-1 w-auto pt-[calc(0.28rem-1px)] pb-[calc(0.28rem-2px)] ${disabled ? 'opacity-60' : ''} ${containerClassName}`}
+            className={`h-6.25 flex items-center space-x-1 w-auto pt-[calc(0.28rem-1px)] pb-[calc(0.28rem-2px)] ${disabled ? 'opacity-60' : ''} ${containerClassName}`}
             style={{
                 ...(marginTop !== undefined ? { marginTop: `${marginTop}px` } : {}),
                 ...(marginLeft !== undefined ? { marginLeft: `${marginLeft}px` } : {}),
             }}
         >
-            <label className={`${labelWidth || ''} pr-2 flex-none text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>{label}</label>
+            <label className={`${labelWidth || ''} pr-2 flex-none text-xs text-gray-700`}>{label}</label>
             <ToggleSwitch
                 rowId={rowId}
                 field={field}
                 id={resolvedId}
                 name={name}
                 checked={value}
-                onChange={(checked) => (onChange || onClick)?.(checked)}
+                checkedColor={checkedColor}
+                onChange={(changedRowId, changedField, checked) => {
+                    if (rowId !== undefined || field !== undefined) {
+                        onChange(changedRowId, changedField, checked);
+                        return;
+                    }
+
+                    onChange(checked);
+                }}
                 disabled={disabled}
             />
             {/* <input type="checkbox" value={value} onClick={(e) => onClick(e)} className="sr-only peer" />

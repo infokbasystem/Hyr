@@ -15,7 +15,7 @@ try
         Console.WriteLine("Usage: <ImportType> <Action> <OfficeId> <AccessFilePath> [SqlServerConnectionString]");
         Console.WriteLine("ImportType: HYR | HYRFLEX");
         Console.WriteLine("HYRFLEX Actions: CheckConnectionAndReadCompany | ImportInvoices");
-        Console.WriteLine("HYR Actions: CheckConnectionAndReadCompany | ImportAllTables");
+        Console.WriteLine("HYR Actions: CheckConnectionAndReadCompany | ImportAllTables | ImportPriceListDayPrices | ImportPriceListDayPriceFreeKm | ImportPriceListThirtyDayPriceIncludedKm | ImportPriceListWeekendPrices | ImportPriceListWeekendPriceFreeKm | ImportPriceListWeekendPriceIncludedKm | ImportPriceListWeekPriceFreeKm | ImportPriceListWeekPriceIncludedKm");
         return;
     }
 

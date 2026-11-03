@@ -12,6 +12,12 @@ export function getFinanceOutstandingOverview() {
   return getSharedRequest('finance-outstanding', () => requestJson('/finance/overview/outstanding'))
 }
 
+export function getFinanceLatestInvoices(count = 10) {
+  const safeCount = Math.max(1, Math.min(50, Number(count) || 10))
+  const path = `/finance/overview/latest?count=${safeCount}`
+  return getSharedRequest(`finance-latest:${safeCount}`, () => requestJson(path))
+}
+
 export function getFinanceOverdueInvoicesPage(pageNumber = 1, pageSize = 20) {
   const safePageNumber = Math.max(1, Number(pageNumber) || 1)
   const safePageSize = Math.max(1, Math.min(200, Number(pageSize) || 20))

@@ -926,7 +926,7 @@ const Invoice = () => {
                 <div className="mt-1 flex min-h-0 flex-1 flex-col">
                     <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
                         <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
-                            <aside className="text-gray-700 lg:sticky lg:top-[calc(52px+72px+1rem)] lg:z-10 lg:self-start">
+                            <aside className="text-gray-700 lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                                 <div className="space-y-4 pr-0 pb-4 ml-2">
                                     <h2 className="text-4 text-center text-gray-700 text-sm">Info</h2>
                                     <div className="space-y-2 text-xs text-gray-600">
@@ -1228,7 +1228,7 @@ const Invoice = () => {
                 <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
 
                     <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
-                        <aside className="lg:sticky lg:top-[calc(52px+72px+1rem)] lg:z-10 lg:self-start">
+                        <aside className="lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                             <div className="space-y-4 pr-0 pb-4 ml-2">
                                 <h2 className="text-4 text-center text-gray-500 text-sm">Info</h2>
                                 <div className="space-y-2 text-xs text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
@@ -1318,12 +1318,12 @@ const Invoice = () => {
                                         />
                                     )}
                                     <div className="flex items-center gap-5 ml-20">
-                                        <ActionButton
+                                        {/* <ActionButton
                                             label="Swish"
                                             icon={Smartphone}
                                             onClick={handleSwishClick}
                                             accent="teal"
-                                        />
+                                        /> */}
                                         {formOptions.tinkEnabled && (
                                             <ActionButton
                                                 label="Tink"

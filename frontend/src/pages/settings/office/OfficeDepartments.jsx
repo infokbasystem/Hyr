@@ -462,7 +462,7 @@ export default function OfficeDepartments() {
                             onKeyDown={handleListKeyDown}
                             className="mt-5 max-h-[calc(100vh-360px)] overflow-y-auto pr-2 focus:outline-none"
                         >
-                            <div className="mb-1 grid grid-cols-[52px_minmax(0,1fr)] border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
+                            <div className="mb-1 grid grid-cols-[48px_minmax(0,1fr)] border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
                                 <span>Kod</span>
                                 <span>Beskrivning</span>
                             </div>
@@ -499,7 +499,7 @@ export default function OfficeDepartments() {
                                                 : 'text-gray-800 hover:bg-gray-100'
                                         }`}
                                     >
-                                        <div className="grid grid-cols-[52px_minmax(0,1fr)] items-center">
+                                        <div className="grid grid-cols-[48px_minmax(0,1fr)] items-center">
                                             <span>{department.id ?? '-'}</span>
                                             <span className="truncate">{department.name || '-'}</span>
                                         </div>

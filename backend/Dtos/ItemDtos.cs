@@ -66,9 +66,72 @@ public class ItemFormOptionsDto
     public List<ItemTypeOptionDto> ItemTypes { get; set; } = [];
     public List<ItemCategoryOptionDto> ItemCategories { get; set; } = [];
     public List<ItemModelOptionDto> ItemModels { get; set; } = [];
+    public List<CabinTypeOptionDto> CabinTypes { get; set; } = [];
 }
 
-public class ItemDto
+public class CabinTypeOptionDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+}
+
+public abstract class ItemCabinFieldsDto
+{
+    public string? CabinTypeCode { get; set; }
+    public int? LengthMm { get; set; }
+    public int? WidthMm { get; set; }
+    public int? HeightMm { get; set; }
+    public int? InternalHeightMm { get; set; }
+    public decimal? InternalFloorAreaM2 { get; set; }
+    public decimal? MaxLoadKg { get; set; }
+    public int? NrOfModules { get; set; }
+    public int? NrOfSockets { get; set; }
+    public bool HasResidualCurrentDevice { get; set; }
+    public bool HasDistributionBoard { get; set; }
+    public string ElectricalPhase { get; set; } = string.Empty;
+    public string PowerConnectionType { get; set; } = string.Empty;
+    public bool HasElectricRadiator { get; set; }
+    public bool HasHeatPump { get; set; }
+    public bool HasUnderfloorHeating { get; set; }
+    public bool HasAirConditioning { get; set; }
+    public bool HasLighting { get; set; }
+    public bool HasVentilation { get; set; }
+    public string ToiletType { get; set; } = string.Empty;
+    public bool HasSink { get; set; }
+    public bool HasWaterHeater { get; set; }
+    public bool HasWaterTank { get; set; }
+    public bool HasFridge { get; set; }
+    public bool HasMicrowave { get; set; }
+    public bool HasCoffeeMaker { get; set; }
+    public bool HasKitchenSink { get; set; }
+    public bool HasDryingCabinet { get; set; }
+    public int? NrOfLockers { get; set; }
+    public int? NrOfTables { get; set; }
+    public int? NrOfChairs { get; set; }
+    public int? NrOfBenches { get; set; }
+    public int? NrOfSeats { get; set; }
+    public bool IsInsulated { get; set; }
+    public bool IsWinterRated { get; set; }
+    public int? NrOfWindows { get; set; }
+    public string DoorType { get; set; } = string.Empty;
+    public string LockType { get; set; } = string.Empty;
+    public bool HasLoadBearingRoof { get; set; }
+    public bool HasLiftingEyes { get; set; }
+    public bool HasForkliftPockets { get; set; }
+    public bool IsStackable { get; set; }
+    public bool RequiresSupportLegs { get; set; }
+    public string PlacementRequirements { get; set; } = string.Empty;
+    public decimal? PurchasePrice { get; set; }
+    public DateTime? PurchaseDate { get; set; }
+    public decimal? BookValue { get; set; }
+    public int? DepreciationPeriodMonths { get; set; }
+    public bool IsRentedIn { get; set; }
+    public string OwnerName { get; set; } = string.Empty;
+    public decimal? RentedInCostPerMonth { get; set; }
+    public string RentedInAgreementRef { get; set; } = string.Empty;
+}
+
+public class ItemDto : ItemCabinFieldsDto
 {
     public int Id { get; set; }
     public int OfficeId { get; set; }
@@ -123,7 +186,7 @@ public class ItemDto
     public string? UpdatedByName { get; set; }
 }
 
-public class ItemUpsertDto
+public class ItemUpsertDto : ItemCabinFieldsDto
 {
     public string ItemTypeCode { get; set; } = string.Empty;
     public int? ItemCategoryId { get; set; }

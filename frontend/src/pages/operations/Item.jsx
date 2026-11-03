@@ -5,6 +5,7 @@ import { ArrowLeft, Pencil, Save } from 'lucide-react'
 import ActionButton from '../../components/ActionButton'
 import ConfirmationModal from '../../components/ConfirmationModal'
 import LabeledInput from '../../components/LabeledInput'
+import LabeledDatePicker from '../../components/LabeledDatePicker'
 import LabeledSelect from '../../components/LabeledSelect'
 import LabeledSwitch from '../../components/LabeledSwitch'
 import LabeledTextArea from '../../components/LabeledTextArea'
@@ -57,6 +58,58 @@ const EMPTY_ITEM = {
   unavailableTo: null,
   accountNr: '',
   costCenterNr: '',
+  cabinTypeCode: null,
+  lengthMm: null,
+  widthMm: null,
+  heightMm: null,
+  internalHeightMm: null,
+  internalFloorAreaM2: null,
+  maxLoadKg: null,
+  nrOfModules: null,
+  nrOfSockets: null,
+  hasResidualCurrentDevice: false,
+  hasDistributionBoard: false,
+  electricalPhase: '',
+  powerConnectionType: '',
+  hasElectricRadiator: false,
+  hasHeatPump: false,
+  hasUnderfloorHeating: false,
+  hasAirConditioning: false,
+  hasLighting: false,
+  hasVentilation: false,
+  toiletType: '',
+  hasSink: false,
+  hasWaterHeater: false,
+  hasWaterTank: false,
+  hasFridge: false,
+  hasMicrowave: false,
+  hasCoffeeMaker: false,
+  hasKitchenSink: false,
+  hasDryingCabinet: false,
+  nrOfLockers: null,
+  nrOfTables: null,
+  nrOfChairs: null,
+  nrOfBenches: null,
+  nrOfSeats: null,
+  isInsulated: false,
+  isWinterRated: false,
+  nrOfWindows: null,
+  doorType: '',
+  lockType: '',
+  hasLoadBearingRoof: false,
+  hasLiftingEyes: false,
+  hasForkliftPockets: false,
+  isStackable: false,
+  requiresSupportLegs: false,
+  placementRequirements: '',
+  purchasePrice: null,
+  purchaseDate: null,
+  bookValue: null,
+  depreciationPeriodMonths: null,
+  isRentedIn: false,
+  ownerName: '',
+  rentedInCostPerMonth: null,
+  rentedInAgreementRef: '',
   packageItemIds: [],
   packageItems: [],
 }
@@ -1623,6 +1676,397 @@ function renderToolAccessoryTemplateFields(item, handleChange, handleSelectChang
   )
 }
 
+function renderCabinSectionTitle(title) {
+  return (
+    <div className="mb-1 mt-3 text-[11px] font-medium uppercase tracking-[0.10em] text-gray-500">
+      {title}
+    </div>
+  )
+}
+
+function renderCabinTemplateFields(item, handleChange, handleSelectChange, formOptions) {
+  const textField = (name, label, inputWidth) => (
+    <LabeledInput
+      key={name}
+      name={name}
+      label={label}
+      value={item[name] ?? ''}
+      onChange={(value) => handleChange(name, value)}
+      labelWidth="w-28"
+      inputWidth={inputWidth}
+      margintop="0"
+    />
+  )
+
+  const numberField = (name, label, { suffix, integerOnly = false, inputWidth = 'w-24' } = {}) => (
+    <LabeledInput
+      key={name}
+      name={name}
+      label={label}
+      type="number"
+      integerOnly={integerOnly}
+      value={item[name]}
+      onChange={(value) => handleChange(name, value)}
+      labelWidth="w-28"
+      inputWidth={inputWidth}
+      margintop="0"
+      suffix={suffix}
+    />
+  )
+
+  const switchField = (name, label) => (
+    <LabeledSwitch
+      key={name}
+      name={name}
+      label={label}
+      value={Boolean(item[name])}
+      onChange={(checked) => handleChange(name, checked)}
+      labelWidth="w-28"
+      marginTop="0"
+    />
+  )
+
+  return (
+    <div className="w-full">
+      <div className="grid gap-15 md:grid-cols-2 xl:grid-cols-[minmax(0,450px)_minmax(0,220px)_minmax(0,400px)] overflow-auto">
+
+        <span>
+          <LabeledInput
+            name="itemNr"
+            label="Namn"
+            value={item.itemNr ?? ''}
+            onChange={(value) => handleChange('itemNr', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledSelect
+            name="cabinTypeCode"
+            label="Bodtyp"
+            value={item.cabinTypeCode ?? ''}
+            items={formOptions.cabinTypeOptions}
+            placeholder="Välj typ"
+            onChange={(value) => handleChange('cabinTypeCode', value || null)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledSelect
+            name="itemCategoryId"
+            label="Kategori"
+            value={item.itemCategoryId ?? ''}
+            items={formOptions.itemCategoryOptions}
+            placeholder="Välj kategori"
+            onChange={(value) => handleSelectChange('itemCategoryId', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledSelect
+            name="itemModelId"
+            label="Modell"
+            value={item.itemModelId ?? ''}
+            items={formOptions.itemModelOptions}
+            placeholder="Välj modell"
+            onChange={(value) => handleSelectChange('itemModelId', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledInput
+            name="manufacturer"
+            label="Fabrikat"
+            value={item.manufacturer ?? ''}
+            onChange={(value) => handleChange('manufacturer', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledInput
+            name="serialNr"
+            label="Serienr"
+            value={item.serialNr ?? ''}
+            onChange={(value) => handleChange('serialNr', value)}
+            labelWidth="w-22"
+            inputWidth="w-32"
+            margintop="2"
+          />
+          <LabeledInput
+            name="yearModel"
+            label="Tillverkn.år"
+            value={item.yearModel ?? ''}
+            onChange={(value) => handleChange('yearModel', value)}
+            labelWidth="w-22"
+            inputWidth="w-32"
+            margintop="0"
+          />
+          <LabeledSwitch
+            name="showInPlanning"
+            label="Visa i planering"
+            value={Boolean(item.showInPlanning)}
+            onChange={(checked) => handleChange('showInPlanning', checked)}
+            labelWidth="w-22"
+            marginTop="2"
+          />
+          <LabeledSwitch
+            name="isActive"
+            label="Aktiv"
+            value={Boolean(item.isActive)}
+            onChange={(checked) => handleChange('isActive', checked)}
+            labelWidth="w-22"
+            marginTop="0"
+          />
+        </span>
+
+        <span>
+          <LabeledInput
+            name="articleNr"
+            label="Artikelnr"
+            value={item.articleNr ?? ''}
+            onChange={(value) => handleChange('articleNr', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledInput
+            name="sortNr"
+            label="Sortnr"
+            type="number"
+            integerOnly
+            value={item.sortNr}
+            onChange={(value) => handleChange('sortNr', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+          <LabeledInput
+            name="basePrice"
+            label="Grundpris"
+            type="number"
+            value={item.basePrice}
+            onChange={(value) => handleChange('basePrice', value)}
+            labelWidth="w-22"
+            margintop="2"
+            suffix="kr"
+          />
+          <LabeledInput
+            name="pricePerDay"
+            label="Pris/dag"
+            type="number"
+            value={item.pricePerDay}
+            onChange={(value) => handleChange('pricePerDay', value)}
+            labelWidth="w-22"
+            margintop="0"
+            suffix="kr"
+          />
+          <LabeledInput
+            name="pricePerWeek"
+            label="Pris/vecka"
+            type="number"
+            value={item.pricePerWeek}
+            onChange={(value) => handleChange('pricePerWeek', value)}
+            labelWidth="w-22"
+            margintop="0"
+            suffix="kr"
+          />
+          <LabeledInput
+            name="pricePerMonth"
+            label="Pris/månad"
+            type="number"
+            value={item.pricePerMonth}
+            onChange={(value) => handleChange('pricePerMonth', value)}
+            labelWidth="w-22"
+            margintop="0"
+            suffix="kr"
+          />
+          <LabeledInput
+            name="replacementCost"
+            label="Ersättn.kost."
+            type="number"
+            value={item.replacementCost}
+            onChange={(value) => handleChange('replacementCost', value)}
+            labelWidth="w-22"
+            margintop="0"
+            suffix="kr"
+          />
+          <LabeledInput
+            name="accountNr"
+            label="Konto"
+            value={item.accountNr ?? ''}
+            onChange={(value) => handleChange('accountNr', value)}
+            labelWidth="w-22"
+            margintop="2"
+          />
+          <LabeledInput
+            name="costCenterNr"
+            label="Kostn.ställe"
+            value={item.costCenterNr ?? ''}
+            onChange={(value) => handleChange('costCenterNr', value)}
+            labelWidth="w-22"
+            margintop="0"
+          />
+        </span>
+
+        <span className="pl-10">
+          <LabeledTextArea
+            name="note"
+            label="Notering"
+            labelPosition='top'
+            value={item.note ?? ''}
+            onChange={(value) => handleChange('note', value)}
+            labelWidth="w-22"
+            margintop="0"
+            height="h-[75px]"
+          />
+          <LabeledTextArea
+            name="popupText"
+            label="Popuptext"
+            labelPosition='top'
+            value={item.popupText ?? ''}
+            onChange={(value) => handleChange('popupText', value)}
+            labelWidth="w-22"
+            margintop="2"
+            height="h-[75px]"
+          />
+          <div className="flex flex-row items-center space-x-2 mt-3">
+            <LabeledSwitch
+              name="unavailableForReservation"
+              label="Ej bokningsbar"
+              value={Boolean(item.unavailableForReservation)}
+              onChange={(checked) => handleChange('unavailableForReservation', checked)}
+              labelWidth="w-22"
+            />
+            <LabeledInput
+              name="unavailableFrom"
+              label="Peroid"
+              type="date"
+              value={formatDateInput(item.unavailableFrom)}
+              onChange={(value) => handleChange('unavailableFrom', value || null)}
+              margintop="0"
+              inputWidth="w-18"
+            />
+            <LabeledInput
+              name="unavailableTo"
+              label=""
+              type="date"
+              value={formatDateInput(item.unavailableTo)}
+              onChange={(value) => handleChange('unavailableTo', value || null)}
+              margintop="0"
+              inputWidth="w-18"
+            />
+          </div>
+          <LabeledTextArea
+            name="unavailableReason"
+            label=""
+            value={item.unavailableReason ?? ''}
+            onChange={(value) => handleChange('unavailableReason', value)}
+            labelWidth=""
+            margintop="0"
+            height="h-[40px]"
+          />
+        </span>
+
+      </div>
+
+      <div className="mt-5 grid gap-x-10 gap-y-2 md:grid-cols-2 xl:grid-cols-5 border-t border-gray-200 pt-2">
+
+        <span>
+          {renderCabinSectionTitle('Mått & vikt')}
+          {numberField('lengthMm', 'Längd (utv.)', { suffix: 'mm', integerOnly: true })}
+          {numberField('widthMm', 'Bredd (utv.)', { suffix: 'mm', integerOnly: true })}
+          {numberField('heightMm', 'Höjd (utv.)', { suffix: 'mm', integerOnly: true })}
+          {numberField('internalHeightMm', 'Inv. takhöjd', { suffix: 'mm', integerOnly: true })}
+          {numberField('internalFloorAreaM2', 'Golvyta (inv.)', { suffix: 'm²' })}
+          {numberField('weightKg', 'Tomvikt', { suffix: 'kg' })}
+          {numberField('maxLoadKg', 'Max last', { suffix: 'kg' })}
+          {numberField('nrOfModules', 'Antal moduler', { integerOnly: true })}
+        </span>
+
+        <span>
+          {renderCabinSectionTitle('El & klimat')}
+          {numberField('nrOfSockets', 'Antal uttag', { integerOnly: true })}
+          {textField('electricalPhase', 'Fas', 'w-24')}
+          {textField('powerConnectionType', 'Anslutning', 'w-32')}
+          {switchField('hasResidualCurrentDevice', 'Jordfelsbrytare')}
+          {switchField('hasDistributionBoard', 'Elcentral')}
+          {switchField('hasLighting', 'Belysning')}
+          {switchField('hasElectricRadiator', 'Elelement')}
+          {switchField('hasHeatPump', 'Värmepump')}
+          {switchField('hasUnderfloorHeating', 'Golvvärme')}
+          {switchField('hasAirConditioning', 'AC/kyla')}
+          {switchField('hasVentilation', 'Ventilation')}
+        </span>
+
+        <span>
+          {renderCabinSectionTitle('Vatten & kök')}
+          {textField('toiletType', 'Toalett (typ)', 'w-32')}
+          {switchField('hasSink', 'Handfat')}
+          {switchField('hasWaterHeater', 'Varmvattenber.')}
+          {switchField('hasWaterTank', 'Vattentank')}
+          {switchField('hasFridge', 'Kylskåp')}
+          {switchField('hasMicrowave', 'Mikrovågsugn')}
+          {switchField('hasCoffeeMaker', 'Kaffebryggare')}
+          {switchField('hasKitchenSink', 'Diskbänk')}
+          {renderCabinSectionTitle('Inredning')}
+          {switchField('hasDryingCabinet', 'Torkskåp')}
+          {numberField('nrOfLockers', 'Antal skåp', { integerOnly: true })}
+          {numberField('nrOfTables', 'Antal bord', { integerOnly: true })}
+          {numberField('nrOfChairs', 'Antal stolar', { integerOnly: true })}
+          {numberField('nrOfBenches', 'Antal bänkar', { integerOnly: true })}
+          {numberField('nrOfSeats', 'Antal platser', { integerOnly: true })}
+        </span>
+
+        <span>
+          {renderCabinSectionTitle('Funktion & placering')}
+          {switchField('isInsulated', 'Isolerad')}
+          {switchField('isWinterRated', 'Vinterkl.')}
+          {numberField('nrOfWindows', 'Antal fönster', { integerOnly: true })}
+          {textField('doorType', 'Dörrtyp', 'w-32')}
+          {textField('lockType', 'Lås', 'w-32')}
+          {switchField('hasLoadBearingRoof', 'Bärande tak')}
+          {switchField('hasLiftingEyes', 'Lyftöglor')}
+          {switchField('hasForkliftPockets', 'Gaffelfickor')}
+          {switchField('isStackable', 'Stapelbar')}
+          {switchField('requiresSupportLegs', 'Kräver stödben')}
+          <LabeledTextArea
+            name="placementRequirements"
+            label="Placeringskrav"
+            labelPosition='top'
+            value={item.placementRequirements ?? ''}
+            onChange={(value) => handleChange('placementRequirements', value)}
+            margintop="1"
+            height="h-[50px]"
+          />
+          <LabeledTextArea
+            name="equipment"
+            label="Övrig utrustning"
+            labelPosition='top'
+            value={item.equipment ?? ''}
+            onChange={(value) => handleChange('equipment', value)}
+            margintop="1"
+            height="h-[50px]"
+          />
+        </span>
+
+        <span>
+          {renderCabinSectionTitle('Ekonomi & ägande')}
+          {numberField('purchasePrice', 'Inköpspris', { suffix: 'kr', inputWidth: 'w-28' })}
+          <LabeledDatePicker
+            name="purchaseDate"
+            label="Inköpsdatum"
+            value={item.purchaseDate}
+            valueType="input"
+            onChange={(value) => handleChange('purchaseDate', value || null)}
+            labelWidth="w-28"
+            inputWidth="w-28"
+            margintop="0"
+          />
+          {numberField('bookValue', 'Bokfört värde', { suffix: 'kr', inputWidth: 'w-28' })}
+          {numberField('depreciationPeriodMonths', 'Avskr.tid', { suffix: 'mån', integerOnly: true })}
+          {switchField('isRentedIn', 'Inhyrd')}
+          {textField('ownerName', 'Ägare', 'w-32')}
+          {numberField('rentedInCostPerMonth', 'Inhyrn./mån', { suffix: 'kr', inputWidth: 'w-28' })}
+          {textField('rentedInAgreementRef', 'Avtalsref.', 'w-32')}
+        </span>
+
+      </div>
+    </div>
+  )
+}
+
 function renderTemplateByItemType(
   item,
   handleChange,
@@ -1669,6 +2113,8 @@ function renderTemplateByItemType(
     case 'TOOL':
     case 'ACCESSORY':
       return renderToolAccessoryTemplateFields(item, handleChange, handleSelectChange, formOptions)
+    case 'CABIN':
+      return renderCabinTemplateFields(item, handleChange, handleSelectChange, formOptions)
     default:
       return renderEmptyTemplateFields(code)
   }

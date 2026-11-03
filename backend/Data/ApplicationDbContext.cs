@@ -24,6 +24,7 @@ namespace Backend.Data
         public DbSet<Article> Articles { get; set; } = null!;
         public DbSet<VatRate> VatRates { get; set; } = null!;
         public DbSet<ItemType> ItemTypes { get; set; } = null!;
+        public DbSet<CabinType> CabinTypes { get; set; } = null!;
         public DbSet<ItemCategory> ItemCategories { get; set; } = null!;
         public DbSet<ItemModel> ItemModels { get; set; } = null!;
         public DbSet<PriceList> PriceLists { get; set; } = null!;
@@ -212,6 +213,26 @@ namespace Backend.Data
                 entity.Property(e => e.UnavailableTo).IsRequired(false);
                 entity.Property(e => e.AccountNr).HasMaxLength(100);
                 entity.Property(e => e.CostCenterNr).HasMaxLength(100);
+                entity.Property(e => e.CabinTypeCode).HasMaxLength(50).IsRequired(false);
+                entity.Property(e => e.InternalFloorAreaM2).IsRequired(false).HasColumnType("decimal(10,2)");
+                entity.Property(e => e.MaxLoadKg).IsRequired(false).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.ElectricalPhase).HasMaxLength(50);
+                entity.Property(e => e.PowerConnectionType).HasMaxLength(100);
+                entity.Property(e => e.ToiletType).HasMaxLength(100);
+                entity.Property(e => e.DoorType).HasMaxLength(100);
+                entity.Property(e => e.LockType).HasMaxLength(100);
+                entity.Property(e => e.PlacementRequirements).HasMaxLength(500);
+                entity.Property(e => e.PurchasePrice).IsRequired(false).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.BookValue).IsRequired(false).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.OwnerName).HasMaxLength(200);
+                entity.Property(e => e.RentedInCostPerMonth).IsRequired(false).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.RentedInAgreementRef).HasMaxLength(200);
+                entity.HasOne(e => e.CabinType)
+                    .WithMany(e => e.Items)
+                    .HasForeignKey(e => e.CabinTypeCode)
+                    .HasPrincipalKey(e => e.Code)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.Items)
                     .HasForeignKey(e => e.OfficeId)
@@ -689,6 +710,16 @@ namespace Backend.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Code).HasMaxLength(50);
                 entity.Property(e => e.Name).HasMaxLength(200);
+                entity.HasAlternateKey(e => e.Code);
+            });
+
+            modelBuilder.Entity<CabinType>(entity =>
+            {
+                entity.ToTable("CabinType");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Code).HasMaxLength(50);
+                entity.Property(e => e.Name).HasMaxLength(200);
+                entity.Property(e => e.SortNr).IsRequired(false);
                 entity.HasAlternateKey(e => e.Code);
             });
 

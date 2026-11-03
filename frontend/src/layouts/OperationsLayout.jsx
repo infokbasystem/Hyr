@@ -22,7 +22,7 @@ const OperationsLayoutContent = () => {
                 <Header />
                 <div className="relative sticky top-0 z-50">
                     <Navbar />
-                    {showPdfPanel && <PdfPanel topOffset="52px" />}
+                    {showPdfPanel && <PdfPanel topOffset="48px" />}
                 </div>
                 <OperationsSubMenu activeOverridePath={activeOverridePath} />
                 <div className="relative flex grow items-stretch bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50" style={{ backgroundImage: `url(${bg})` }}>

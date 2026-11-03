@@ -16,6 +16,12 @@
   --text-xs: 0.7rem;
 }
 
+@media screen and (max-width: 1700px) {
+  html {
+    zoom: 0.9;
+  }
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:focus {
   transition: background-color 0s 600000s, color 0s 600000s !important;

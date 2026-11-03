@@ -101,7 +101,7 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromT
 
     return (
         <>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1">
                     <LabeledDatePicker
                         label="Bokad från"
@@ -109,7 +109,7 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromT
                         onChange={(value) => handleDateChange('bookedFrom', value)}
                         valueType="input"
                         labelWidth="w-20"
-                        inputWidth="w-[88px]"
+                        inputWidth="w-[100px]"
                         margintop="0"
                         placeholder="Datum"
                     />
@@ -125,7 +125,7 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromT
                         onChange={(value) => handleDateChange('actualFrom', value)}
                         valueType="input"
                         labelWidth="w-[74px]"
-                        inputWidth="w-[88px]"
+                        inputWidth="w-[100px]"
                         margintop="0"
                         placeholder="Datum"
                     />
@@ -135,7 +135,7 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromT
                     />
                 </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1">
                     <LabeledDatePicker
                         label="Bokad till"
@@ -143,7 +143,7 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromT
                         onChange={(value) => handleDateChange('bookedTo', value)}
                         valueType="input"
                         labelWidth="w-20"
-                        inputWidth="w-[88px]"
+                        inputWidth="w-[100px]"
                         margintop="0"
                         placeholder="Datum"
                     />
@@ -159,7 +159,7 @@ const ReservationItemDateTimeFields = ({ item, onFieldChange, defaultBookedFromT
                         onChange={(value) => handleDateChange('actualTo', value)}
                         valueType="input"
                         labelWidth="w-[74px]"
-                        inputWidth="w-[88px]"
+                        inputWidth="w-[100px]"
                         margintop="0"
                         placeholder="Datum"
                     />

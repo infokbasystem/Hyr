@@ -19,6 +19,7 @@ import LabeledCheckbox from '../../components/LabeledCheckbox';
 import Input from '../../components/Input';
 import ReservationItemVehicle from './ReservationItemVehicle';
 import ReservationItemTrailer from './ReservationItemTrailer';
+import ReservationItemCabin from './ReservationItemCabin';
 import ReservationItemLift from './ReservationItemLift';
 import ReservationItemHaki from './ReservationItemHaki';
 import ReservationItemAlu from './ReservationItemAlu';
@@ -36,9 +37,9 @@ const SKELETON_SHOW_DELAY_MS = 200;
 const SKELETON_TEST_DELAY_MS = 0;
 const SAVED_RESERVATION_ROUTE_CACHE_TTL_MS = 5000;
 const PRICING_CALENDAR_OPTIONS = [
-    { id: 'ALLDAYS', name: 'ALLDAYS' },
-    { id: 'WEEKDAYS', name: 'WEEKDAYS' },
-    { id: 'WORKINGDAYS', name: 'WORKINGDAYS' },
+    { id: 'ALLDAYS', name: 'Alla dagar' },
+    { id: 'WEEKDAYS', name: 'Vardagar' },
+    { id: 'WORKINGDAYS', name: 'Arbetsdagar' },
 ];
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -442,11 +443,12 @@ const Reservation = () => {
     const aluItemTypeCode = getEnabledOfficeItemTypeCode('ALU');
     const accessoryItemTypeCode = getEnabledOfficeItemTypeCode('ACCESSORY');
     const toolItemTypeCode = getEnabledOfficeItemTypeCode('TOOL');
+    const cabinItemTypeCode = getEnabledOfficeItemTypeCode('CABIN');
 
     const isVehicleEnabledForOffice = Boolean(vehicleItemTypeCode);
     const hasMachineInfoItem = (reservation?.reservationItems || []).some((item) => {
         const itemTypeCode = normalizeItemTypeCode(item?.itemTypeCode);
-        return itemTypeCode === 'LIFT' || itemTypeCode === 'ALU' || itemTypeCode === 'TOOL' || itemTypeCode === 'HAKI';
+        return itemTypeCode === 'LIFT' || itemTypeCode === 'ALU' || itemTypeCode === 'TOOL' || itemTypeCode === 'HAKI' || itemTypeCode === 'CABIN';
     });
     const hasReservationItems = (reservation?.reservationItems || []).length > 0;
     const canReturnItems = (reservation?.reservationItems || []).length > 0
@@ -492,10 +494,15 @@ const Reservation = () => {
         internal: { exVat: 0, inclVat: 0 },
     });
 
-    const faktureringSummary = (reservation?.reservationCalcs || []).reduce((summary, calc, calcIndex) => {
-        const reservationItem = reservation?.reservationItems?.[calcIndex] || null;
-        const partyKey = resolveInvoiceParty(reservationItem);
+    const faktureringSummary = (reservation?.reservationCalcs || []).reduce((summary, calc) => {
         const rows = Array.isArray(calc?.reservationCalcItems) ? calc.reservationCalcItems : [];
+        const matchedItemId = rows.find((row) => Number.isInteger(row?.itemId))?.itemId;
+        const reservationItem = reservation?.reservationItems?.find((item) => item.itemId === matchedItemId) || null;
+        const partyKey = {
+            CUSTOMER: 'customer',
+            INSURANCECOMPANY: 'insuranceCompany',
+            INTERNAL: 'internal',
+        }[calc?.receiverTypeCode] || resolveInvoiceParty(reservationItem);
 
         rows.forEach((row) => {
             const exVat = Number(row?.sum) || 0;
@@ -818,28 +825,32 @@ const Reservation = () => {
             return;
         }
 
+        setReservation(prev => ({
+            ...prev,
+            customerId: customer.id,
+            customerName: customer.customerName ?? '',
+            customerOrgNr: customer.organizationNr ?? '',
+            address: '',
+            zipCode: '',
+            email: customer.email ?? '',
+            mobilePhone: customer.mobilePhone ?? '',
+        }));
+
         try {
             const selectedCustomer = await getCustomerById(customer.id);
 
-            setReservation(prev => ({
+            setReservation(prev => prev?.customerId !== customer.id ? prev : ({
                 ...prev,
                 customerId: selectedCustomer?.id ?? customer.id,
                 customerName: selectedCustomer?.customerName ?? customer.customerName ?? '',
                 customerOrgNr: selectedCustomer?.orgNr ?? customer.organizationNr ?? '',
                 address: selectedCustomer?.street1 ?? '',
                 zipCode: selectedCustomer?.zipCode ?? '',
-                email: selectedCustomer?.email ?? '',
-                mobilePhone: selectedCustomer?.mobilePhone ?? '',
+                email: selectedCustomer?.email ?? customer.email ?? '',
+                mobilePhone: selectedCustomer?.mobilePhone ?? customer.mobilePhone ?? '',
             }));
         } catch (error) {
             console.error('Error selecting customer:', error);
-
-            setReservation(prev => ({
-                ...prev,
-                customerId: customer.id,
-                customerName: customer.customerName ?? prev?.customerName ?? '',
-                customerOrgNr: customer.organizationNr ?? '',
-            }));
         }
     };
 
@@ -1227,8 +1238,35 @@ const Reservation = () => {
 
     const newReservationPrefill = location.state?.newReservationPrefill ?? null;
 
+    const handleCabinPrefill = ({ period, cabin }) => {
+        markStale();
+        setReservation(prev => {
+            const defaultBookedFromTime = String(reservationFormOptions?.defaultBookedFromTime ?? '').trim();
+            const defaultBookedToTime = String(reservationFormOptions?.defaultBookedToTime ?? '').trim();
+
+            const newItem = {
+                itemTypeCode: 'CABIN',
+                itemId: Number.isInteger(cabin?.id) ? cabin.id : null,
+                itemNr: cabin?.itemNr || '',
+                itemName: cabin?.itemNr || '',
+                manufacturer: cabin?.manufacturer || '',
+                category: cabin?.itemCategoryName || '',
+                model: cabin?.itemModelName || '',
+                bookedFrom: applyTimeOfDay(period?.from, defaultBookedFromTime),
+                bookedTo: applyTimeOfDay(period?.to, defaultBookedToTime),
+                actualFrom: '',
+                actualTo: ''
+            };
+
+            return {
+                ...prev,
+                reservationItems: [...(prev?.reservationItems || []), newItem]
+            };
+        });
+    };
+
     useEffect(() => {
-        if (!newReservationPrefill?.vehicle || appliedNewReservationPrefillRef.current) {
+        if ((!newReservationPrefill?.vehicle && !newReservationPrefill?.cabin) || appliedNewReservationPrefillRef.current) {
             return;
         }
 
@@ -1247,11 +1285,18 @@ const Reservation = () => {
             return Number.isNaN(parsed.getTime()) ? null : parsed;
         };
 
+        const prefillPeriod = {
+            from: parsePrefillDate(newReservationPrefill?.period?.from),
+            to: parsePrefillDate(newReservationPrefill?.period?.to),
+        };
+
+        if (newReservationPrefill.cabin) {
+            handleCabinPrefill({ period: prefillPeriod, cabin: newReservationPrefill.cabin });
+            return;
+        }
+
         handleCarSearch({
-            period: {
-                from: parsePrefillDate(newReservationPrefill?.period?.from),
-                to: parsePrefillDate(newReservationPrefill?.period?.to),
-            },
+            period: prefillPeriod,
             selectedCar: newReservationPrefill.vehicle,
         });
     }, [newReservationPrefill, initialLoadPending, routeReservationId, reservation]);
@@ -1473,7 +1518,7 @@ const Reservation = () => {
             return;
         }
 
-        if (!reservation?.priceListId) {
+        if ((reservation?.reservationItems || []).some(isVehicleItem) && !reservation?.priceListId) {
             setMessages([{ type: 'error', text: 'Välj prislista innan priset beräknas' }]);
             return;
         }
@@ -1503,7 +1548,8 @@ const Reservation = () => {
             }
 
             const calculateToDate = resolveCalculateToDate(reservationForCalculation);
-            if (!calculateToDate) {
+            const hasVehicle = (reservationForCalculation?.reservationItems || []).some(isVehicleItem);
+            if (hasVehicle && !calculateToDate) {
                 setMessages([{ type: 'error', text: 'Sätt Bokad till eller Faktisk till på fordonet innan priset beräknas' }]);
                 return;
             }
@@ -1743,7 +1789,7 @@ const Reservation = () => {
                 <div className="mt-1 flex min-h-0 flex-1 flex-col">
                     <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
                         <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
-                            <aside className="text-gray-700 lg:sticky lg:top-[calc(52px+72px+1rem)] lg:z-10 lg:self-start">
+                            <aside className="text-gray-700 lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                                 <div className="space-y-4 pr-0 pb-4 ml-2">
                                     <h2 className="text-4 text-center text-gray-700 text-sm">Info</h2>
                                     <div className="space-y-2 text-xs text-gray-600">
@@ -1952,7 +1998,7 @@ const Reservation = () => {
                 <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
 
                     <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
-                        <aside className="lg:sticky lg:top-[calc(52px+72px+1rem)] lg:z-10 lg:self-start">
+                        <aside className="lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                             <div className="space-y-4 pr-0 pb-4 ml-2">
                                 <h2 className="text-4 text-center text-gray-500 text-sm">Info</h2>
                                 <div className="space-y-2 text-xs text-gray-500" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
@@ -2040,7 +2086,7 @@ const Reservation = () => {
                                             disabled={!canCheckIn}
                                         />
                                     </div>
-                                    <div className='ml-10'>
+                                    <div className='ml-10 flex items-center flex-wrap gap-3'>
                                         <ActionButton
                                             label={isCalculatingPrice ? 'Beräknar...' : 'Beräkna pris'}
                                             icon={Euro}
@@ -2275,6 +2321,15 @@ const Reservation = () => {
                                         VERKTYG
                                     </button>
                                 )}
+                                {cabinItemTypeCode && (
+                                    <button
+                                        type="button"
+                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        onClick={() => handleAddItem(cabinItemTypeCode)}
+                                    >
+                                        BYGGBOD
+                                    </button>
+                                )}
                             </div>
 
                             {/* Reservation Items List */}
@@ -2363,6 +2418,19 @@ const Reservation = () => {
                                             case 'TOOL':
                                                 return (
                                                     <ReservationItemTool
+                                                        key={item.id || index}
+                                                        item={item}
+                                                        index={index}
+                                                        onChange={handleItemChange}
+                                                        onRemove={handleRemoveItem}
+                                                        itemCategories={itemCategories}
+                                                        defaultBookedFromTime={defaultBookedFromTime}
+                                                        defaultBookedToTime={defaultBookedToTime}
+                                                    />
+                                                );
+                                            case 'CABIN':
+                                                return (
+                                                    <ReservationItemCabin
                                                         key={item.id || index}
                                                         item={item}
                                                         index={index}

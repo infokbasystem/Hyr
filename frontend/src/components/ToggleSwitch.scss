@@ -1,14 +1,14 @@
 // Colors
 $label-colour: #bbb;
 $disabled-colour: #ddd;
-$toggle-colour: #2F855A;
+$toggle-colour: rgb(20, 184, 166);
 $white: #fff;
 $focus-color: #ff0;
 
 .toggle-switch {
   position: relative;
   margin-right: 10px;
-  width: 32px;
+  width: 28px;
   display: inline-block;
   vertical-align: middle;
   -webkit-user-select: none;
@@ -58,7 +58,7 @@ $focus-color: #ff0;
       content: attr(data-yes);
       text-transform: uppercase;
       padding-left: 10px;
-      background-color: $toggle-colour;
+      background-color: var(--toggle-switch-checked-color, #{$toggle-colour});
       color: $white;
     }
   }
@@ -86,7 +86,7 @@ $focus-color: #ff0;
     position: absolute;
     top: 0;
     bottom: 0;
-    right: 12px;
+    right: 8px;
     border: 0 solid $label-colour;
     border-radius: 20px;
     transition: all 0.1s ease-in 0s;

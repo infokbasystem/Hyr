@@ -60,7 +60,8 @@ public static class HyrItemImporter
         const string checkByRegNrSql = "SELECT [Id] FROM [dbo].[Item] WHERE [OfficeId] = @OfficeId AND [RegNr] = @RegNr";
         const string updateSql = @"UPDATE [dbo].[Item]
             SET [ItemCategoryId] = @ItemCategoryId,
-                [ItemModelId] = @ItemModelId
+                [ItemModelId] = @ItemModelId,
+                [ItemNr] = @ItemNr
             WHERE [Id] = @Id;";
         const string insertSql = @"INSERT INTO [dbo].[Item]
             ([OfficeId],[ItemTypeCode],[ItemCategoryId],[ItemModelId],[RegNr],[YearModel],[Note],[MachineNr],[ImportId],[ImportSource],[IsActive],[KmReading],[Equipment],[Fuel])
@@ -141,6 +142,7 @@ public static class HyrItemImporter
                 updateCmd.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = existingItemId.Value });
                 updateCmd.Parameters.Add(new SqlParameter("@ItemCategoryId", SqlDbType.Int) { Value = (object?)itemCategoryId ?? DBNull.Value });
                 updateCmd.Parameters.Add(new SqlParameter("@ItemModelId", SqlDbType.Int) { Value = (object?)itemModelId ?? DBNull.Value });
+                updateCmd.Parameters.Add(new SqlParameter("@ItemNr", SqlDbType.NVarChar, 100) { Value = regNr });
                 updated += updateCmd.ExecuteNonQuery();
                 continue;
             }
@@ -151,6 +153,7 @@ public static class HyrItemImporter
             insertCmd.Parameters.Add(new SqlParameter("@ItemCategoryId", SqlDbType.Int) { Value = (object?)itemCategoryId ?? DBNull.Value });
             insertCmd.Parameters.Add(new SqlParameter("@ItemModelId", SqlDbType.Int) { Value = (object?)itemModelId ?? DBNull.Value });
             insertCmd.Parameters.Add(new SqlParameter("@RegNr", SqlDbType.NVarChar, 100) { Value = regNr });
+            insertCmd.Parameters.Add(new SqlParameter("@ItemNr", SqlDbType.NVarChar, 100) { Value = regNr });
             insertCmd.Parameters.Add(new SqlParameter("@YearModel", SqlDbType.NVarChar, 50) { Value = yearModel });
             insertCmd.Parameters.Add(new SqlParameter("@Note", SqlDbType.NVarChar, 500) { Value = note });
             insertCmd.Parameters.Add(new SqlParameter("@MachineNr", SqlDbType.NVarChar, 100) { Value = machineNr });

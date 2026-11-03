@@ -153,10 +153,10 @@ const TIMELINE_MAX_HEIGHT = "calc(100vh - 189px)";
 const TIMELINE_HEADER_H = 88;
 
 const PERIOD_OPTIONS = [
-    { value: 3, label: '3 dagar' },
-    { value: 7, label: '7 dagar' },
-    { value: 31, label: '31 dagar' },
-    { value: 90, label: '3 månader' },
+    { value: 3, label: '3 dgr' },
+    { value: 7, label: '7 dgr' },
+    { value: 31, label: '31 dgr' },
+    { value: 90, label: '3 mån' },
 ];
 
 // ---------------------------------------------------------------------------

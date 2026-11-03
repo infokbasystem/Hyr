@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
 import { useNavigate } from 'react-router-dom'
 import {
+  getFinanceLatestInvoices,
   getFinanceOutstandingOverview,
   getFinanceOverdueInvoicesPage,
   getFinanceWeeklyOverview,
@@ -64,7 +65,7 @@ function normalizePagedResult(payload) {
 
 function Section({ title, children, className = '', headerRight = null }) {
   return (
-    <section className={`w-full ${className}`}>
+    <section className={`min-w-0 w-full ${className}`}>
       <div className="relative mb-2 flex items-center justify-center">
         <h2 className="text-center text-xs leading-none font-medium text-stone-500">{title}</h2>
         {headerRight ? <div className="absolute right-0 top-1/2 -translate-y-1/2">{headerRight}</div> : null}
@@ -213,7 +214,7 @@ function FinancePieLegend({ ejForfallet, forfallet }) {
 
   return (
     <div className="min-w-[250px] text-[0.75rem] leading-[1.15] text-stone-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
-      <div className="grid grid-cols-[16px_80px_80px] items-center gap-x-3 gap-y-3">
+      <div className="grid grid-cols-[16px_80px_80px] items-center gap-x-3 gap-y-3 text-tiny">
         <span className="h-3 w-3 bg-[#85c33f]" />
         <span>Ej förfallet</span>
         <span className="min-w-[40px] text-right">{ejForfalletText}</span>
@@ -302,6 +303,7 @@ export default function FinanceOverviewPage() {
   const [weeklyLoading, setWeeklyLoading] = useState(false)
   const [outstandingData, setOutstandingData] = useState({ ejForfallet: 0, forfallet: 0 })
   const [overdueData, setOverdueData] = useState(() => normalizePagedResult())
+  const [latestInvoices, setLatestInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [overdueLoading, setOverdueLoading] = useState(false)
   const [error, setError] = useState('')
@@ -315,9 +317,10 @@ export default function FinanceOverviewPage() {
       setError('')
 
       try {
-        const [outstandingResponse, overdueResponse] = await Promise.all([
+        const [outstandingResponse, overdueResponse, latestResponse] = await Promise.all([
           getFinanceOutstandingOverview(),
           getFinanceOverdueInvoicesPage(1, 10),
+          getFinanceLatestInvoices(10),
         ])
 
         if (disposed) {
@@ -329,6 +332,7 @@ export default function FinanceOverviewPage() {
           forfallet: outstandingResponse?.forfallet ?? 0,
         })
         setOverdueData(normalizePagedResult(overdueResponse))
+        setLatestInvoices(Array.isArray(latestResponse) ? latestResponse : [])
       } catch (requestError) {
         if (disposed) {
           return
@@ -336,6 +340,7 @@ export default function FinanceOverviewPage() {
 
         setOutstandingData({ ejForfallet: 0, forfallet: 0 })
         setOverdueData(normalizePagedResult())
+        setLatestInvoices([])
         setError(requestError?.message || 'Kunde inte hämta översikten.')
       } finally {
         if (!disposed) {
@@ -413,7 +418,44 @@ export default function FinanceOverviewPage() {
     () => [
       {
         key: 'fakturanr',
-        label: 'FAKTURANR',
+        label: 'Fakturanr',
+        widthClass: 'w-[15%]',
+        render: (row) => (
+          <button
+            type="button"
+            className="text-left text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+            onClick={(event) => {
+              event.stopPropagation()
+
+              if (!row.id) {
+                return
+              }
+
+              navigate(`/finance/invoice/${row.id}`)
+            }}
+          >
+            {row.fakturanr}
+          </button>
+        ),
+      },
+      { key: 'forfaller', label: 'Förfaller', widthClass: 'w-[15%]', render: (row) => formatDate(row.forfaller) },
+      { key: 'kund', label: 'Kund', widthClass: 'w-[30%]', render: (row) => row.kund },
+      {
+        key: 'belopp',
+        label: 'Sum ink moms',
+        widthClass: 'w-[30%]',
+        align: 'right',
+        render: (row) => formatKronor(row.belopp ?? 0),
+      },
+    ],
+    [navigate]
+  )
+
+  const latestColumns = useMemo(
+    () => [
+      {
+        key: 'fakturanr',
+        label: 'Fakturanr',
         widthClass: 'w-[18%]',
         render: (row) => (
           <button
@@ -433,11 +475,11 @@ export default function FinanceOverviewPage() {
           </button>
         ),
       },
-      { key: 'forfaller', label: 'FÖRFALLER', widthClass: 'w-[16%]', render: (row) => formatDate(row.forfaller) },
-      { key: 'kund', label: 'KUND', widthClass: 'w-[46%]', render: (row) => row.kund },
+      { key: 'fakturadatum', label: 'Fakturadatum', widthClass: 'w-[16%]', render: (row) => formatDate(row.fakturadatum) },
+      { key: 'kund', label: 'Kund', widthClass: 'w-[46%]', render: (row) => row.kund },
       {
         key: 'belopp',
-        label: 'SUMMA INKL MOMS',
+        label: 'Sum ink moms',
         widthClass: 'w-[20%]',
         align: 'right',
         render: (row) => formatKronor(row.belopp ?? 0),
@@ -451,7 +493,7 @@ export default function FinanceOverviewPage() {
       <main className="h-full w-full overflow-hidden px-6 py-2 text-stone-800 md:px-10">
         {error ? <p className="mb-3 text-[1.2rem] text-red-700">{error}</p> : null}
 
-        <div className="grid h-full content-start grid-cols-1 gap-x-20 gap-y-4 xl:grid-cols-[50%_50%]">
+        <div className="grid h-full content-start grid-cols-1 gap-x-20 gap-y-4 xl:grid-cols-2">
           <Section
             title={<WeeklyHeaderLabels />}
             headerRight={
@@ -478,6 +520,14 @@ export default function FinanceOverviewPage() {
               ejForfallet={outstandingData.ejForfallet}
               forfallet={outstandingData.forfallet}
             />
+          </Section>
+
+          <Section className="mt-8" title="Senast skapade fakturor">
+            {loading ? (
+              <p className="text-[1.2rem] text-stone-500"></p>
+            ) : (
+              <DataTable columns={latestColumns} rows={latestInvoices} />
+            )}
           </Section>
 
           <Section className="mt-8"
