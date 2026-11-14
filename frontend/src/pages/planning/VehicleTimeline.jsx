@@ -8,10 +8,14 @@ import FilterSelect from '../../components/FilterSelect';
 import SegmentedFilter from '../../components/SegmentedFilter';
 import DateRangePicker from '../../components/DaterangePicker';
 import ActionButton from '../../components/ActionButton';
+import { PLANNING_STATUS_COLORS as STATUS_COLORS } from '../../lib/planningStatus';
 import { getPlanningCategories, getPlanningReservations, getPlanningVehicles, updatePlanningReservation } from '../../lib/planningApi';
 import useVehicleTimelineDrag from './useVehicleTimelineDrag';
-import useVehicleTimelineGeometry, { getRowRenderWindow, getTimelineRenderWindow } from './useVehicleTimelineGeometry';
+import useVehicleTimelineGeometry, { getRowRenderWindow, getTimelineBookingRange, getTimelineRenderWindow } from './useVehicleTimelineGeometry';
 import useProgressivePlanningReservations from './useProgressivePlanningReservations';
+import PlanningSkeleton from './PlanningSkeleton';
+import { useDelayedSkeleton } from '../../hooks/useDelayedSkeleton';
+import { withPlanningLoadingDelay } from '../../lib/planningLoading';
 import bg from "../../assets/content.png";
 // ---------------------------------------------------------------------------
 // Themes
@@ -134,13 +138,6 @@ const INITIAL_BOOKINGS = [
     // { id: 9, carId: 8, start: 8.0, end: 13.5, customer: "Tom Hanks", status: "confirmed" },
 ];
 
-const STATUS_COLORS = {
-    booked: { name: "bokad", bg: "#889DFA", text: "#fff", border: "#889DFA" },
-    out: { name: "utlämnad", bg: "rgb(3,191,127)", text: "#fff", border: "rgb(3,191,127)" },
-    late_out: { name: "sen hämtning", bg: "rgb(251,167,21)", text: "#fff", border: "rgb(255,170,1)" },
-    late_in: { name: "sen återlämning", bg: "#A8120B", text: "#fff", border: "#A8120B" },
-};
-
 // ---------------------------------------------------------------------------
 // Layout constants
 // ---------------------------------------------------------------------------
@@ -152,7 +149,7 @@ const LANE_TOP_PAD = 1;
 const LANE_BOTTOM_PAD = 1;
 const LABEL_W = 200;
 const HEADER_H = 72;
-const TIMELINE_MAX_HEIGHT = "calc(100vh - 189px)";
+const TIMELINE_MAX_HEIGHT = "calc(var(--app-viewport-height) - 189px)";
 const TIMELINE_HEADER_H = 88;
 
 const PERIOD_OPTIONS = [
@@ -223,17 +220,18 @@ function formatSelectionDate(value) {
     return `${date.getFullYear()}-${month}-${day}`;
 }
 
-function assignLanes(carBookings) {
+function assignLanes(carBookings, wholeDays) {
     const sorted = [...carBookings].sort((a, b) => a.start - b.start);
     const lanes = [], result = new Map();
     const lastBookingByLane = new Map();
     const bookingsWithFollowers = new Set();
     for (const b of sorted) {
+        const { start, end } = getTimelineBookingRange(b, wholeDays);
         let placed = false;
         for (let i = 0; i < lanes.length; i++) {
-            if (lanes[i] <= b.start) { lanes[i] = b.end; result.set(b.id, i); placed = true; break; }
+            if (lanes[i] <= start) { lanes[i] = end; result.set(b.id, i); placed = true; break; }
         }
-        if (!placed) { result.set(b.id, lanes.length); lanes.push(b.end); }
+        if (!placed) { result.set(b.id, lanes.length); lanes.push(end); }
         const lane = result.get(b.id);
         const previousBookingId = lastBookingByLane.get(lane);
         if (previousBookingId !== undefined) bookingsWithFollowers.add(previousBookingId);
@@ -242,7 +240,7 @@ function assignLanes(carBookings) {
     return { laneMap: result, laneCount: Math.max(1, lanes.length), bookingsWithFollowers };
 }
 
-function computeRowLayout(bookings, cars) {
+function computeRowLayout(bookings, cars, wholeDays) {
     // Single pass grouping instead of re-filtering the whole bookings array once per car
     // (once here, and again later when rendering each row's bars).
     const bookingsByCarId = new Map();
@@ -254,7 +252,7 @@ function computeRowLayout(bookings, cars) {
 
     const layout = cars.map(car => {
         const carBookings = bookingsByCarId.get(car.id) ?? EMPTY_BOOKINGS;
-        const { laneMap, laneCount, bookingsWithFollowers } = assignLanes(carBookings);
+        const { laneMap, laneCount, bookingsWithFollowers } = assignLanes(carBookings, wholeDays);
         const rowH = laneCount * LANE_H + Math.max(0, laneCount - 1) * LANE_GAP + LANE_TOP_PAD + LANE_BOTTOM_PAD;
         return { carId: car.id, laneMap, laneCount, rowH, bookings: carBookings, bookingsWithFollowers };
     });
@@ -286,23 +284,26 @@ function computeMonthSpans(visibleStartDayI, totalVisible, dayW, startDate) {
 
 const VehicleTimelineBar = memo(function VehicleTimelineBar({
     booking,
+    wholeDays,
     dayW,
     timelineViewportWidth,
     lane,
     hasFollowingBooking,
     isMoving,
     isHovered,
+    lockPlanningTimelineDrag,
     onBookingMouseDown,
     onOpenReservation,
     onHoverChange,
 }) {
     const color = STATUS_COLORS[booking.status] || STATUS_COLORS.booked;
-    const widthPx = (booking.end - booking.start) * dayW;
+    const { start, end } = getTimelineBookingRange(booking, wholeDays);
+    const widthPx = (end - start) * dayW;
     const barTop = LANE_TOP_PAD + lane * (LANE_H + LANE_GAP);
     const barWidth = Math.max(widthPx - (hasFollowingBooking ? 1 : 0), 8);
     const arrowSize = Math.min(10, barWidth / 2);
-    const labelLeft = `max(${arrowSize + 4}px, calc(var(--timeline-scroll-x) - ${booking.start * dayW}px + ${arrowSize + 4}px))`;
-    const labelRight = `max(${arrowSize + 4}px, calc(${booking.end * dayW}px - var(--timeline-scroll-x) - ${timelineViewportWidth}px + ${arrowSize + 4}px))`;
+    const labelLeft = `max(${arrowSize + 4}px, calc(var(--timeline-scroll-x) - ${start * dayW}px + ${arrowSize + 4}px))`;
+    const labelRight = `max(${arrowSize + 4}px, calc(${end * dayW}px - var(--timeline-scroll-x) - ${timelineViewportWidth}px + ${arrowSize + 4}px))`;
 
     return (
         <div
@@ -312,14 +313,14 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
             onMouseLeave={() => onHoverChange(null)}
             style={{
                 position: "absolute",
-                left: booking.start * dayW,
+                left: start * dayW,
                 top: 0,
                 transform: `translateY(${barTop}px)`,
                 height: LANE_H,
                 width: barWidth,
                 background: color.bg,
                 clipPath: `polygon(${arrowSize}px 0, calc(100% - ${arrowSize}px) 0, 100% 50%, calc(100% - ${arrowSize}px) 100%, ${arrowSize}px 100%, 0 50%)`,
-                cursor: isMoving ? "grabbing" : isHovered ? "grab" : "default",
+                cursor: lockPlanningTimelineDrag ? "not-allowed" : isMoving ? "grabbing" : isHovered ? "grab" : "default",
                 display: "flex",
                 alignItems: "center",
                 overflow: "hidden",
@@ -339,7 +340,7 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
             >
                 <ChevronLeft
                     className="h-10 w-10 text-white"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     style={{ opacity: isHovered ? 0.9 : 0, transition: "opacity 0.12s" }}
                 />
             </div>
@@ -407,7 +408,7 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
             >
                 <ChevronRight
                     className="h-10 w-10 text-white"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     style={{ opacity: isHovered ? 0.9 : 0, transition: "opacity 0.12s" }}
                 />
             </div>
@@ -418,33 +419,38 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
 
 const VehicleTimelineRowContent = memo(function VehicleTimelineRowContent({
     row,
+    wholeDays,
     dayW,
     renderWindow,
     timelineViewportWidth,
     movingId,
     draggingId,
     hoveredBooking,
+    lockPlanningTimelineDrag,
     onBookingMouseDown,
     onOpenReservation,
     onHoverChange,
 }) {
     return (
         <div style={{ position: "absolute", inset: 0, transform: "translateX(calc(-1 * var(--timeline-scroll-x)))" }}>
-            {row.bookings.filter(booking => (
-                booking.id === draggingId
-                || booking.id === hoveredBooking
-                || (booking.start < renderWindow.endDay
-                    && Math.max(booking.end, booking.start + 8 / dayW) > renderWindow.startDay)
-            )).map(booking => (
+            {row.bookings.filter(booking => {
+                const { start, end } = getTimelineBookingRange(booking, wholeDays);
+                return booking.id === draggingId
+                    || booking.id === hoveredBooking
+                    || (start < renderWindow.endDay
+                        && Math.max(end, start + 8 / dayW) > renderWindow.startDay);
+            }).map(booking => (
                 <VehicleTimelineBar
                     key={booking.id}
                     booking={booking}
+                    wholeDays={wholeDays}
                     dayW={dayW}
                     timelineViewportWidth={timelineViewportWidth}
                     lane={row.laneMap.get(booking.id) ?? 0}
                     hasFollowingBooking={row.bookingsWithFollowers.has(booking.id)}
                     isMoving={movingId === booking.id}
                     isHovered={hoveredBooking === booking.id}
+                    lockPlanningTimelineDrag={lockPlanningTimelineDrag}
                     onBookingMouseDown={onBookingMouseDown}
                     onOpenReservation={onOpenReservation}
                     onHoverChange={onHoverChange}
@@ -564,6 +570,9 @@ function VehicleTimeline(props) {
     const [selectedCategories, setSelectedCategories] = useState(timelineViewState.selectedCategories);
     const [categoryOptions, setCategoryOptions] = useState(EMPTY_VEHICLES);
     const [visibleCars, setVisibleCars] = useState(EMPTY_VEHICLES);
+    const [itemsLoading, setItemsLoading] = useState(true);
+    const [itemsError, setItemsError] = useState(null);
+    const [itemsReloadKey, setItemsReloadKey] = useState(0);
 
     const isPlanningBusy = useCallback((kind) => (
         kind === 'replace'
@@ -617,23 +626,31 @@ function VehicleTimeline(props) {
     useEffect(() => {
         let isActive = true;
         const categoryIds = selectedCategoryKey ? selectedCategoryKey.split(',').map(Number) : [];
+        setItemsLoading(true);
+        setItemsError(null);
 
-        getPlanningVehicles({
+        withPlanningLoadingDelay(getPlanningVehicles({
             categoryIds,
             categoryName: searchSelection?.category ?? '',
             modelName: searchSelection?.model ?? '',
             availableFrom: searchSelection?.from ?? '',
             availableTo: searchSelection?.to ?? '',
-        })
+        }))
             .then(vehicles => {
                 if (isActive) setVisibleCars(vehicles);
             })
-            .catch(() => {
-                if (isActive) setVisibleCars(EMPTY_VEHICLES);
+            .catch(error => {
+                if (isActive) {
+                    setItemsError(error);
+                    setVisibleCars(EMPTY_VEHICLES);
+                }
+            })
+            .finally(() => {
+                if (isActive) setItemsLoading(false);
             });
 
         return () => { isActive = false; };
-    }, [selectedCategoryKey, searchSelection]);
+    }, [selectedCategoryKey, searchSelection, itemsReloadKey]);
 
     const handleCarSearch = (params) => {
         const from = toIsoDateTime(params?.period?.from);
@@ -762,6 +779,10 @@ function VehicleTimeline(props) {
         getRevision: getBookingRevision,
     });
     const { loadedRange, queryKey, extend, refresh, flush, ensureCoverage } = progressive;
+    const isInitialLoading = itemsLoading || progressive.initialLoading;
+    const delayedInitialLoading = useDelayedSkeleton(isInitialLoading, 200);
+    const delayedBackgroundLoading = useDelayedSkeleton(!isInitialLoading && progressive.loading, 200);
+    const showLoadingSkeleton = isInitialLoading && delayedInitialLoading;
     const geometry = useVehicleTimelineGeometry({
         containerWidth: containerW,
         daysVisible,
@@ -896,7 +917,7 @@ function VehicleTimeline(props) {
     const MONTH_ROW_H = 24;
     const headerH = TIMELINE_HEADER_H;
 
-    const layout = useMemo(() => computeRowLayout(bookings, visibleCars), [bookings, visibleCars]);
+    const layout = useMemo(() => computeRowLayout(bookings, visibleCars, !showSubRow), [bookings, visibleCars, showSubRow]);
 
     const rowOffsets = useMemo(() => {
         const offsets = new Array(layout.length + 1);
@@ -1110,6 +1131,7 @@ function VehicleTimeline(props) {
         isReservationClickSuppressed,
         onBookingMouseDown,
     } = useVehicleTimelineDrag({
+        wholeDays: !showSubRow,
         daysVisible,
         geometry,
         gridRef,
@@ -1124,6 +1146,7 @@ function VehicleTimeline(props) {
         statusColors: STATUS_COLORS,
         minimumDay: loadedRange.startDay,
         maximumDay: loadedRange.endDay,
+        lockPlanningTimelineDrag: props.lockPlanningTimelineDrag,
     });
 
     const handleOpenReservationInNewTab = useCallback((e, reservationId) => {
@@ -1270,7 +1293,6 @@ function VehicleTimeline(props) {
 
                 {/* Legend */}
                 <div style={{ display: "flex", gap: 16 }}>
-                    {progressive.loading && <LoaderCircle className="h-4 w-4 animate-spin text-gray-500" aria-label="Läser bokningar" />}
                     {progressive.error && (
                         <button
                             type="button"
@@ -1294,21 +1316,41 @@ function VehicleTimeline(props) {
             </div>
 
             {/* ── Grid ── */}
+            {itemsError && (
+                <div role="alert" className="mb-3 flex items-center gap-3 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+                    Kunde inte läsa objekten. {itemsError.message}
+                    <ActionButton label="Försök igen" icon={RotateCw} onClick={() => setItemsReloadKey(value => value + 1)} accent="lime" />
+                </div>
+            )}
             <div
                 style={{ position: "relative" }}
+                aria-busy={isInitialLoading || progressive.loading}
                 onMouseDownCapture={(event) => {
-                    if (event.button === 0) gestureRef.current = 'pointer';
+                    if (!isInitialLoading && event.button === 0) gestureRef.current = 'pointer';
                 }}
             >
+                {showLoadingSkeleton && (
+                    <div className="absolute inset-0 z-50">
+                        <PlanningSkeleton labelWidth={LABEL_W} headerHeight={headerH} />
+                    </div>
+                )}
+                {!isInitialLoading && progressive.loading && delayedBackgroundLoading && (
+                    <div className="pointer-events-none absolute inset-x-0 top-0 z-50">
+                        <PlanningSkeleton variant="progress" />
+                    </div>
+                )}
                 <div
                     className=""
                     ref={gridRef}
+                    inert={isInitialLoading}
+                    aria-hidden={isInitialLoading}
                     style={{
                         height: TIMELINE_MAX_HEIGHT,
                         maxHeight: TIMELINE_MAX_HEIGHT,
                         overflowX: "hidden",
                         overflowY: "auto",
                         position: "relative",
+                        visibility: isInitialLoading ? "hidden" : "visible",
                         '--timeline-scroll-x': '0px',
                     }}
                 >
@@ -1459,6 +1501,7 @@ function VehicleTimeline(props) {
                                         }}
                                     >
                                         <VehicleTimelineRowContent
+                                            wholeDays={!showSubRow}
                                             row={row}
                                             dayW={dayW}
                                             renderWindow={renderWindow}
@@ -1466,6 +1509,7 @@ function VehicleTimeline(props) {
                                             movingId={row.laneMap.has(movingId) ? movingId : null}
                                             draggingId={row.laneMap.has(dragging?.bookingId) ? dragging.bookingId : null}
                                             hoveredBooking={row.laneMap.has(hoveredBooking) ? hoveredBooking : null}
+                                            lockPlanningTimelineDrag={props.lockPlanningTimelineDrag}
                                             onBookingMouseDown={onBookingMouseDown}
                                             onOpenReservation={handleOpenReservationInNewTab}
                                             onHoverChange={setHoveredBooking}
@@ -1486,6 +1530,9 @@ function VehicleTimeline(props) {
                 {/* Scrollbar */}
                 <div
                     ref={scrollbarRef}
+                    className={isInitialLoading ? 'invisible' : ''}
+                    inert={isInitialLoading}
+                    aria-hidden={isInitialLoading}
                     data-timeline-scrollbar="true"
                     onClick={onScrollbarTrackClick}
                     style={{ height: 10, background: T.scrollTrack, borderRadius: 5, position: "absolute", left: LABEL_W + 8, right: 8, bottom: 4, cursor: "pointer", zIndex: 40 }}

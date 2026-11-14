@@ -86,7 +86,7 @@ const ITEM_INFO_TEMPLATES = {
             ...IDENTITY_SECTION,
             fields: [
                 ...IDENTITY_SECTION.fields,
-                { key: 'cabinTypeCode', label: 'Byggbodtyp', type: 'cabinType' },
+                { key: 'cabinTypeCode', label: 'Bodtyp', type: 'cabinType' },
                 { key: 'serialNr', label: 'Serienr' },
                 { key: 'yearModel', label: 'Tillverkningsår' },
             ],

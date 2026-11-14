@@ -1,5 +1,7 @@
 namespace Backend.Dtos;
 
+using Backend.Models;
+
 public class OfficeTinkSettingsDto
 {
     public bool TinkEnabled { get; set; }
@@ -44,6 +46,27 @@ public class OfficeFortnoxSettingsUpdateDto
 public class OfficeFortnoxStartPairingDto
 {
     public string? RedirectUrl { get; set; }
+}
+
+public class OfficeFortnoxImportRequestDto
+{
+    public int Page { get; set; } = 1;
+    public int? PageSize { get; set; }
+    public bool UpdateExisting { get; set; }
+}
+
+public class OfficeFortnoxImportResultDto
+{
+    public string Entity { get; set; } = string.Empty;
+    public int Page { get; set; }
+    public int TotalPages { get; set; }
+    public int TotalResources { get; set; }
+    public int Processed { get; set; }
+    public int Inserted { get; set; }
+    public int Updated { get; set; }
+    public int Skipped { get; set; }
+    public int Failed { get; set; }
+    public List<string> Errors { get; set; } = [];
 }
 
 public class OfficeCompanyInfoDto
@@ -129,6 +152,8 @@ public class OfficeItemTypeSettingsDto
     public List<OfficeItemTypeSettingDto> ItemTypes { get; set; } = [];
     public string DefaultBookedFromTime { get; set; } = string.Empty;
     public string DefaultBookedToTime { get; set; } = string.Empty;
+    public string DefaultPricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
+    public bool LockPlanningTimelineDrag { get; set; }
 }
 
 public class OfficeItemTypeSettingsUpdateDto
@@ -136,4 +161,6 @@ public class OfficeItemTypeSettingsUpdateDto
     public List<int> ItemTypeIds { get; set; } = [];
     public string DefaultBookedFromTime { get; set; } = string.Empty;
     public string DefaultBookedToTime { get; set; } = string.Empty;
+    public string? DefaultPricingCalendarCode { get; set; }
+    public bool? LockPlanningTimelineDrag { get; set; }
 }

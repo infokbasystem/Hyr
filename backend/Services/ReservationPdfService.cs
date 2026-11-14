@@ -140,12 +140,29 @@ public sealed class ReservationPdfService(ApplicationDbContext dbContext) : IRes
             .Include(r => r.ReservationItems)
                 .ThenInclude(ri => ri.Item)
                     .ThenInclude(i => i!.ItemCategory)
+            .Include(r => r.ReservationItems)
+                .ThenInclude(ri => ri.Item)
+                    .ThenInclude(i => i!.CabinType)
             .FirstOrDefaultAsync(r => r.Id == reservationId && r.OfficeId == officeId, cancellationToken);
 
         if (reservation?.Office is null)
             return null;
 
+        var number = reservation.ReservationNr?.ToString(CultureInfo.InvariantCulture) ?? reservation.Id.ToString(CultureInfo.InvariantCulture);
         var vehicleItem = reservation.ReservationItems.FirstOrDefault(ri => ri.ItemTypeCode == "VEHICLE");
+
+        if (vehicleItem is null)
+        {
+            var customerCalcs = await dbContext.ReservationCalcs
+                .AsNoTracking()
+                .Include(rc => rc.ReservationCalcItems)
+                .Where(rc => rc.ReservationId == reservation.Id && rc.ReceiverTypeCode == ReceiverTypeCodes.Customer)
+                .ToListAsync(cancellationToken);
+
+            var nonVehicleDocument = new ReservationNonVehicleDocument(CreateNonVehicleModel(reservation, customerCalcs));
+            return new GeneratedPdf(nonVehicleDocument.GeneratePdf(), $"reservation_{number}.pdf");
+        }
+
         InsuranceCompany? insuranceCompany = null;
         if (vehicleItem?.InsuranceCompanyId is int insuranceCompanyId)
         {
@@ -180,9 +197,185 @@ public sealed class ReservationPdfService(ApplicationDbContext dbContext) : IRes
         var document = new ReservationDocument(model);
         var content = document.GeneratePdf();
 
-        var number = reservation.ReservationNr?.ToString(CultureInfo.InvariantCulture) ?? reservation.Id.ToString(CultureInfo.InvariantCulture);
         return new GeneratedPdf(content, $"reservation_{number}.pdf");
     }
+
+    private static readonly string[] NonVehicleSectionTypeCodes = ["LIFT", "TOOL", "CABIN", "ALU", "HAKI", "ACCESSORY"];
+
+    private ReservationNonVehiclePdfModel CreateNonVehicleModel(Reservation reservation, IReadOnlyList<ReservationCalc> customerCalcs)
+    {
+        var office = reservation.Office!;
+        var customer = reservation.Customer;
+
+        var addressLines = new[] { reservation.Address, customer?.Street1, customer?.Street2 }
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var postalCity = $"{FirstNonEmpty(reservation.ZipCode, customer?.ZipCode)}  {FirstNonEmpty(customer?.City)}".Trim();
+        if (!string.IsNullOrWhiteSpace(postalCity))
+            addressLines.Add(postalCity);
+
+        var deliveryLines = new[] { reservation.DeliveryPlace, reservation.DeliveryPlaceNote }
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Trim())
+            .ToList();
+
+        var orderedItems = reservation.ReservationItems
+            .OrderBy(ri => ri.SortNr ?? int.MaxValue)
+            .ThenBy(ri => ri.Id)
+            .ToList();
+        var itemNameById = orderedItems
+            .Where(ri => ri.ItemId.HasValue && ri.Item is not null)
+            .GroupBy(ri => ri.ItemId!.Value)
+            .ToDictionary(g => g.Key, g => GetItemDisplayName(g.First().Item!));
+        var itemOrderById = orderedItems
+            .Where(ri => ri.ItemId.HasValue)
+            .Select((ri, index) => (ri.ItemId!.Value, index))
+            .GroupBy(x => x.Value)
+            .ToDictionary(g => g.Key, g => g.First().index);
+        var rentDaysByItemId = customerCalcs
+            .SelectMany(calc => calc.ReservationCalcItems)
+            .Where(row => row.ItemId.HasValue && string.Equals(row.Text, "Dygn", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(row => row.ItemId!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(row => row.Qty ?? 0m));
+
+        var items = orderedItems
+            .Where(ri => NonVehicleSectionTypeCodes.Contains(ri.ItemTypeCode, StringComparer.OrdinalIgnoreCase))
+            .Select(ri =>
+            {
+                var item = ri.Item;
+                var isCabin = string.Equals(ri.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase);
+                var cabinSize = item?.LengthMm is int length && item.WidthMm is int width
+                    ? $"{length} x {width} mm"
+                    : "";
+                return new NonVehicleItemLine
+                {
+                    ItemTypeCode = ri.ItemTypeCode.ToUpperInvariant(),
+                    Name = item is null ? "" : GetItemDisplayName(item),
+                    MachineNr = FirstNonEmpty(item?.MachineNr, item?.ItemNr),
+                    Category = FirstNonEmpty(item?.ItemCategory?.Name),
+                    RegNr = FirstNonEmpty(item?.RegNr),
+                    MeterOut = ri.KmOut?.ToString(CultureInfo.InvariantCulture) ?? "",
+                    MeterIn = ri.KmIn?.ToString(CultureInfo.InvariantCulture) ?? "",
+                    CabinType = isCabin ? FirstNonEmpty(item?.CabinType?.Name, item?.CabinTypeCode) : "",
+                    CabinSize = isCabin ? cabinSize : "",
+                    RentFrom = FormatDate(ri.ActualFrom ?? ri.BookedFrom),
+                    RentTo = FormatDate(ri.ActualTo ?? ri.BookedTo),
+                    HandedOut = FormatDate(ri.ActualFrom),
+                    Returned = FormatDate(ri.ActualTo),
+                    RentDays = ri.ItemId is int itemId && rentDaysByItemId.TryGetValue(itemId, out var days) ? FormatNumber(days) : "",
+                    DayRate = FormatNumber(isCabin ? ri.PricePerDay : item?.PricePerDay),
+                    DeliveryPlace = FirstNonEmpty(ri.DeliveryPlaceNote),
+                    PickupPlace = FirstNonEmpty(ri.PickupPlaceNote),
+                };
+            })
+            .ToList();
+
+        var priceLines = new List<NonVehiclePriceLine>();
+        var orderedCalcs = customerCalcs
+            .OrderBy(calc => calc.ReservationCalcItems.Select(row => row.ItemId).FirstOrDefault(id => id.HasValue) is int itemId
+                && itemOrderById.TryGetValue(itemId, out var order) ? order : int.MaxValue)
+            .ThenBy(calc => calc.DateTimeFrom)
+            .ThenBy(calc => calc.Id);
+        foreach (var calc in orderedCalcs)
+        {
+            var period = $"{FormatDate(calc.DateTimeFrom)} - {FormatDate(calc.DateTimeTo)}";
+            int? previousItemId = null;
+            foreach (var row in calc.ReservationCalcItems.OrderBy(row => row.Id))
+            {
+                var itemName = row.ItemId is int itemId && itemNameById.TryGetValue(itemId, out var name) ? name : "";
+                var specification = row.ItemId.HasValue && row.ItemId == previousItemId ? "" : itemName;
+                previousItemId = row.ItemId;
+                var text = row.Text ?? "";
+                var isRent = string.Equals(row.CalcPriceTypeCode, CalcPriceTypeCodes.Rent, StringComparison.OrdinalIgnoreCase);
+
+                if (string.IsNullOrWhiteSpace(itemName))
+                {
+                    priceLines.Add(new NonVehiclePriceLine(text, "", "", FormatNumber(row.Qty), "", row.UnitPrice ?? 0m, row.Sum ?? 0m));
+                }
+                else if (isRent && string.Equals(text, "Baspris", StringComparison.OrdinalIgnoreCase))
+                {
+                    priceLines.Add(new NonVehiclePriceLine(specification, "Grundpris", "", "", FormatMoney(row.UnitPrice), null, row.Sum ?? 0m));
+                }
+                else if (isRent && string.Equals(text, "Dygn", StringComparison.OrdinalIgnoreCase))
+                {
+                    priceLines.Add(new NonVehiclePriceLine(specification, $"Hyra {period}", FormatNumber(row.Qty), "", "", row.UnitPrice ?? 0m, row.Sum ?? 0m));
+                }
+                else if (isRent && (string.Equals(text, "Vecka", StringComparison.OrdinalIgnoreCase) || string.Equals(text, "Månad", StringComparison.OrdinalIgnoreCase)))
+                {
+                    priceLines.Add(new NonVehiclePriceLine(specification, $"Hyra {period} ({text.ToLowerInvariant()})", "", FormatNumber(row.Qty), "", row.UnitPrice ?? 0m, row.Sum ?? 0m));
+                }
+                else
+                {
+                    priceLines.Add(new NonVehiclePriceLine(specification, text, "", FormatNumber(row.Qty), "", row.UnitPrice ?? 0m, row.Sum ?? 0m));
+                }
+            }
+        }
+
+        var calcRows = customerCalcs.SelectMany(calc => calc.ReservationCalcItems).ToList();
+        var netTotal = calcRows.Sum(row => row.Sum ?? 0m);
+        var vatTotal = Math.Round(calcRows.Sum(row => (row.Sum ?? 0m) * (row.VatRate ?? 0m) / 100m), 2, MidpointRounding.AwayFromZero);
+        var grossTotal = netTotal + vatTotal;
+        var subtotal = Math.Round(grossTotal, 0, MidpointRounding.AwayFromZero);
+        var deposit = reservation.Deposition ?? 0m;
+
+        return new ReservationNonVehiclePdfModel
+        {
+            Issuer = new ReservationPdfIssuer(
+                office.LogoData is { Length: > 0 } ? office.LogoData : null,
+                office.Name ?? "Hyr",
+                $"{office.Street}, {office.ZipCode} {office.City}".Trim(),
+                office.Country ?? "",
+                office.EmergencyNumber ?? "",
+                office.Telephone ?? "Tel",
+                office.Email ?? "Email",
+                office.BgNr ?? "",
+                office.Iban ?? "",
+                office.OrganizationNr ?? "000000-0000",
+                office.VatNr ?? "",
+                reservation.ReservationNr?.ToString(CultureInfo.InvariantCulture) ?? reservation.Id.ToString(CultureInfo.InvariantCulture),
+                DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                "000-0000000"),
+            CustomerName = FirstNonEmpty(reservation.CustomerName, customer?.CustomerName),
+            CustomerNr = customer?.CustomerNr?.ToString(CultureInfo.InvariantCulture) ?? "",
+            AddressLines = addressLines,
+            Telephone = FirstNonEmpty(reservation.MobilePhone, customer?.Telephone, customer?.MobilePhone),
+            TelephoneWorkplace = FirstNonEmpty(reservation.TelephoneWorkplace),
+            DeliveryAddressLines = deliveryLines,
+            Marking = FirstNonEmpty(reservation.CustomerMarking),
+            BookingDate = FormatDate(reservation.CreatedDate),
+            ReservationNr = reservation.ReservationNr?.ToString(CultureInfo.InvariantCulture) ?? reservation.Id.ToString(CultureInfo.InvariantCulture),
+            BookedBy = FirstNonEmpty(reservation.CreatedByUser?.Name),
+            Calendar = ReservationPricingCalendarCodes.NormalizeOrDefault(reservation.PricingCalendarCode) switch
+            {
+                ReservationPricingCalendarCodes.WeekDays => "Vardagar",
+                ReservationPricingCalendarCodes.WorkingDays => "Arbetsdagar",
+                _ => "Alla dagar",
+            },
+            Note = FirstNonEmpty(reservation.NoteExternal),
+            Orderer = FirstNonEmpty(reservation.Orderer),
+            PickUpBy = FirstNonEmpty(reservation.PickUpBy),
+            Items = items,
+            HasPriceCalculation = calcRows.Count > 0,
+            PriceLines = priceLines,
+            NetTotal = netTotal,
+            VatTotal = vatTotal,
+            Rounding = subtotal - grossTotal,
+            Subtotal = subtotal,
+            DepositPaid = deposit,
+            AmountToPay = subtotal - deposit,
+        };
+    }
+
+    private static string GetItemDisplayName(Item item) =>
+        FirstNonEmpty($"{item.Manufacturer} {item.ItemModel?.Name}".Trim(), item.ItemModel?.Name, item.ItemNr);
+
+    private static string FormatNumber(decimal? value) =>
+        value?.ToString("0.##", CultureInfo.GetCultureInfo("sv-SE")) ?? "";
+
+    private static string FormatMoney(decimal? value) =>
+        value?.ToString("N2", CultureInfo.GetCultureInfo("sv-SE")) ?? "";
 
     private ReservationPdfModel CreateModel(Reservation reservation, InsuranceCompany? insuranceCompany, ReservationCalc? lastCalc, PriceList? priceList, IReadOnlyList<ReservationCalc> latestCalcsByReceiver)
     {
@@ -354,7 +547,7 @@ public sealed class ReservationPdfService(ApplicationDbContext dbContext) : IRes
     private string FormatDateTime(DateTime? value) =>
         value?.ToString("yyyy-MM-dd HH:mm", CultureInfo.GetCultureInfo("sv-SE")) ?? "";
 
-    private string FormatDate(DateTime? value) =>
+    private static string FormatDate(DateTime? value) =>
         value?.ToString("yyyy-MM-dd", CultureInfo.GetCultureInfo("sv-SE")) ?? "";
 
     private string FormatTime(DateTime? value) =>
@@ -362,6 +555,98 @@ public sealed class ReservationPdfService(ApplicationDbContext dbContext) : IRes
 
     private static string FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+}
+
+// ---------- Shared layout ----------
+
+public record ReservationPdfIssuer(
+    byte[]? LogoBytes,
+    string CompanyName,
+    string CompanyAddress,
+    string CompanyCountry,
+    string CompanyEmergencyNumber,
+    string CompanyPhone,
+    string CompanyEmail,
+    string Bankgiro,
+    string Iban,
+    string OrgNr,
+    string VatNr,
+    string ContractNumber,
+    string PrintDate,
+    string JournalNr);
+
+public static class ReservationPdfLayout
+{
+    public const string Dark = "#1F2937";
+    public const string Accent = "#B91C1C";
+    public const string Grey = "#6B7280";
+    public const string Line = "#D1D5DB";
+
+    public static void ComposeHeader(IContainer container, ReservationPdfIssuer issuer)
+    {
+        container.Row(row =>
+        {
+            row.RelativeItem(1.5f).Column(c =>
+            {
+                if (issuer.LogoBytes is { Length: > 0 } logoBytes)
+                {
+                    c.Item().PaddingTop(10).AlignLeft().Width(180).Height(50).Image(logoBytes).FitArea();
+                    c.Item().PaddingTop(3).Width(180).AlignCenter().Text($"{issuer.CompanyPhone}  \u00b7  {issuer.CompanyAddress}")
+                        .FontSize(8).FontColor(Grey);
+                }
+            });
+
+            row.RelativeItem(1f).Column(c =>
+            {
+                c.Item().PaddingTop(8).AlignRight().Text("HYRESKONTRAKT").FontSize(13).Bold().FontColor(Accent);
+                c.Item().AlignRight().PaddingTop(2).Text(text =>
+                {
+                    text.AlignRight();
+                    text.DefaultTextStyle(x => x.FontSize(6.5f).FontColor(Grey));
+                    text.Span("Kontrakt #: ");
+                    text.Span(issuer.ContractNumber).Bold().FontColor(Dark);
+                    text.Line("");
+                    text.Span($"Utskriftsdatum: {issuer.PrintDate}");
+                    text.Line("");
+                    text.Span($"Journr: {issuer.JournalNr}");
+                });
+            });
+        });
+    }
+
+    public static void ComposeFooter(IContainer container, ReservationPdfIssuer issuer)
+    {
+        var addressLines = issuer.CompanyAddress
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        container.PaddingHorizontal(50).PaddingTop(10).PaddingBottom(15).DefaultTextStyle(style => style.FontSize(9).LineHeight(1.4f)).Row(row =>
+        {
+            row.RelativeItem().Column(c =>
+            {
+                c.Item().Text(issuer.CompanyName).Bold();
+                foreach (var line in addressLines) c.Item().Text(line);
+                if (!string.IsNullOrWhiteSpace(issuer.CompanyCountry)) c.Item().Text(issuer.CompanyCountry);
+            });
+            row.RelativeItem().Column(c =>
+            {
+                if (!string.IsNullOrWhiteSpace(issuer.CompanyEmergencyNumber)) c.Item().Text($"Jour {issuer.CompanyEmergencyNumber}").FontColor(Accent);
+                if (!string.IsNullOrWhiteSpace(issuer.CompanyPhone)) c.Item().Text($"Tel {issuer.CompanyPhone}");
+                if (!string.IsNullOrWhiteSpace(issuer.CompanyEmail)) c.Item().Text($"Mail {issuer.CompanyEmail}");
+            });
+            row.RelativeItem().Column(c =>
+            {
+                c.Item().Text("Betalningsinformation").Bold();
+                if (!string.IsNullOrWhiteSpace(issuer.Bankgiro)) c.Item().Text($"Bankgiro {issuer.Bankgiro}");
+                if (!string.IsNullOrWhiteSpace(issuer.Iban)) c.Item().Text($"IBAN {issuer.Iban}");
+            });
+            row.RelativeItem().Column(c =>
+            {
+                c.Item().Text("Godkänd för F-skatt");
+                if (!string.IsNullOrWhiteSpace(issuer.OrgNr)) c.Item().Text($"Org.nr {issuer.OrgNr}");
+                if (!string.IsNullOrWhiteSpace(issuer.VatNr)) c.Item().Text($"VAT {issuer.VatNr}");
+            });
+        });
+    }
 }
 
 // ---------- Document ----------
@@ -442,78 +727,25 @@ public class ReservationDocument : IDocument
         });
     }
 
-    private void ComposeFooter(IContainer container)
-    {
-        var addressLines = _m.CompanyAddress
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    private ReservationPdfIssuer Issuer => new(
+        _m.LogoBytes,
+        _m.CompanyName,
+        _m.CompanyAddress,
+        _m.CompanyCountry,
+        _m.CompanyEmergencyNumber,
+        _m.CompanyPhone,
+        _m.CompanyEmail,
+        _m.Bankgiro,
+        _m.Iban,
+        _m.OrgNr,
+        _m.VatNr,
+        _m.ContractNumber,
+        _m.PrintDate,
+        _m.JournalNr);
 
-        container.PaddingHorizontal(50).PaddingTop(10).PaddingBottom(15).DefaultTextStyle(style => style.FontSize(9).LineHeight(1.4f)).Row(row =>
-        {
-            row.RelativeItem().Column(c =>
-            {
-                c.Item().Text(_m.CompanyName).Bold();
-                foreach (var line in addressLines) c.Item().Text(line);
-                if (!string.IsNullOrWhiteSpace(_m.CompanyCountry)) c.Item().Text(_m.CompanyCountry);
-            });
-            row.RelativeItem().Column(c =>
-            {
-                if (!string.IsNullOrWhiteSpace(_m.CompanyEmergencyNumber)) c.Item().Text($"Jour {_m.CompanyEmergencyNumber}").FontColor(Accent);
-                if (!string.IsNullOrWhiteSpace(_m.CompanyPhone)) c.Item().Text($"Tel {_m.CompanyPhone}");
-                if (!string.IsNullOrWhiteSpace(_m.CompanyEmail)) c.Item().Text($"Mail {_m.CompanyEmail}");
-            });
-            row.RelativeItem().Column(c =>
-            {
-                c.Item().Text("Betalningsinformation").Bold();
-                if (!string.IsNullOrWhiteSpace(_m.Bankgiro)) c.Item().Text($"Bankgiro {_m.Bankgiro}");
-                if (!string.IsNullOrWhiteSpace(_m.Iban)) c.Item().Text($"IBAN {_m.Iban}");
-            });
-            row.RelativeItem().Column(c =>
-            {
-                c.Item().Text("Godkänd för F-skatt");
-                if (!string.IsNullOrWhiteSpace(_m.OrgNr)) c.Item().Text($"Org.nr {_m.OrgNr}");
-                if (!string.IsNullOrWhiteSpace(_m.VatNr)) c.Item().Text($"VAT {_m.VatNr}");
-            });
-        });
-    }
+    private void ComposeFooter(IContainer container) => ReservationPdfLayout.ComposeFooter(container, Issuer);
 
-    private void ComposeHeader(IContainer container)
-    {
-        container.Row(row =>
-        {
-            row.RelativeItem(1.5f).Column(c =>
-            {
-                if (_m.LogoBytes is { Length: > 0 } logoBytes)
-                {
-                    c.Item().AlignLeft().Width(180).Height(50).Image(logoBytes).FitArea();
-                    c.Item().PaddingTop(3).Width(180).AlignCenter().Text($"{_m.CompanyPhone}  \u00b7  {_m.CompanyAddress}")
-                        .FontSize(8).FontColor(Grey);
-                }
-
-                // c.Item().PaddingTop(_m.LogoBytes is { Length: > 0 } ? 4 : 0).Text(_m.CompanyName).FontSize(16).Bold().FontColor(Dark);
-                // c.Item().PaddingTop(2).Text(
-                //     $"{_m.CompanyAddress}\n" +
-                //     $"Tel: {_m.CompanyPhone}  ·  {_m.CompanyEmail}  ·  Org.nr {_m.OrgNr}\n" +
-                //     $"Bankgiro {_m.Bankgiro}  ·  IBAN {_m.Iban}  ·  Swift/Bic {_m.SwiftBic}")
-                //     .FontSize(6.5f).FontColor(Grey).LineHeight(1.3f);
-            });
-
-            row.RelativeItem(1f).Column(c =>
-            {
-                c.Item().PaddingTop(8).AlignRight().Text("HYRESKONTRAKT").FontSize(13).Bold().FontColor(Accent);
-                c.Item().AlignRight().PaddingTop(2).Text(text =>
-                {
-                    text.AlignRight();
-                    text.DefaultTextStyle(x => x.FontSize(6.5f).FontColor(Grey));
-                    text.Span("Kontrakt #: ");
-                    text.Span(_m.ContractNumber).Bold().FontColor(Dark);
-                    text.Line("");
-                    text.Span($"Utskriftsdatum: {_m.PrintDate}");
-                    text.Line("");
-                    text.Span($"Journr: {_m.JournalNr}");
-                });
-            });
-        });
-    }
+    private void ComposeHeader(IContainer container) => ReservationPdfLayout.ComposeHeader(container, Issuer);
 
     private void ComposeCustomer(IContainer container)
     {

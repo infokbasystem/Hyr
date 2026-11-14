@@ -14,6 +14,11 @@ public static class DirectItemPricingCalculator
     private sealed record Rate(string Text, decimal Price, int Hours = 0, int Days = 0, int Months = 0);
 
     public static IReadOnlyList<PriceRow> Calculate(Item item, DateTime from, DateTime to, string? calendarCode)
+        => Calculate(item.BasePrice, item.PricePerDay, item.PricePerWeek, item.PricePerMonth, from, to, calendarCode);
+
+    public static IReadOnlyList<PriceRow> Calculate(
+        decimal? basePrice, decimal? pricePerDay, decimal? pricePerWeek, decimal? pricePerMonth,
+        DateTime from, DateTime to, string? calendarCode)
     {
         if (to <= from)
         {
@@ -26,7 +31,7 @@ public static class DirectItemPricingCalculator
             throw new ArgumentException("Ogiltig priskalender.");
         }
 
-        var prices = new[] { item.BasePrice, item.PricePerDay, item.PricePerWeek, item.PricePerMonth };
+        var prices = new[] { basePrice, pricePerDay, pricePerWeek, pricePerMonth };
         if (prices.Any(price => price < 0m))
         {
             throw new ArgumentException("Artikelpriser får inte vara negativa.");
@@ -49,9 +54,9 @@ public static class DirectItemPricingCalculator
         }
 
         var rows = new List<PriceRow>();
-        if (item.BasePrice > 0m)
+        if (basePrice > 0m)
         {
-            rows.Add(new PriceRow("Baspris", 1m, item.BasePrice.Value));
+            rows.Add(new PriceRow("Baspris", 1m, basePrice.Value));
         }
 
         if (totalTicks == 0)
@@ -61,9 +66,9 @@ public static class DirectItemPricingCalculator
 
         var rates = new[]
         {
-            new Rate("Dygn", item.PricePerDay ?? 0m, Hours: 24),
-            new Rate("Vecka", item.PricePerWeek ?? 0m, Days: 7),
-            new Rate("Månad", item.PricePerMonth ?? 0m, Months: 1),
+            new Rate("Dygn", pricePerDay ?? 0m, Hours: 24),
+            new Rate("Vecka", pricePerWeek ?? 0m, Days: 7),
+            new Rate("Månad", pricePerMonth ?? 0m, Months: 1),
         }.Where(rate => rate.Price > 0m).ToArray();
 
         if (rates.Length == 0)

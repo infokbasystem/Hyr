@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Plug, Save, Trash2 } from 'lucide-react'
+import { Download, Plug, Save, Trash2 } from 'lucide-react'
 
 import ActionButton from '../../../components/ActionButton'
 import LabeledCheckbox from '../../../components/LabeledCheckbox'
 import LabeledInput from '../../../components/LabeledInput'
 import LabeledSelect from '../../../components/LabeledSelect'
+import FortnoxImportModal from '../../../modals/FortnoxImportModal'
 import { getSharedRequest } from '../../../lib/sharedRequest'
 import {
     clearFortnoxToken,
@@ -42,6 +43,10 @@ export default function OfficeIntegrations() {
     const [fortnoxSettings, setFortnoxSettings] = useState(null)
     const [isPairingFortnox, setIsPairingFortnox] = useState(false)
     const [isClearingFortnoxToken, setIsClearingFortnoxToken] = useState(false)
+    const [isFortnoxImportOpen, setIsFortnoxImportOpen] = useState(false)
+
+    const isFortnoxPaired = Boolean(fortnoxSettings?.hasAccessToken || fortnoxSettings?.hasRefreshToken)
+    const canImportFromFortnox = Boolean(fortnoxSettings?.useFortnox) && isFortnoxPaired
 
     useEffect(() => {
         let isActive = true
@@ -220,6 +225,16 @@ export default function OfficeIntegrations() {
                                 : ''}
                             placeholder="-"
                         />
+                        {canImportFromFortnox && (
+                            <div className="mt-2">
+                                <ActionButton
+                                    label="Importera"
+                                    icon={Download}
+                                    onClick={() => setIsFortnoxImportOpen(true)}
+                                    accent="teal"
+                                />
+                            </div>
+                        )}
                     </>
                 )}
 
@@ -309,6 +324,11 @@ export default function OfficeIntegrations() {
                     </>
                 )}
             </form>
+
+            <FortnoxImportModal
+                isOpen={isFortnoxImportOpen}
+                onClose={() => setIsFortnoxImportOpen(false)}
+            />
         </div>
     )
 }

@@ -69,7 +69,7 @@ namespace Backend.Controllers
             var totalRecords = await query.CountAsync();
 
             // Default sort for stable paging when no explicit sorting is provided.
-            var sortBy = filter.SortBy ?? new[] { "ItemNr:asc", "Id:desc" };
+            var sortBy = filter.SortBy ?? new[] { "ItemCategory.SortOrder:asc", "ItemNr:asc", "Id:desc" };
             query = query.ApplyMultiSort(sortBy);
 
             var items = await query
@@ -171,11 +171,13 @@ namespace Backend.Controllers
             var itemCategories = await _context.ItemCategories
                 .Where(itemCategory => itemCategory.OfficeId == officeId)
                 .AsNoTracking()
-                .OrderBy(itemCategory => itemCategory.Name)
+                .OrderBy(itemCategory => itemCategory.SortOrder)
+                .ThenBy(itemCategory => itemCategory.Name)
                 .Select(itemCategory => new ItemCategoryOptionDto
                 {
                     Id = itemCategory.Id,
                     Name = itemCategory.Name,
+                    SortOrder = itemCategory.SortOrder,
                 })
                 .ToListAsync();
 

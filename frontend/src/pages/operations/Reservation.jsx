@@ -27,6 +27,9 @@ import ReservationItemAccessory from './ReservationItemAccessory';
 import ReservationItemTool from './ReservationItemTool';
 import apiClient from '../../lib/apiClient';
 import { getCustomerById } from '../../lib/customerApi';
+import { getItemById } from '../../lib/itemApi';
+import { getItemCategoryById, getItemCategoryFormOptions } from '../../lib/itemCategoryApi';
+import { getPlanningCabins } from '../../lib/planningApi';
 import { getSharedRequest } from '../../lib/sharedRequest';
 import NumberInput from '../../components/NumberInput';
 
@@ -48,6 +51,7 @@ const normalizeItemTypeCode = (value) => String(value || '').trim().toUpperCase(
 
 const isVehicleItem = (item) => normalizeItemTypeCode(item?.itemTypeCode) === 'VEHICLE';
 const isAccessoryItem = (item) => normalizeItemTypeCode(item?.itemTypeCode) === 'ACCESSORY';
+const getCabinRowKey = (item) => item?.id ? `id:${item.id}` : item?._cabinKey;
 
 const getNowRoundedToNearestQuarterHour = () => {
     const now = new Date();
@@ -162,9 +166,9 @@ const formatDateOnly = (value) => {
 const renderMetaRow = (label, value, userName) => {
     return (
         <div className="grid grid-cols-21 gap-1">
-            <div className="col-span-5"><span className="text-gray-500">{label}</span></div>
-            <div className="col-span-8">{value && formatDateTime(value)}</div>
-            <div className="col-span-8 text-gray-500">{userName && `av ${userName}`}</div>
+            <div className="col-span-4"><span className="text-gray-500">{label}</span></div>
+            <div className="col-span-9 ml-1">{value && formatDateTime(value)}</div>
+            <div className="col-span-8 text-gray-500 truncate">{userName && `${userName}`}</div>
         </div>
     );
 };
@@ -315,6 +319,7 @@ const Reservation = () => {
         priceLists: [],
         defaultBookedFromTime: '',
         defaultBookedToTime: '',
+        defaultPricingCalendarCode: 'ALLDAYS',
     };
 
     const [reservation, setReservation] = useState(initialSavedReservation);
@@ -341,6 +346,12 @@ const Reservation = () => {
     const [initialLoadPending, setInitialLoadPending] = useState(!initialSavedReservation);
     const [loading, setLoading] = useState(false);
     const [reservationFormOptions, setReservationFormOptions] = useState(initialReservationFormOptions);
+    const [cabinOptions, setCabinOptions] = useState([]);
+    const [cabinArticleOptions, setCabinArticleOptions] = useState([]);
+    const [isLoadingCabinArticles, setIsLoadingCabinArticles] = useState(false);
+    const [isLoadingCabins, setIsLoadingCabins] = useState(false);
+    const [pendingCabinKeys, setPendingCabinKeys] = useState([]);
+    const cabinRequestsRef = useRef(new Map());
 
     const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
 
@@ -401,6 +412,20 @@ const Reservation = () => {
                 kmIn: item?.kmIn === '' ? null : item?.kmIn,
                 fuelLitres: item?.fuelLitres === '' ? null : item?.fuelLitres,
                 fuelUnitPrice: item?.fuelUnitPrice === '' ? null : item?.fuelUnitPrice,
+                basePrice: toNumberOrNull(item?.basePrice),
+                pricePerDay: toNumberOrNull(item?.pricePerDay),
+                pricePerWeek: toNumberOrNull(item?.pricePerWeek),
+                pricePerMonth: toNumberOrNull(item?.pricePerMonth),
+                articleSelections: normalizeItemTypeCode(item?.itemTypeCode) === 'CABIN'
+                    ? item?.reservationItemArticles
+                        ?.filter(article => Number.isInteger(Number(article.articleId)) && Number(article.articleId) > 0)
+                        .map(article => ({
+                            articleId: article.articleId,
+                            quantity: Number(article.quantity),
+                            unitPrice: toNumberOrNull(article.unitPrice),
+                        }))
+                    : undefined,
+                _cabinKey: undefined,
             }))
             : [];
 
@@ -444,6 +469,71 @@ const Reservation = () => {
     const accessoryItemTypeCode = getEnabledOfficeItemTypeCode('ACCESSORY');
     const toolItemTypeCode = getEnabledOfficeItemTypeCode('TOOL');
     const cabinItemTypeCode = getEnabledOfficeItemTypeCode('CABIN');
+    const hasCabinRows = (reservation?.reservationItems || []).some(item => normalizeItemTypeCode(item?.itemTypeCode) === 'CABIN');
+
+    useEffect(() => {
+        const requests = cabinRequestsRef.current;
+        setPendingCabinKeys([]);
+        return () => requests.clear();
+    }, [routeReservationId]);
+
+    useEffect(() => {
+        if (!hasCabinRows) {
+            return;
+        }
+
+        let isActive = true;
+        setIsLoadingCabins(true);
+        getPlanningCabins()
+            .then(cabins => {
+                if (isActive) {
+                    setCabinOptions(cabins.map(cabin => ({
+                        id: cabin.id,
+                        name: cabin.itemNr || cabin.serialNr,
+                        category: cabin.category || '',
+                    })));
+                }
+            })
+            .catch(error => {
+                if (isActive) {
+                    setMessages(prev => [...prev, { type: 'error', text: formatErrorMessage(error) }]);
+                }
+            })
+            .finally(() => {
+                if (isActive) {
+                    setIsLoadingCabins(false);
+                }
+            });
+
+        return () => { isActive = false; };
+    }, [hasCabinRows, routeReservationId]);
+
+    useEffect(() => {
+        if (!hasCabinRows) {
+            return;
+        }
+
+        let isActive = true;
+        setIsLoadingCabinArticles(true);
+        getSharedRequest('reservation:cabin-article-options', getItemCategoryFormOptions)
+            .then(options => {
+                if (isActive) {
+                    setCabinArticleOptions(options.articles);
+                }
+            })
+            .catch(error => {
+                if (isActive) {
+                    setMessages(prev => [...prev, { type: 'error', text: formatErrorMessage(error) }]);
+                }
+            })
+            .finally(() => {
+                if (isActive) {
+                    setIsLoadingCabinArticles(false);
+                }
+            });
+
+        return () => { isActive = false; };
+    }, [hasCabinRows, routeReservationId]);
 
     const isVehicleEnabledForOffice = Boolean(vehicleItemTypeCode);
     const hasMachineInfoItem = (reservation?.reservationItems || []).some((item) => {
@@ -919,6 +1009,8 @@ const Reservation = () => {
     };
 
     const handleRemoveItem = (index) => {
+        cabinRequestsRef.current.delete(getCabinRowKey(reservation?.reservationItems?.[index]));
+        setPendingCabinKeys([...cabinRequestsRef.current.keys()]);
         markStale();
         setMessages(prev => prev.filter(msg => msg.type !== 'success'));
         setReservation(prev => {
@@ -1153,6 +1245,14 @@ const Reservation = () => {
 
             const newItem = {
                 itemTypeCode: itemTypeCode,
+                ...(normalizeItemTypeValue(itemTypeCode) === 'CABIN' ? {
+                    _cabinKey: crypto.randomUUID(),
+                    basePrice: null,
+                    pricePerDay: null,
+                    pricePerWeek: null,
+                    pricePerMonth: null,
+                    reservationItemArticles: [],
+                } : {}),
                 bookedFrom: shouldCopyVehiclePeriod ? vehiclePeriod.bookedFrom : '',
                 bookedTo: shouldCopyVehiclePeriod ? vehiclePeriod.bookedTo : '',
                 actualFrom: shouldCopyVehiclePeriod ? vehiclePeriod.actualFrom : '',
@@ -1238,7 +1338,78 @@ const Reservation = () => {
 
     const newReservationPrefill = location.state?.newReservationPrefill ?? null;
 
+    const loadCabinForRow = async (rowKey, cabinId) => {
+        const requestToken = {};
+        cabinRequestsRef.current.set(rowKey, requestToken);
+        setPendingCabinKeys([...cabinRequestsRef.current.keys()]);
+
+        try {
+            const cabin = cabinId
+                ? await getSharedRequest(`reservation-cabin:${cabinId}`, () => getItemById(cabinId))
+                : null;
+            if (cabinRequestsRef.current.get(rowKey) !== requestToken) {
+                return;
+            }
+            if (cabin && normalizeItemTypeCode(cabin.itemTypeCode) !== 'CABIN') {
+                throw new Error('Välj en bod.');
+            }
+            const [category, articleOptions] = cabin?.itemCategoryId
+                ? await Promise.all([
+                    getSharedRequest(`reservation:cabin-category:${cabin.itemCategoryId}`, () => getItemCategoryById(cabin.itemCategoryId)),
+                    getSharedRequest('reservation:cabin-article-options', getItemCategoryFormOptions),
+                ])
+                : [null, null];
+            if (cabinRequestsRef.current.get(rowKey) !== requestToken) {
+                return;
+            }
+
+            markStale();
+            setMessages(prev => prev.filter(message => message.type !== 'success'));
+            setReservation(prev => ({
+                ...prev,
+                reservationItems: (prev?.reservationItems || []).map(item => getCabinRowKey(item) === rowKey ? {
+                    ...item,
+                    itemId: cabin?.id ?? null,
+                    itemNr: cabin?.itemNr ?? '',
+                    itemName: cabin?.itemNr ?? '',
+                    manufacturer: cabin?.manufacturer ?? '',
+                    category: cabin?.itemCategoryName ?? '',
+                    model: cabin?.itemModelName ?? '',
+                    itemNote: cabin?.note ?? '',
+                    basePrice: cabin?.basePrice ?? null,
+                    pricePerDay: cabin?.pricePerDay ?? null,
+                    pricePerWeek: cabin?.pricePerWeek ?? null,
+                    pricePerMonth: cabin?.pricePerMonth ?? null,
+                    reservationItemArticles: (category?.articles || []).map(article => ({
+                        ...article,
+                        unitPrice: articleOptions?.articles.find(option => String(option.id) === String(article.articleId))?.price ?? null,
+                    })),
+                } : item),
+            }));
+        } catch (error) {
+            if (cabinRequestsRef.current.get(rowKey) === requestToken) {
+                setMessages(prev => [...prev, { type: 'error', text: formatErrorMessage(error) }]);
+            }
+        } finally {
+            if (cabinRequestsRef.current.get(rowKey) === requestToken) {
+                cabinRequestsRef.current.delete(rowKey);
+                setPendingCabinKeys([...cabinRequestsRef.current.keys()]);
+            }
+        }
+    };
+
+    const handleCabinSelect = (index, value) => {
+        const item = reservation?.reservationItems?.[index];
+        const cabinId = toNumberOrNull(value);
+        const rowKey = getCabinRowKey(item);
+        if (!rowKey || (cabinId === item?.itemId && !cabinRequestsRef.current.has(rowKey))) {
+            return;
+        }
+        void loadCabinForRow(rowKey, cabinId);
+    };
+
     const handleCabinPrefill = ({ period, cabin }) => {
+        const rowKey = crypto.randomUUID();
         markStale();
         setReservation(prev => {
             const defaultBookedFromTime = String(reservationFormOptions?.defaultBookedFromTime ?? '').trim();
@@ -1246,7 +1417,12 @@ const Reservation = () => {
 
             const newItem = {
                 itemTypeCode: 'CABIN',
-                itemId: Number.isInteger(cabin?.id) ? cabin.id : null,
+                _cabinKey: rowKey,
+                itemId: null,
+                basePrice: null,
+                pricePerDay: null,
+                pricePerWeek: null,
+                pricePerMonth: null,
                 itemNr: cabin?.itemNr || '',
                 itemName: cabin?.itemNr || '',
                 manufacturer: cabin?.manufacturer || '',
@@ -1263,10 +1439,11 @@ const Reservation = () => {
                 reservationItems: [...(prev?.reservationItems || []), newItem]
             };
         });
+        void loadCabinForRow(rowKey, cabin?.id);
     };
 
     useEffect(() => {
-        if ((!newReservationPrefill?.vehicle && !newReservationPrefill?.cabin) || appliedNewReservationPrefillRef.current) {
+        if ((!newReservationPrefill?.vehicle && !newReservationPrefill?.cabin && !newReservationPrefill?.lift) || appliedNewReservationPrefillRef.current) {
             return;
         }
 
@@ -1290,8 +1467,37 @@ const Reservation = () => {
             to: parsePrefillDate(newReservationPrefill?.period?.to),
         };
 
+        const handleLiftPrefill = ({ period, lift }) => {
+            markStale();
+            setMessages(prev => prev.filter(message => message.type !== 'success'));
+            const defaultBookedFromTime = String(reservationFormOptions?.defaultBookedFromTime ?? '').trim();
+            const defaultBookedToTime = String(reservationFormOptions?.defaultBookedToTime ?? '').trim();
+            const newItem = {
+                itemTypeCode: 'LIFT',
+                itemId: Number.isInteger(lift?.id) ? lift.id : null,
+                itemNr: lift?.itemNr || '',
+                itemName: lift?.itemNr || '',
+                manufacturer: lift?.manufacturer || '',
+                category: lift?.itemCategoryName || '',
+                model: lift?.itemModelName || '',
+                bookedFrom: applyTimeOfDay(period?.from, defaultBookedFromTime),
+                bookedTo: applyTimeOfDay(period?.to, defaultBookedToTime),
+                actualFrom: '',
+                actualTo: '',
+            };
+            setReservation(prev => ({
+                ...prev,
+                reservationItems: [...(prev?.reservationItems || []), newItem],
+            }));
+        };
+
         if (newReservationPrefill.cabin) {
             handleCabinPrefill({ period: prefillPeriod, cabin: newReservationPrefill.cabin });
+            return;
+        }
+
+        if (newReservationPrefill.lift) {
+            handleLiftPrefill({ period: prefillPeriod, lift: newReservationPrefill.lift });
             return;
         }
 
@@ -1299,7 +1505,7 @@ const Reservation = () => {
             period: prefillPeriod,
             selectedCar: newReservationPrefill.vehicle,
         });
-    }, [newReservationPrefill, initialLoadPending, routeReservationId, reservation]);
+    }, [newReservationPrefill, initialLoadPending, routeReservationId, reservation, reservationFormOptions]);
 
     const handleBackClick = () => {
         if (window.history.length > 1) {
@@ -1408,6 +1614,7 @@ const Reservation = () => {
                 priceLists: [],
                 defaultBookedFromTime: '',
                 defaultBookedToTime: '',
+                defaultPricingCalendarCode: 'ALLDAYS',
             };
         };
 
@@ -1430,6 +1637,7 @@ const Reservation = () => {
                     priceLists: [],
                     defaultBookedFromTime: '',
                     defaultBookedToTime: '',
+                    defaultPricingCalendarCode: 'ALLDAYS',
                 };
             }
 
@@ -1440,6 +1648,7 @@ const Reservation = () => {
                 priceLists: [],
                 defaultBookedFromTime: '',
                 defaultBookedToTime: '',
+                defaultPricingCalendarCode: 'ALLDAYS',
             });
             return {
                 itemTypes: [],
@@ -1447,12 +1656,38 @@ const Reservation = () => {
                 priceLists: [],
                 defaultBookedFromTime: '',
                 defaultBookedToTime: '',
+                defaultPricingCalendarCode: 'ALLDAYS',
             };
         }
     }
 
     const saveReservationAndRefresh = async ({ showSuccessMessage = true, reloadPdf = true } = {}) => {
+        if (cabinRequestsRef.current.size > 0) {
+            setMessages([{ type: 'error', text: 'Vänta tills bodens priser har hämtats.' }]);
+            return null;
+        }
         if (!reservation) {
+            return null;
+        }
+
+        const hasItemWithoutBookedPeriod = (reservation.reservationItems || []).some(item =>
+            !String(item?.bookedFrom || '').trim() || !String(item?.bookedTo || '').trim()
+        );
+        if (hasItemWithoutBookedPeriod) {
+            setMessages([{
+                type: 'warning',
+                text: 'Fyll i både start- och slutdatum för alla artiklar innan bokningen kan sparas.',
+            }]);
+            return null;
+        }
+
+        const hasArticleWithoutPrice = (reservation.reservationItems || []).some(item =>
+            normalizeItemTypeCode(item?.itemTypeCode) === 'CABIN'
+            && (item.reservationItemArticles || []).some(article =>
+                article.articleId && toNumberOrNull(article.unitPrice) === null)
+        );
+        if (hasArticleWithoutPrice) {
+            setMessages([{ type: 'error', text: 'Ange ett à-pris för alla valda artiklar på bokningens bodar. Ange 0 för en kostnadsfri artikel.' }]);
             return null;
         }
 
@@ -1513,6 +1748,10 @@ const Reservation = () => {
     };
 
     const handleCalculatePrice = async () => {
+        if (cabinRequestsRef.current.size > 0) {
+            setMessages([{ type: 'error', text: 'Vänta tills bodens priser har hämtats.' }]);
+            return;
+        }
         if (!reservation) {
             setMessages([{ type: 'error', text: 'Kunde inte läsa bokningen' }]);
             return;
@@ -1690,10 +1929,19 @@ const Reservation = () => {
             }, SKELETON_SHOW_DELAY_MS);
 
             try {
-                await Promise.all([
+                const [formOptions, loadedReservation] = await Promise.all([
                     getReservationFormOptions({ dedupe: true, isActive: () => isActive }),
                     getReservationById(routeReservationId, { dedupe: true, isActive: () => isActive })
                 ]);
+
+                if (isActive && routeReservationId === 'new' && loadedReservation) {
+                    const newReservation = {
+                        ...loadedReservation,
+                        pricingCalendarCode: formOptions?.defaultPricingCalendarCode || 'ALLDAYS',
+                    }
+                    setReservation(newReservation)
+                    setOriginalReservation(JSON.parse(JSON.stringify(newReservation)))
+                }
 
                 if (SKELETON_TEST_DELAY_MS > 0) {
                     await wait(SKELETON_TEST_DELAY_MS);
@@ -1787,7 +2035,7 @@ const Reservation = () => {
         return (
             <div className="relative flex flex-col h-full md:px-[clamp(4px,3vw,6vw)] animate-pulse">
                 <div className="mt-1 flex min-h-0 flex-1 flex-col">
-                    <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                    <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:items-start">
                         <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
                             <aside className="text-gray-700 lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                                 <div className="space-y-4 pr-0 pb-4 ml-2">
@@ -1812,7 +2060,7 @@ const Reservation = () => {
                             </aside>
                         </div>
 
-                        <div className="flex-grow lg:pl-2 pb-10 mr-20">
+                        <div className="flex-grow lg:pl-2 pb-10 mr-10">
                             <div className="h-4 bg-gray-200 rounded w-52 mb-3" />
 
                             <div className="flex justify-between w-full mb-4">
@@ -1995,7 +2243,7 @@ const Reservation = () => {
 
             <div className='mt-1 flex min-h-0 flex-1 flex-col'>
 
-                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:items-start">
 
                     <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
                         <aside className="lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
@@ -2023,6 +2271,8 @@ const Reservation = () => {
                                             key={message.id ?? `${message.type}-${message.text}-${index}`}
                                             className={`rounded-sm border px-3 py-2 text-xs text-center ${message.type === 'error'
                                                 ? 'border-rose-200 bg-rose-50 text-rose-800'
+                                                : message.type === 'warning'
+                                                    ? 'border-amber-200 bg-amber-50 text-amber-800'
                                                 : 'border-emerald-200 bg-emerald-100 text-emerald-800'
                                                 }`}
                                         >
@@ -2038,7 +2288,7 @@ const Reservation = () => {
 
                     {/* <div className="mx-10 w-px self-stretch bg-gray-300" /> */}
 
-                    <div className='flex-grow lg:pl-2 pb-10 mr-20'>
+                    <div className='flex-grow lg:pl-2 pb-10 mr-10'>
                         <h2 className="pb-3 text-sm text-gray-500 tracking-[0.10em] font-semibold">{reservation?.reservationNr || reservation?.id ? (<>BOKNING <span className="ml-2">Nr. {reservation?.reservationNr ?? reservation?.id}</span></>) : ("Ny bokning")}</h2>
 
                         <form onSubmit={submitReservation} autoComplete='off'>
@@ -2170,11 +2420,16 @@ const Reservation = () => {
                                                 margintop="1"
                                             />
                                             <LabeledInput
-                                                label="Leveranspl."
-                                                value={reservation?.deliveryPlace || ''}
-                                                onChange={(e) => handleChange('deliveryPlace', e)}
+                                                label="Leverans"
+                                                value={reservation?.deliveryPlaceNote || ''}
+                                                onChange={(e) => handleChange('deliveryPlaceNote', e)}
                                                 labelWidth="w-18"
                                             />
+                                            <LabeledInput
+                                                label="Hämtning"
+                                                value={reservation?.pickupPlaceNote || ''}
+                                                onChange={(e) => handleChange('pickupPlaceNote', e)}
+                                                labelWidth="w-18" />
                                             <LabeledInput
                                                 label="Tfn arb.plats"
                                                 value={reservation?.telephoneWorkplace || ''}
@@ -2184,11 +2439,6 @@ const Reservation = () => {
                                                 label="Beställare"
                                                 value={reservation?.orderer || ''}
                                                 onChange={(e) => handleChange('orderer', e)}
-                                                labelWidth="w-18" />
-                                            <LabeledInput
-                                                label="Hämtas av"
-                                                value={reservation?.pickUpBy || ''}
-                                                onChange={(e) => handleChange('pickUpBy', e)}
                                                 labelWidth="w-18" />
                                         </span>
                                     )}
@@ -2256,12 +2506,12 @@ const Reservation = () => {
                                 </span>
                             </div>
 
-                            <div className="flex items-center space-x-2 ml-3 mt-4 tracking-[0.10em]">
-                                <span className="text-xs text-gray-700 mr-2 uppercase">Lägg till:</span>
+                            <div className="flex items-center space-x-2 mt-4 tracking-[0.10em]">
+                                <span className="text-xs text-gray-700 mr-2 ">Lägg till:</span>
                                 {vehicleItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => setShowCarSearchModal(true)}
                                     >
                                         PERSONBIL
@@ -2270,7 +2520,7 @@ const Reservation = () => {
                                 {trailerItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => handleAddItem(trailerItemTypeCode)}
                                     >
                                         SLÄP
@@ -2279,7 +2529,7 @@ const Reservation = () => {
                                 {liftItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => handleAddItem(liftItemTypeCode)}
                                     >
                                         LIFT
@@ -2288,7 +2538,7 @@ const Reservation = () => {
                                 {hakiItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => handleAddItem(hakiItemTypeCode)}
                                     >
                                         HAKI
@@ -2297,7 +2547,7 @@ const Reservation = () => {
                                 {aluItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => handleAddItem(aluItemTypeCode)}
                                     >
                                         ALU-STÄLLNING
@@ -2306,7 +2556,7 @@ const Reservation = () => {
                                 {accessoryItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={handleAddAccessoryClick}
                                     >
                                         TILLBEHÖR
@@ -2315,7 +2565,7 @@ const Reservation = () => {
                                 {toolItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => handleAddItem(toolItemTypeCode)}
                                     >
                                         VERKTYG
@@ -2324,16 +2574,16 @@ const Reservation = () => {
                                 {cabinItemTypeCode && (
                                     <button
                                         type="button"
-                                        className="text-xs text-gray-700 border border-blue-300 bg-sky-50/50 hover:bg-lime-100 px-3 py-1"
+                                        className="rounded text-tiny tracking-[0.12em] font-semibold text-gray-700 border border-lime-400 bg-lime-100/50 hover:bg-lime-200 px-3 py-1"
                                         onClick={() => handleAddItem(cabinItemTypeCode)}
                                     >
-                                        BYGGBOD
+                                        BOD
                                     </button>
                                 )}
                             </div>
 
                             {/* Reservation Items List */}
-                            <div className="ml-3 mt-4">
+                            <div className="mt-4">
                                 {(() => {
                                     const reservationItems = reservation?.reservationItems || [];
                                     const reservationItemsWithIndex = reservationItems.map((item, index) => ({ item, index }));
@@ -2436,7 +2686,12 @@ const Reservation = () => {
                                                         index={index}
                                                         onChange={handleItemChange}
                                                         onRemove={handleRemoveItem}
-                                                        itemCategories={itemCategories}
+                                                        cabinOptions={cabinOptions}
+                                                        onCabinSelect={handleCabinSelect}
+                                                        isLoadingCabins={isLoadingCabins}
+                                                        isLoadingPrices={pendingCabinKeys.includes(getCabinRowKey(item))}
+                                                        articleOptions={cabinArticleOptions}
+                                                        isLoadingArticles={isLoadingCabinArticles}
                                                         defaultBookedFromTime={defaultBookedFromTime}
                                                         defaultBookedToTime={defaultBookedToTime}
                                                     />
@@ -2475,7 +2730,7 @@ const Reservation = () => {
                             </div>
 
                             {hasReservationItems && (
-                            <div className="ml-3 mt-4">
+                            <div className="mt-4">
                                 <div className="grid grid-cols-[1fr_3fr_3fr] gap-10 rounded-sm border border-gray-300 bg-sky-50/50 p-3 pb-5">
                                     <div className="flex flex-col gap-3">
                                         {/* Debit periods */}
@@ -2547,14 +2802,14 @@ const Reservation = () => {
                                             </colgroup>
                                             <thead>
                                                 <tr className="tracking-[0.1em] text-gray-500">
-                                                    <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-left"></th>
-                                                    <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right">Antal</th>
-                                                    <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right">Á-pris</th>
-                                                    {/* <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right">Rbt</th> */}
-                                                    <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right">Moms</th>
-                                                    {/* <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right">ex moms</th> */}
-                                                    <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right">ink moms</th>
-                                                    <th className="px-2 text-tiny font-medium uppercase text-gray-400 text-right"></th>
+                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-left"></th>
+                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Antal</th>
+                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Á-pris</th>
+                                                    {/* <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Rbt</th> */}
+                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Moms</th>
+                                                    {/* <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">ex moms</th> */}
+                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">ink moms</th>
+                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>

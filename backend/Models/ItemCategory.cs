@@ -8,8 +8,10 @@ namespace Backend.Models
         public int Id { get; set; }
         public int? OfficeId { get; set; }
         public string Name { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
 
         public virtual Office? Office { get; set; }
+        public virtual ICollection<CategoryArticle> CategoryArticles { get; set; } = new List<CategoryArticle>();
         public virtual ICollection<Item>? Items { get; set; } = new List<Item>();
         public virtual ICollection<PriceListDayPrice> DayPrices { get; set; } = new List<PriceListDayPrice>();
         public virtual ICollection<PriceListDayPriceFreeKm> DayPriceFreeKms { get; set; } = new List<PriceListDayPriceFreeKm>();

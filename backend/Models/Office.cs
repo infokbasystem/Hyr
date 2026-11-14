@@ -51,6 +51,8 @@ namespace Backend.Models
         public string TinkPaymentScheme { get; set; } = string.Empty;
         public string DefaultBookedFromTime { get; set; } = string.Empty;
         public string DefaultBookedToTime { get; set; } = string.Empty;
+        public string DefaultPricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
+        public bool LockPlanningTimelineDrag { get; set; }
         public byte[]? LogoData { get; set; }
         public string? LogoContentType { get; set; }
 

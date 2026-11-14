@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getInitialTimelineRange, getTimelineRangeExtension } from './useVehicleTimelineGeometry.js';
+import { withPlanningLoadingDelay } from '../../lib/planningLoading.js';
 
 export function mergePlanningReservations(current, incoming) {
     const merged = new Map(current.map(booking => [booking.id, booking]));
@@ -131,6 +132,7 @@ export default function useProgressivePlanningReservations({
     const [rangeState, setRangeState] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [publishedQueryKey, setPublishedQueryKey] = useState(null);
     const controllerRef = useRef(null);
     const configRef = useRef(null);
 
@@ -156,12 +158,12 @@ export default function useProgressivePlanningReservations({
                 setLoading(value);
             },
             fetchRange: async (range) => {
-                const rows = await config.fetchReservations({
+                const rows = await withPlanningLoadingDelay(config.fetchReservations({
                     categoryIds,
                     filterKey: config.categoryKey,
                     from: rangeDate(config.startDate, range.startDay),
                     to: rangeDate(config.startDate, range.endDay),
-                });
+                }));
                 return rows.map(booking => ({
                     ...booking,
                     start: (new Date(booking.start).getTime() - config.startDate.getTime()) / 86400000,
@@ -171,6 +173,7 @@ export default function useProgressivePlanningReservations({
             publish: (range, rows, replace) => {
                 config.setBookings(current => replace ? rows : mergePlanningReservations(current, rows));
                 setRangeState({ queryKey, range });
+                setPublishedQueryKey(queryKey);
             },
         });
         controllerRef.current = controller;
@@ -195,6 +198,7 @@ export default function useProgressivePlanningReservations({
         loadedRange: rangeState?.queryKey === queryKey ? rangeState.range : initialRange,
         queryKey,
         loading,
+        initialLoading: !error && (!enabled || publishedQueryKey !== queryKey),
         error,
         extend,
         refresh,

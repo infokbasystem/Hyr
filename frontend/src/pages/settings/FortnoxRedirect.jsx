@@ -21,7 +21,7 @@ const FortnoxRedirect = () => {
             const redirectUrl = window.location.origin + '/settings/fortnoxredirect';
             await apiClient.post('/settings/fortnoxactivate', { code, state, redirectUrl });
             setActivated(true);
-            setMessage("Kopplingen aktiverades! Du kan nu stänga denna flik och bokföra fakturor.");
+            setMessage("Kopplingen aktiverades!");
         } catch (error) {
             const status = error?.response?.status;
             const message = error?.response?.data?.message ?? error.message;

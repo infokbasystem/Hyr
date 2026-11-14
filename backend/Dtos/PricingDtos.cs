@@ -166,6 +166,7 @@ public sealed class ReservationCalcResultItemDto
 {
     public int Id { get; set; }
     public int? ItemId { get; set; }
+    public int? ReservationItemArticleId { get; set; }
     public int? PriceListId { get; set; }
     public int? VatId { get; set; }
     public decimal? VatRate { get; set; }

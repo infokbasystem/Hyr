@@ -1,5 +1,6 @@
+import { useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../hooks/AuthProvider";
+import { AuthContext } from "../AuthContext";
 
 import './Header.css'
 import bg from '../assets/header.png'
@@ -8,7 +9,7 @@ import logo from '../assets/logo.png'
 
 const Header = ({ user, onSignOut }) => {
     const navigate = useNavigate();
-    const auth = useAuth();
+    const auth = useContext(AuthContext);
     const activeUser = user ?? auth?.user;
 
     const handleLogout = async () => {
@@ -30,7 +31,7 @@ const Header = ({ user, onSignOut }) => {
                     <div className="mt-2 flex w-full items-center justify-between">
                         <p className='text-tiny text-white-700 leading-0 p-1'>
                             <span>Välkommen</span>
-                            <span className='ms-1 text-white font-medium'>{activeUser?.displayName ?? activeUser?.email ?? "Användare"}</span>
+                            <span className='ms-1 text-white font-medium'>{activeUser?.name ?? activeUser?.Name ?? activeUser?.displayName ?? activeUser?.email ?? "Användare"}</span>
                         </p>
                         <button type='button' onClick={handleLogout} className="place-self-end text-tiny text-white-700 font-medium bg-transparent hover:text-white-600 leading-0 p-1">Logga ut</button>
                     </div>

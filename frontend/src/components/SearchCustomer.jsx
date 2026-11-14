@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Search } from 'lucide-react'
+import { ExternalLink, Search, UserPlus } from 'lucide-react'
 import { searchCustomers } from '../lib/customerSearchApi'
+import ActionButton from './ActionButton'
+import CustomerCreateModal from '../modals/CustomerCreateModal'
 
 function normalizeCustomerRows(payload) {
     if (Array.isArray(payload)) {
@@ -28,7 +30,6 @@ export default function SearchCustomer({
 }) {
     const containerRef = useRef(null)
     const requestRef = useRef(0)
-    const skipNextSearchRef = useRef(false)
     const previousSelectedCustomerNameRef = useRef('')
     const [query, setQuery] = useState('')
     const [hasEditedSinceSelection, setHasEditedSinceSelection] = useState(false)
@@ -37,6 +38,8 @@ export default function SearchCustomer({
     const [isSearching, setIsSearching] = useState(false)
     const [isOpen, setIsOpen] = useState(false)
     const [selectedCustomer, setSelectedCustomer] = useState(null)
+    const [searchError, setSearchError] = useState('')
+    const [showCreateModal, setShowCreateModal] = useState(false)
     const mayHaveMoreMatches = !isSearching && take > 0 && matches.length >= take
     const canOpenCustomer = typeof onOpenCustomer === 'function' && Boolean(selectedCustomerName?.trim() || selectedCustomer)
 
@@ -63,7 +66,6 @@ export default function SearchCustomer({
 
         previousSelectedCustomerNameRef.current = selectedCustomerName
         requestRef.current += 1
-        skipNextSearchRef.current = true
         setQuery(selectedCustomerName)
         setHasEditedSinceSelection(false)
         setMatches([])
@@ -100,11 +102,6 @@ export default function SearchCustomer({
             return
         }
 
-        if (skipNextSearchRef.current) {
-            skipNextSearchRef.current = false
-            return
-        }
-
         const trimmedQuery = query.trim()
 
         if (trimmedQuery.length < minQueryLength) {
@@ -116,6 +113,7 @@ export default function SearchCustomer({
 
         const requestId = ++requestRef.current
         setIsSearching(true)
+        setSearchError('')
 
         const timer = setTimeout(() => {
             Promise.resolve(searchCustomers({
@@ -147,12 +145,13 @@ export default function SearchCustomer({
                     setMatches(normalizeCustomerRows(result))
                     setIsOpen(true)
                 })
-                .catch(() => {
+                .catch((error) => {
                     if (requestRef.current !== requestId) {
                         return
                     }
 
                     setMatches([])
+                    setSearchError(error?.payload?.message ?? error?.message ?? 'Kunde inte söka kunder.')
                     setIsOpen(true)
                 })
                 .finally(() => {
@@ -162,7 +161,10 @@ export default function SearchCustomer({
                 })
         }, debounceMs)
 
-        return () => clearTimeout(timer)
+        return () => {
+            clearTimeout(timer)
+            requestRef.current += 1
+        }
     }, [debounceMs, disabled, hasEditedSinceSelection, minQueryLength, query, take])
 
     useEffect(() => {
@@ -189,12 +191,14 @@ export default function SearchCustomer({
     }, [hasEditedSinceSelection, onCustomerSelect, query])
 
     function handlePick(customer) {
+        requestRef.current += 1
         onCustomerSelect?.(customer)
         setSelectedCustomer(customer ?? null)
         setQuery(customer?.customerName ?? '')
         setHasEditedSinceSelection(false)
         setMatches([])
         setIsOpen(false)
+        setIsSearching(false)
     }
 
     function handleInputKeyDown(event) {
@@ -231,6 +235,10 @@ export default function SearchCustomer({
                             return
                         }
 
+                        requestRef.current += 1
+                        setMatches([])
+                        setSearchError('')
+                        setIsSearching(true)
                         setQuery(event.target.value)
                         setHasEditedSinceSelection(true)
                     }}
@@ -292,12 +300,20 @@ export default function SearchCustomer({
                         })}
                         </ul>
 
-                        {!isSearching && matches.length === 0 && (
-                            <div className="px-4 py-2 text-xs text-gray-500">
-                                Inga träffar
-                            </div>
+                        {!isSearching && searchError && (
+                            <div role="alert" className="px-4 py-2 text-xs text-red-700">{searchError}</div>
                         )}
 
+                        {!isSearching && !searchError && matches.length === 0 && (
+                            <div className="flex items-center justify-between gap-4 px-4 py-2 text-xs text-gray-500">
+                                <span>Inga träffar</span>
+                                <ActionButton label="Ny kund" icon={UserPlus} accent="lime" disabled={disabled} onClick={() => {
+                                    requestRef.current += 1
+                                    setIsOpen(false)
+                                    setShowCreateModal(true)
+                                }} />
+                            </div>
+                        )}
                         {isSearching && (
                             <div className="px-4 py-2 text-xs text-gray-500">
                                 Söker...
@@ -311,6 +327,16 @@ export default function SearchCustomer({
                         )}
                     </div>
                 </div>
+            )}
+            {showCreateModal && (
+                <CustomerCreateModal
+                    initialName={query.trim()}
+                    onClose={() => setShowCreateModal(false)}
+                    onSaved={(customer) => {
+                        handlePick(customer)
+                        setShowCreateModal(false)
+                    }}
+                />
             )}
         </div>
     )

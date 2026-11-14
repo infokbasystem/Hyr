@@ -192,7 +192,7 @@ export default function WorkOrderBar({
             return (
               <StatusIcon
                 className="h-2.5 w-2.5"
-                strokeWidth={3}
+                strokeWidth={2}
                 fill={order.bookingStatus === 'started' || order.bookingStatus === 'paused' ? 'currentColor' : 'none'}
                 aria-hidden="true"
               />

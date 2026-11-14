@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { getAutoScrollDelta } from './useVehicleTimelineGeometry.js';
+import { getAutoScrollDelta, getTimelineBookingRange } from './useVehicleTimelineGeometry.js';
 
 const DRAG_THRESHOLD = 5;
 
@@ -14,6 +14,7 @@ function findCarIdAt(x, y) {
 
 export default function useVehicleTimelineDrag({
     daysVisible,
+    wholeDays = false,
     geometry,
     gridRef,
     headerHeight,
@@ -27,6 +28,7 @@ export default function useVehicleTimelineDrag({
     statusColors,
     minimumDay,
     maximumDay,
+    lockPlanningTimelineDrag = false,
 }) {
     const [dragging, setDragging] = useState(null);
     const [ghost, setGhost] = useState(null);
@@ -220,6 +222,11 @@ export default function useVehicleTimelineDrag({
     }, [formatRange, geometry, gridRef, headerHeight, labelWidth, minimumDuration, onCommit, pendingScrollXRef, scheduleScrollXRef, setBookings]);
 
     const onBookingMouseDown = useCallback((event, booking, type) => {
+        if (lockPlanningTimelineDrag && type === 'move') {
+            event.stopPropagation();
+            return;
+        }
+
         event.stopPropagation();
         if (type !== 'move') event.preventDefault();
 
@@ -227,10 +234,12 @@ export default function useVehicleTimelineDrag({
         pendingCleanupRef.current?.();
 
         const color = statusColors[booking.status] || statusColors.booked;
-        const width = geometry.durationToPixels(booking.end - booking.start);
-        const barRect = event.currentTarget.getBoundingClientRect();
+        const { start, end } = getTimelineBookingRange(booking, wholeDays);
+        const width = geometry.durationToPixels(end - start);
+        const barRect = event.currentTarget.closest('[data-reservation-bar]')?.getBoundingClientRect()
+            ?? event.currentTarget.getBoundingClientRect();
         const gridRect = gridRef.current?.getBoundingClientRect();
-        const barLeft = booking.start * geometry.dayWidth - pendingScrollXRef.current;
+        const barLeft = start * geometry.dayWidth - pendingScrollXRef.current;
         const drag = {
             bookingId: booking.id,
             type,
@@ -271,7 +280,7 @@ export default function useVehicleTimelineDrag({
         };
         window.addEventListener('mousemove', handlePendingMove);
         window.addEventListener('mouseup', handlePendingUp);
-    }, [beginActiveDrag, daysVisible, geometry, gridRef, labelWidth, pendingScrollXRef, statusColors]);
+    }, [beginActiveDrag, daysVisible, geometry, gridRef, labelWidth, lockPlanningTimelineDrag, pendingScrollXRef, statusColors, wholeDays]);
 
     const beginResize = useCallback((event, booking) => {
         beginActiveDrag({

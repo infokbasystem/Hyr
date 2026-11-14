@@ -387,6 +387,7 @@ namespace Backend.Controllers
                 {
                     candidate.DefaultBookedFromTime,
                     candidate.DefaultBookedToTime,
+                    candidate.DefaultPricingCalendarCode,
                 })
                 .FirstOrDefaultAsync();
 
@@ -409,11 +410,13 @@ namespace Backend.Controllers
             var itemCategories = await _context.ItemCategories
                 .Where(itemCategory => itemCategory.OfficeId == officeId)
                 .AsNoTracking()
-                .OrderBy(itemCategory => itemCategory.Name)
+                .OrderBy(itemCategory => itemCategory.SortOrder)
+                .ThenBy(itemCategory => itemCategory.Name)
                 .Select(itemCategory => new ItemCategoryOptionDto
                 {
                     Id = itemCategory.Id,
                     Name = itemCategory.Name,
+                    SortOrder = itemCategory.SortOrder,
                 })
                 .ToListAsync();
 
@@ -436,6 +439,7 @@ namespace Backend.Controllers
                 PriceLists = priceLists,
                 DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty,
                 DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty,
+                DefaultPricingCalendarCode = ReservationPricingCalendarCodes.NormalizeOrDefault(office.DefaultPricingCalendarCode),
             });
         }
 
@@ -593,6 +597,7 @@ namespace Backend.Controllers
                     .Collection(r => r.ReservationItems)
                     .Query()
                     .Include(ri => ri.Item)
+                    .Include(ri => ri.ReservationItemArticles)
                     .LoadAsync();
 
                 await _context.Entry(reservationInDb)
@@ -679,6 +684,10 @@ namespace Backend.Controllers
                         EvProlonging = item.EvProlonging,
                         FuelLitres = item.FuelLitres,
                         FuelUnitPrice = item.FuelUnitPrice,
+                        BasePrice = item.BasePrice,
+                        PricePerDay = item.PricePerDay,
+                        PricePerWeek = item.PricePerWeek,
+                        PricePerMonth = item.PricePerMonth,
                         InsuranceCompanyId = item.InsuranceCompanyId,
                         InsuranceCounterpartRegNr = item.InsuranceCounterpartRegNr,
                         InsuranceCustomerIsCause = item.InsuranceCustomerIsCause,
@@ -713,6 +722,17 @@ namespace Backend.Controllers
                         YearModel = item.Item?.YearModel ?? string.Empty,
                         ReservationId = item.ReservationId,
                         SortNr = item.SortNr,
+                        ReservationItemArticles = item.ReservationItemArticles
+                            .OrderBy(link => link.ArticleId)
+                            .Select(link => new ReservationItemArticle
+                            {
+                                Id = link.Id,
+                                ReservationItemId = link.ReservationItemId,
+                                ArticleId = link.ArticleId,
+                                Quantity = link.Quantity,
+                                UnitPrice = link.UnitPrice,
+                            })
+                            .ToList(),
                         Item = item.Item != null ? new Item
                         {
                             Id = item.Item.Id,
@@ -744,6 +764,7 @@ namespace Backend.Controllers
                             Id = calcItem.Id,
                             ReservationCalcId = calcItem.ReservationCalcId,
                             ItemId = calcItem.ItemId,
+                            ReservationItemArticleId = calcItem.ReservationItemArticleId,
                             PriceListId = calcItem.PriceListId,
                             VatId = calcItem.VatId,
                             VatRate = calcItem.VatRate,
@@ -879,6 +900,7 @@ namespace Backend.Controllers
                 {
                     reservationInDb = await _context.Reservations
                         .Include(r => r.ReservationItems)
+                            .ThenInclude(item => item.ReservationItemArticles)
                         .Include(r => r.ReservationCalcs)
                             .ThenInclude(rc => rc.ReservationCalcItems)
                         .FirstOrDefaultAsync(r => r.Id == reservation.Id);
@@ -897,6 +919,81 @@ namespace Backend.Controllers
                 if (!ReservationPricingCalendarCodes.IsValid(normalizedPricingCalendarCode))
                 {
                     return BadRequest(new { message = "Invalid pricing calendar code" });
+                }
+
+                var cabinRows = reservation.ReservationItems
+                    .Where(item => string.Equals(item.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (cabinRows.Any(item => new[] { item.BasePrice, item.PricePerDay, item.PricePerWeek, item.PricePerMonth }.Any(price => price < 0m)))
+                {
+                    return BadRequest(new { message = "Bodens bokningspriser får inte vara negativa." });
+                }
+
+                var cabinIds = cabinRows.Where(item => item.ItemId.HasValue).Select(item => item.ItemId!.Value).Distinct().ToList();
+                var validCabinIds = await _context.Items
+                    .Where(item => cabinIds.Contains(item.Id) && item.OfficeId == user.OfficeId && item.ItemTypeCode == "CABIN")
+                    .Select(item => item.Id)
+                    .ToListAsync();
+                if (cabinIds.Except(validCabinIds).Any())
+                {
+                    return BadRequest(new { message = "Boden måste tillhöra det aktuella kontoret." });
+                }
+
+                var newItemIds = reservation.ReservationItems
+                    .Where(item => item.Id == 0 && item.ItemId.HasValue)
+                    .Select(item => item.ItemId!.Value)
+                    .Distinct()
+                    .ToArray();
+                var categoryByNewItemId = await _context.Items
+                    .Where(item => newItemIds.Contains(item.Id) && item.OfficeId == user.OfficeId)
+                    .ToDictionaryAsync(item => item.Id, item => item.ItemCategoryId);
+                if (categoryByNewItemId.Count != newItemIds.Length)
+                {
+                    return BadRequest(new { message = "Objekten måste tillhöra det aktuella kontoret." });
+                }
+
+                var categoryIds = categoryByNewItemId.Values
+                    .Where(id => id.HasValue)
+                    .Select(id => id!.Value)
+                    .Distinct()
+                    .ToArray();
+                var categoryArticles = await _context.CategoryArticles
+                    .AsNoTracking()
+                    .Where(link => categoryIds.Contains(link.ItemCategoryId)
+                        && link.ItemCategory!.OfficeId == user.OfficeId
+                        && link.Article!.OfficeId == user.OfficeId)
+                    .Select(link => new { link.ItemCategoryId, link.ArticleId, link.Quantity, UnitPrice = link.Article!.Price })
+                    .ToListAsync();
+                var articlesByCategory = categoryArticles.ToLookup(link => link.ItemCategoryId);
+
+                var articleSelections = reservation.ReservationItems
+                    .Where(item => item.ArticleSelections != null)
+                    .Select(item => item.ArticleSelections!)
+                    .ToList();
+                if (articleSelections.Any(articles =>
+                    articles.Any(article => article == null || article.ArticleId <= 0
+                        || article.Quantity <= 0m || article.Quantity > 9999999999999.99999m
+                        || decimal.Round(article.Quantity, 5) != article.Quantity)
+                    || articles.Select(article => article.ArticleId).Distinct().Count() != articles.Count))
+                {
+                    return BadRequest(new { message = "Varje artikel får bara förekomma en gång och måste ha ett positivt antal med högst fem decimaler." });
+                }
+                if (articleSelections.SelectMany(articles => articles).Any(article => article.UnitPrice.HasValue
+                    && (article.UnitPrice < 0m || article.UnitPrice > 9999999999999.99999m
+                        || decimal.Round(article.UnitPrice.Value, 5) != article.UnitPrice.Value)))
+                {
+                    return BadRequest(new { message = "Artikelns à-pris måste vara noll eller positivt och ha högst fem decimaler." });
+                }
+
+                var selectedArticleIds = articleSelections.SelectMany(articles => articles)
+                    .Select(article => article.ArticleId).Distinct().ToArray();
+                var selectedArticlePrices = await _context.Articles
+                    .Where(article => selectedArticleIds.Contains(article.Id) && article.OfficeId == user.OfficeId)
+                    .ToDictionaryAsync(article => article.Id, article => article.Price);
+                if (selectedArticlePrices.Count != selectedArticleIds.Length
+                    || (selectedArticleIds.Length > 0 && !user.OfficeId.HasValue))
+                {
+                    return BadRequest(new { message = "Artiklarna måste tillhöra det aktuella kontoret." });
                 }
 
                 var effectivePriceListId = reservation.PriceListId;
@@ -988,14 +1085,56 @@ namespace Backend.Controllers
                         reservationItemInDb = new ReservationItem();
                         reservationItemInDb.OfficeId = user.OfficeId;
                         reservationItemInDb.Reservation = reservationInDb;
+                        if (reservationItem.ArticleSelections == null && reservationItem.ItemId.HasValue
+                            && categoryByNewItemId.TryGetValue(reservationItem.ItemId.Value, out var categoryId)
+                            && categoryId.HasValue)
+                        {
+                            foreach (var article in articlesByCategory[categoryId.Value])
+                            {
+                                reservationItemInDb.ReservationItemArticles.Add(new ReservationItemArticle
+                                {
+                                    ArticleId = article.ArticleId,
+                                    Quantity = article.Quantity,
+                                    UnitPrice = article.UnitPrice,
+                                });
+                            }
+                        }
                         _context.ReservationItems.Add(reservationItemInDb);
                     }
                     else
                     {
-                        reservationItemInDb = await _context.ReservationItems.FindAsync(reservationItem.Id);
+                        reservationItemInDb = reservationInDb.ReservationItems.FirstOrDefault(item => item.Id == reservationItem.Id);
                         if (reservationItemInDb == null)
                         {
                             return NotFound(new { message = $"ReservationItem with Id {reservationItem.Id} not found" });
+                        }
+                    }
+                    if (reservationItem.ArticleSelections != null)
+                    {
+                        var selectedArticles = reservationItem.ArticleSelections.ToDictionary(article => article.ArticleId);
+                        foreach (var link in reservationItemInDb.ReservationItemArticles
+                            .Where(link => !selectedArticles.ContainsKey(link.ArticleId)).ToList())
+                        {
+                            reservationItemInDb.ReservationItemArticles.Remove(link);
+                            _context.ReservationItemArticles.Remove(link);
+                        }
+                        var existingArticles = reservationItemInDb.ReservationItemArticles.ToDictionary(link => link.ArticleId);
+                        foreach (var article in selectedArticles.Values)
+                        {
+                            if (existingArticles.TryGetValue(article.ArticleId, out var link))
+                            {
+                                link.Quantity = article.Quantity;
+                                link.UnitPrice = article.UnitPrice ?? link.UnitPrice;
+                            }
+                            else
+                            {
+                                reservationItemInDb.ReservationItemArticles.Add(new ReservationItemArticle
+                                {
+                                    ArticleId = article.ArticleId,
+                                    Quantity = article.Quantity,
+                                    UnitPrice = article.UnitPrice ?? selectedArticlePrices[article.ArticleId],
+                                });
+                            }
                         }
                     }
                     reservationItemInDb.AbroadOk = reservationItem.AbroadOk;
@@ -1008,6 +1147,11 @@ namespace Backend.Controllers
                     reservationItemInDb.EvProlonging = reservationItem.EvProlonging;
                     reservationItemInDb.FuelLitres = reservationItem.FuelLitres;
                     reservationItemInDb.FuelUnitPrice = reservationItem.FuelUnitPrice;
+                    var isCabin = string.Equals(reservationItem.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase);
+                    reservationItemInDb.BasePrice = isCabin ? reservationItem.BasePrice : null;
+                    reservationItemInDb.PricePerDay = isCabin ? reservationItem.PricePerDay : null;
+                    reservationItemInDb.PricePerWeek = isCabin ? reservationItem.PricePerWeek : null;
+                    reservationItemInDb.PricePerMonth = isCabin ? reservationItem.PricePerMonth : null;
                     reservationItemInDb.InsuranceCompanyId = reservationItem.InsuranceCompanyId;
                     reservationItemInDb.InsuranceCounterpartRegNr = reservationItem.InsuranceCounterpartRegNr;
                     reservationItemInDb.InsuranceCustomerIsCause = reservationItem.InsuranceCustomerIsCause;
@@ -1087,6 +1231,7 @@ namespace Backend.Controllers
                         if (reservationCalcItem.Id == 0)
                         {
                             reservationCalcItemInDb = new ReservationCalcItem();
+                            reservationCalcItemInDb.OfficeId = user.OfficeId;
                             reservationCalcItemInDb.ReservationCalc = reservationCalcInDb;
                             _context.ReservationCalcItems.Add(reservationCalcItemInDb);
                         }
@@ -1098,13 +1243,41 @@ namespace Backend.Controllers
                                 return NotFound(new { message = $"ReservationCalcItem with Id {reservationCalcItem.Id} not found" });
                             }
                         }
+                        if (reservationCalcItem.ReservationItemArticleId.HasValue
+                            && reservationCalcItem.ReservationItemArticleId != reservationCalcItemInDb.ReservationItemArticleId)
+                        {
+                            var source = await _context.ReservationItemArticles
+                                .Where(link => link.Id == reservationCalcItem.ReservationItemArticleId
+                                    && link.ReservationItem!.ReservationId == reservationInDb.Id
+                                    && link.ReservationItem.OfficeId == user.OfficeId
+                                    && link.ReservationItem.ItemId == reservationCalcItem.ItemId
+                                    && link.Article!.OfficeId == user.OfficeId
+                                    && (link.Article.VatRate == null || link.Article.VatRate.OfficeId == user.OfficeId))
+                                .Select(link => new
+                                {
+                                    link.Id,
+                                    link.Article!.VatRateId,
+                                    VatRate = link.Article.VatRate == null ? (decimal?)null : link.Article.VatRate.Rate,
+                                })
+                                .SingleOrDefaultAsync();
+                            if (source == null)
+                            {
+                                return BadRequest(new { message = "Beräkningsradens artikel måste tillhöra samma bokningsrad och kontor." });
+                            }
+                            reservationCalcItemInDb.ReservationItemArticleId = source.Id;
+                            reservationCalcItemInDb.VatId = source.VatRateId ?? defaultVatId;
+                            reservationCalcItemInDb.VatRate = source.VatRate ?? defaultVatRate;
+                        }
                         reservationCalcItemInDb.ItemId = reservationCalcItem.ItemId;
                         reservationCalcItemInDb.PriceListId = reservationCalcItem.PriceListId;
                         reservationCalcItemInDb.Qty = reservationCalcItem.Qty;
                         reservationCalcItemInDb.UnitPrice = reservationCalcItem.UnitPrice;
                         reservationCalcItemInDb.Sum = reservationCalcItem.Sum;
-                        reservationCalcItemInDb.VatId = defaultVatId;
-                        reservationCalcItemInDb.VatRate = defaultVatRate;
+                        if (!reservationCalcItemInDb.ReservationItemArticleId.HasValue)
+                        {
+                            reservationCalcItemInDb.VatId = defaultVatId;
+                            reservationCalcItemInDb.VatRate = defaultVatRate;
+                        }
                         reservationCalcItemInDb.CalcPriceTypeCode = CalcPriceTypeCodes.NormalizeOrDefault(reservationCalcItem.CalcPriceTypeCode);
                         reservationCalcItemInDb.Text = reservationCalcItem.Text;
                     }

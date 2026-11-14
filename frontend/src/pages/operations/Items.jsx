@@ -51,6 +51,14 @@ function getSorts(sortConfig) {
     ]
   }
 
+  if (column.key === 'itemCategoryName') {
+    return [
+      { field: column.sortField, direction: sortConfig.direction },
+      { field: 'itemnr', direction: 'asc' },
+      { field: 'id', direction: 'desc' },
+    ]
+  }
+
   return [
     { field: column.sortField, direction: sortConfig.direction },
     { field: 'id', direction: 'desc' },
@@ -93,8 +101,8 @@ export default function Items() {
   })
 
   const [sortConfig, setSortConfig] = useState({
-    key: cachedState?.sortConfig?.key ?? 'id',
-    direction: cachedState?.sortConfig?.direction ?? 'desc',
+    key: cachedState?.sortConfig?.key ?? 'itemCategoryName',
+    direction: cachedState?.sortConfig?.direction ?? 'asc',
   })
   const [selectedRowId, setSelectedRowId] = useState(cachedState?.selectedRowId ?? null)
 

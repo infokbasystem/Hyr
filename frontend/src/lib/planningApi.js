@@ -1,8 +1,12 @@
 import { requestJson } from './apiClient'
 import { getSharedRequest } from './sharedRequest'
 
-export async function getPlanningCategories() {
-  const data = await getSharedRequest('planning-categories', () => requestJson('/planning/categories'))
+export async function getPlanningCategories({ itemTypeCode } = {}) {
+  const query = new URLSearchParams()
+  if (itemTypeCode != null) query.set('ItemTypeCode', String(itemTypeCode).trim().toUpperCase())
+  const queryString = query.toString()
+  const path = queryString ? `/planning/categories?${queryString}` : '/planning/categories'
+  const data = await getSharedRequest(`planning-categories:${queryString}`, () => requestJson(path))
   const rows = Array.isArray(data) ? data : []
 
   return rows.map((category) => ({
@@ -61,8 +65,11 @@ export async function getPlanningCabinTypes() {
   }))
 }
 
-export async function getPlanningCabins({ cabinTypeCodes = [], availableFrom = '', availableTo = '' } = {}) {
+export async function getPlanningCabins({ categoryIds = [], cabinTypeCodes = [], availableFrom = '', availableTo = '' } = {}) {
   const query = new URLSearchParams()
+  categoryIds
+    .filter((id) => Number.isFinite(Number(id)))
+    .forEach((id) => query.append('CategoryIds', `${id}`))
   cabinTypeCodes
     .filter(Boolean)
     .forEach((code) => query.append('CabinTypeCodes', code))
@@ -87,6 +94,33 @@ export async function getPlanningCabins({ cabinTypeCodes = [], availableFrom = '
     category: cabin?.itemCategoryName ?? '',
     manufacturer: cabin?.manufacturer ?? '',
     model: cabin?.itemModelName ?? '',
+  }))
+}
+
+export async function getPlanningLifts({ categoryIds = [], availableFrom = '', availableTo = '' } = {}) {
+  const query = new URLSearchParams()
+  categoryIds
+    .filter((id) => Number.isFinite(Number(id)))
+    .forEach((id) => query.append('CategoryIds', `${id}`))
+
+  if (availableFrom && availableTo) {
+    query.set('AvailableFrom', availableFrom)
+    query.set('AvailableTo', availableTo)
+  }
+
+  const queryString = query.toString()
+  const path = queryString ? `/planning/lifts?${queryString}` : '/planning/lifts'
+  const data = await getSharedRequest(`planning-lifts:${queryString}`, () => requestJson(path))
+  const rows = Array.isArray(data) ? data : []
+
+  return rows.map((lift) => ({
+    id: lift?.id,
+    itemNr: lift?.itemNr ?? '',
+    serialNr: lift?.serialNr ?? '',
+    categoryId: lift?.itemCategoryId ?? null,
+    category: lift?.itemCategoryName ?? '',
+    manufacturer: lift?.manufacturer ?? '',
+    model: lift?.itemModelName ?? '',
   }))
 }
 
@@ -129,4 +163,12 @@ export function updatePlanningReservation(reservationItemId, body) {
     method: 'PUT',
     body,
   })
+}
+
+export async function getPlanningCustomerRentals() {
+  const data = await requestJson('/planning/customer-rentals')
+  if (!Array.isArray(data)) {
+    throw new Error('Kunde inte läsa kundöversikten: ogiltigt svar från servern.')
+  }
+  return data
 }

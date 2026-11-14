@@ -1,11 +1,11 @@
 import Select from 'react-select'
 
-function getFilterSelectStyles() {
+function getFilterSelectStyles(isSearchable) {
   return {
     control: (base, state) => ({
       ...base,
-      minHeight: 26,
-      height: 'auto',
+      minHeight: 28,
+      height: state.isMulti ? 'auto' : 28,
       borderRadius: state.isMulti && state.hasValue ? 14 : 9999,
       borderColor: state.isFocused ? '#65a30d' : '#84cc16',
       boxShadow: 'none',
@@ -13,11 +13,14 @@ function getFilterSelectStyles() {
         borderColor: state.isFocused ? '#65a30d' : '#84cc16',
       },
       backgroundColor: 'white',
+      ...(isSearchable ? {
+        '&:focus-within [id$="-placeholder"]': { display: 'none' },
+      } : {}),
     }),
-    valueContainer: (base) => ({
+    valueContainer: (base, state) => ({
       ...base,
       minHeight: 26,
-      height: 'auto',
+      height: state.isMulti ? 'auto' : 26,
       flexWrap: 'wrap',
       padding: '0px 12px',
       fontSize: '0.7rem',
@@ -52,6 +55,7 @@ function getFilterSelectStyles() {
       margin: 0,
       padding: 0,
       fontSize: '0.7rem',
+      lineHeight: 1,
     }),
     option: (base, state) => ({
       ...base,
@@ -122,7 +126,7 @@ export default function FilterSelect({
       isDisabled={isDisabled}
       isSearchable={isSearchable}
       isClearable={isClearable}
-      styles={getFilterSelectStyles()}
+      styles={getFilterSelectStyles(isSearchable)}
       {...props}
     />
   )

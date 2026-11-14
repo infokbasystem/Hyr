@@ -328,9 +328,27 @@ namespace Backend.Controllers
 
             var sortNr = 1;
             var calcPriceTypeArticles = await _calcPriceTypeArticleService.EnsureArticlesAsync(user.OfficeId.Value);
+            var sourceIds = uninvoicedCalcItems.Where(item => item.ReservationItemArticleId.HasValue)
+                .Select(item => item.ReservationItemArticleId!.Value).Distinct().ToArray();
+            var sourceArticles = await _context.ReservationItemArticles
+                .AsNoTracking()
+                .Where(link => sourceIds.Contains(link.Id)
+                    && link.ReservationItem!.Reservation!.OfficeId == user.OfficeId
+                    && link.Article!.OfficeId == user.OfficeId)
+                .Include(link => link.Article)
+                    .ThenInclude(article => article!.Account)
+                .ToDictionaryAsync(link => link.Id, link => link.Article!);
             foreach (var calcItem in uninvoicedCalcItems)
             {
-                calcPriceTypeArticles.TryGetValue(calcItem.CalcPriceTypeCode ?? string.Empty, out var article);
+                Article? article;
+                if (calcItem.ReservationItemArticleId.HasValue)
+                {
+                    sourceArticles.TryGetValue(calcItem.ReservationItemArticleId.Value, out article);
+                }
+                else
+                {
+                    calcPriceTypeArticles.TryGetValue(calcItem.CalcPriceTypeCode ?? string.Empty, out article);
+                }
 
                 invoice.InvoiceRows.Add(new InvoiceRow
                 {
@@ -340,6 +358,7 @@ namespace Backend.Controllers
                     ReservationCalcItemId = calcItem.Id,
                     ArticleId = article?.Id,
                     ArticleNr = article?.ArticleNr ?? string.Empty,
+                    AccountNr = article?.Account?.AccountNr,
                     SortNr = sortNr++,
                     Text1 = calcItem.Text,
                     Qty = calcItem.Qty,

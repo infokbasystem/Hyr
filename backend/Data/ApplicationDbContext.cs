@@ -22,6 +22,8 @@ namespace Backend.Data
         public DbSet<IntegrationSchedule> IntegrationSchedules { get; set; } = null!;
         public DbSet<Account> Accounts { get; set; } = null!;
         public DbSet<Article> Articles { get; set; } = null!;
+        public DbSet<CategoryArticle> CategoryArticles { get; set; } = null!;
+        public DbSet<ReservationItemArticle> ReservationItemArticles { get; set; } = null!;
         public DbSet<VatRate> VatRates { get; set; } = null!;
         public DbSet<ItemType> ItemTypes { get; set; } = null!;
         public DbSet<CabinType> CabinTypes { get; set; } = null!;
@@ -96,6 +98,13 @@ namespace Backend.Data
                 entity.Property(e => e.TinkPaymentScheme).HasMaxLength(50);
                 entity.Property(e => e.DefaultBookedFromTime).HasMaxLength(5);
                 entity.Property(e => e.DefaultBookedToTime).HasMaxLength(5);
+                entity.Property(e => e.DefaultPricingCalendarCode)
+                    .IsRequired()
+                    .HasMaxLength(20)
+                    .HasDefaultValue(ReservationPricingCalendarCodes.AllDays);
+                entity.Property(e => e.LockPlanningTimelineDrag)
+                    .IsRequired()
+                    .HasDefaultValue(false);
                 entity.Property(e => e.LogoData).HasColumnType("varbinary(max)");
                 entity.Property(e => e.LogoContentType).HasMaxLength(100);
             });
@@ -416,6 +425,10 @@ namespace Backend.Data
                 entity.Property(e => e.InsuranceCounterpartRegNr).HasMaxLength(100);
                 entity.Property(e => e.FuelLitres).HasColumnType("decimal(18,5)");
                 entity.Property(e => e.FuelUnitPrice).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.BasePrice).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerDay).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerWeek).HasColumnType("decimal(10,5)");
+                entity.Property(e => e.PricePerMonth).HasColumnType("decimal(10,5)");
                 entity.Property(e => e.InsuranceMaxAllowedCompensationCost).HasColumnType("decimal(18,5)");
                 entity.Property(e => e.InsuranceSjalvriskDayCost).HasColumnType("decimal(18,5)");
                 entity.Property(e => e.InsuranceManulaMaxCompensationCost).HasColumnType("decimal(18,5)");
@@ -432,6 +445,23 @@ namespace Backend.Data
                 entity.HasOne(e => e.Item)
                     .WithMany(e => e.ReservationItems)
                     .HasForeignKey(e => e.ItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ReservationItemArticle>(entity =>
+            {
+                entity.ToTable("ReservationItemArticle");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.ReservationItemId, e.ArticleId }).IsUnique();
+                entity.Property(e => e.Quantity).HasColumnType("decimal(18,5)").HasDefaultValue(1m);
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,5)");
+                entity.HasOne(e => e.ReservationItem)
+                    .WithMany(e => e.ReservationItemArticles)
+                    .HasForeignKey(e => e.ReservationItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Article)
+                    .WithMany(e => e.ReservationItemArticles)
+                    .HasForeignKey(e => e.ArticleId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -454,6 +484,7 @@ namespace Backend.Data
             {
                 entity.ToTable("ReservationCalcItem");
                 entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.ReservationItemArticleId);
                 entity.Property(e => e.CalcPriceTypeCode).HasMaxLength(30).HasDefaultValue(CalcPriceTypeCodes.FreeText);
                 entity.Property(e => e.Text).HasMaxLength(500);
                 entity.Property(e => e.VatRate).HasColumnType("decimal(18,5)");
@@ -686,6 +717,7 @@ namespace Backend.Data
                 entity.Property(e => e.ArticleNr).HasMaxLength(100);
                 entity.Property(e => e.Name).HasMaxLength(500);
                 entity.Property(e => e.Price).HasColumnType("decimal(18,5)");
+                entity.Property(e => e.KeyFortnox).HasMaxLength(200);
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.Articles)
                     .HasForeignKey(e => e.OfficeId)
@@ -732,6 +764,21 @@ namespace Backend.Data
                     .WithMany(e => e.ItemCategories)
                     .HasForeignKey(e => e.OfficeId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<CategoryArticle>(entity =>
+            {
+                entity.ToTable("CategoryArticle");
+                entity.HasKey(e => new { e.ItemCategoryId, e.ArticleId });
+                entity.Property(e => e.Quantity).HasColumnType("decimal(18,5)").HasDefaultValue(1m);
+                entity.HasOne(e => e.ItemCategory)
+                    .WithMany(e => e.CategoryArticles)
+                    .HasForeignKey(e => e.ItemCategoryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Article)
+                    .WithMany(e => e.CategoryArticles)
+                    .HasForeignKey(e => e.ArticleId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<ItemModel>(entity =>

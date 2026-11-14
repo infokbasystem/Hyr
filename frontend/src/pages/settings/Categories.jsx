@@ -7,11 +7,13 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import ActionButton from '../../components/ActionButton'
 import ConfirmationModal from '../../components/ConfirmationModal'
 import LabeledInput from '../../components/LabeledInput'
+import LabeledReactSelect from '../../components/LabeledReactSelect'
 import { useDelayedSkeleton } from '../../hooks/useDelayedSkeleton'
 import { getSharedRequest } from '../../lib/sharedRequest'
 import {
   deleteItemCategory,
   getItemCategoryById,
+  getItemCategoryFormOptions,
   saveItemCategory,
   searchItemCategories,
 } from '../../lib/itemCategoryApi'
@@ -22,6 +24,8 @@ function createEmptyCategoryForm() {
   return {
     id: null,
     name: '',
+    sortOrder: 0,
+    articles: [],
   }
 }
 
@@ -29,12 +33,22 @@ function mapCategoryToListItem(itemCategory) {
   return {
     id: itemCategory?.id ?? null,
     name: itemCategory?.name ?? '',
+    sortOrder: itemCategory?.sortOrder ?? 0,
   }
+}
+
+function sortCategoryRows(rows) {
+  return [...rows].sort((a, b) =>
+    (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+    || (a.name ?? '').localeCompare(b.name ?? '', 'sv')
+    || (b.id ?? 0) - (a.id ?? 0))
 }
 
 function createCategorySnapshot(form) {
   return JSON.stringify({
     name: form?.name ?? '',
+    sortOrder: form?.sortOrder ?? 0,
+    articles: [...(form?.articles ?? [])].sort((a, b) => a.articleId - b.articleId),
   })
 }
 
@@ -59,6 +73,7 @@ export default function Categories() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false)
+  const [articleOptions, setArticleOptions] = useState(null)
 
   const showListSkeleton = useDelayedSkeleton(isLoading, 300, 200)
   const showDetailSkeleton = useDelayedSkeleton(isDetailLoading, 300, 200)
@@ -67,6 +82,29 @@ export default function Categories() {
     initialCategorySnapshotRef.current = createCategorySnapshot(nextForm)
     hasInitializedSnapshotRef.current = true
   }
+
+  useEffect(() => {
+    let isActive = true
+
+    getSharedRequest('settings:itemcategories:form-options', getItemCategoryFormOptions)
+      .then((options) => {
+        if (isActive) {
+          setArticleOptions(options.articles.map((article) => ({
+            id: article.id,
+            name: `${article.articleNr} - ${article.name}${article.isActive ? '' : ' (inaktiv)'}`,
+          })))
+        }
+      })
+      .catch((requestError) => {
+        if (isActive) {
+          setError(requestError?.message || 'Kunde inte hämta artiklar för kategorin.')
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
 
   useEffect(() => {
     let isActive = true
@@ -152,6 +190,8 @@ export default function Categories() {
         const nextForm = {
           id: result?.id ?? null,
           name: result?.name ?? '',
+          sortOrder: result?.sortOrder ?? 0,
+          articles: result?.articles ?? [],
         }
 
         setForm(nextForm)
@@ -310,6 +350,33 @@ export default function Categories() {
     }))
   }
 
+  function handleAddArticle(value) {
+    const articleId = Number(value)
+    if (!articleOptions?.some((article) => article.id === articleId)) {
+      return
+    }
+
+    setForm((previous) => previous.articles.some((article) => article.articleId === articleId)
+      ? previous
+      : { ...previous, articles: [...previous.articles, { articleId, quantity: 1 }] })
+  }
+
+  function handleArticleQuantityChange(articleId, quantity) {
+    setForm((previous) => ({
+      ...previous,
+      articles: previous.articles.map((article) => article.articleId === articleId
+        ? { ...article, quantity }
+        : article),
+    }))
+  }
+
+  function handleRemoveArticle(articleId) {
+    setForm((previous) => ({
+      ...previous,
+      articles: previous.articles.filter((article) => article.articleId !== articleId),
+    }))
+  }
+
   function handleAddCategory() {
     requestCategoryTransition(() => {
       const nextForm = createEmptyCategoryForm()
@@ -324,6 +391,14 @@ export default function Categories() {
   }
 
   async function handleSave() {
+    if (form.articles.some((article) => !Number.isFinite(article.quantity)
+      || article.quantity <= 0 || article.quantity >= 1e13
+      || Math.round(article.quantity * 100000) / 100000 !== article.quantity)) {
+      setError('Ange ett positivt antal med högst fem decimaler för varje artikel.')
+      setSuccessMessage('')
+      return
+    }
+
     setIsSaving(true)
     setError('')
     setSuccessMessage('')
@@ -332,11 +407,15 @@ export default function Categories() {
       const savedCategory = await saveItemCategory({
         id: form.id,
         name: form.name,
+        sortOrder: form.sortOrder ?? 0,
+        articles: form.articles,
       })
 
       const savedCategoryForm = {
         id: savedCategory?.id ?? null,
         name: savedCategory?.name ?? '',
+        sortOrder: savedCategory?.sortOrder ?? 0,
+        articles: savedCategory?.articles ?? [],
       }
       const savedCategoryRow = mapCategoryToListItem(savedCategory)
 
@@ -345,10 +424,10 @@ export default function Categories() {
         if (existingIndex >= 0) {
           const nextCategories = [...previousCategories]
           nextCategories[existingIndex] = savedCategoryRow
-          return nextCategories
+          return sortCategoryRows(nextCategories)
         }
 
-        return [savedCategoryRow, ...previousCategories].slice(0, PAGE_SIZE)
+        return sortCategoryRows([savedCategoryRow, ...previousCategories]).slice(0, PAGE_SIZE)
       })
 
       if (form.id == null) {
@@ -429,7 +508,8 @@ export default function Categories() {
     pendingTransition?.()
   }
 
-  const isDetailDisabled = (selectedCategoryId == null && !isCreatingCategory) || isDetailLoading
+  const isDetailDisabled = (selectedCategoryId == null && !isCreatingCategory)
+    || isDetailLoading || articleOptions == null || isSaving
 
   return (
     <div className="flex h-full min-h-full w-full flex-col px-0 pb-10 md:px-[clamp(8px,15vw,10vw)]">
@@ -455,9 +535,10 @@ export default function Categories() {
               onKeyDown={handleListKeyDown}
               className="mt-5 max-h-[calc(100vh-360px)] overflow-y-auto pr-2 focus:outline-none"
             >
-              <div className="mb-1 grid grid-cols-[92px_minmax(0,1fr)] border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
+              <div className="mb-1 grid grid-cols-[92px_minmax(0,1fr)_64px] border-b border-gray-300 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-gray-700">
                 <span>Kod</span>
                 <span>Beskrivning</span>
+                <span className="text-right">Sort.</span>
               </div>
 
               {showListSkeleton && (
@@ -492,9 +573,10 @@ export default function Categories() {
                         : 'text-gray-800 hover:bg-lime-100'
                     }`}
                   >
-                    <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center">
+                    <div className="grid grid-cols-[92px_minmax(0,1fr)_64px] items-center">
                       <span>{itemCategory.id ?? '-'}</span>
                       <span className="truncate">{itemCategory.name || '-'}</span>
+                      <span className="text-right">{itemCategory.sortOrder ?? 0}</span>
                     </div>
                   </button>
                 )
@@ -589,6 +671,82 @@ export default function Categories() {
                       disabled={isDetailDisabled}
                       onChange={(value) => handleFieldChange('name', value ?? '')}
                     />
+                    <LabeledInput
+                      name="sortOrder"
+                      label="Sort."
+                      type="number"
+                      integerOnly
+                      labelWidth="w-12"
+                      inputWidth="w-20"
+                      margintop="2"
+                      value={form.sortOrder ?? 0}
+                      disabled={isDetailDisabled}
+                      onChange={(value) => handleFieldChange('sortOrder', value ?? 0)}
+                    />
+                    <div className="mt-8">
+                      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                        <h2 className="text-xs font-semibold tracking-[0.04em] text-gray-500">ARTIKLAR</h2>
+                        <div className="w-70 max-w-full">
+                          <LabeledReactSelect
+                            name="articleToAdd"
+                            value=""
+                            items={(articleOptions ?? []).filter((option) => !form.articles.some((article) => article.articleId === option.id))}
+                            disabled={isDetailDisabled}
+                            filterStyle
+                            isClearable={false}
+                            aria-label="Lägg till artikel"
+                            placeholder="Välj artikel..."
+                            noOptionsMessage={() => 'Inga fler artiklar att lägga till'}
+                            onChange={handleAddArticle}
+                          />
+                        </div>
+                      </div>
+                      <table className="w-full table-fixed text-left text-xs text-gray-700" aria-label="Kopplade artiklar">
+                        <thead>
+                          <tr className="border-b border-gray-400">
+                            <th scope="col" className="pb-2 pr-3 font-normal tracking-[0.06em]">Artikel</th>
+                            <th scope="col" className="w-24 pb-2 pr-3 font-normal tracking-[0.06em]">Antal</th>
+                            <th scope="col" className="w-28"><span className="sr-only">Åtgärder</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="h-1"></tr>
+                          {form.articles.map((article) => {
+                            const articleName = articleOptions?.find((option) => option.id === article.articleId)?.name
+                              ?? `Artikel ${article.articleId}`
+
+                            return (
+                              <tr key={article.articleId}>
+                                <td className="break-words py-1 pr-3">{articleName}</td>
+                                <td className="pt-1 pr-3">
+                                  <LabeledInput
+                                    name={`article-quantity-${article.articleId}`}
+                                    type="number"
+                                    inputWidth="w-full"
+                                    margintop="0"
+                                    value={article.quantity}
+                                    disabled={isDetailDisabled}
+                                    aria-label={`Antal för ${articleName}`}
+                                    onChange={(value) => handleArticleQuantityChange(article.articleId, value)}
+                                  />
+                                </td>
+                                <td className="py-1 pl-2">
+                                  <button
+                                    type="button"
+                                    disabled={isDetailDisabled}
+                                    className="text-gray-600 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                    aria-label={`Ta bort ${articleName}`}
+                                    onClick={() => handleRemoveArticle(article.articleId)}
+                                  >
+                                    Ta bort rad
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </>
                 )}
               </div>

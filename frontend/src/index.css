@@ -2,6 +2,7 @@
 
 @layer base {
   html {
+    --app-viewport-height: 100vh;
     font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   }
 
@@ -16,9 +17,20 @@
   --text-xs: 0.7rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .planning-loading-skeleton .react-loading-skeleton::after {
+    animation: none;
+  }
+}
+
 @media screen and (max-width: 1700px) {
   html {
+    --app-viewport-height: calc(100vh / 0.9);
     zoom: 0.9;
+  }
+
+  .min-h-screen {
+    min-height: var(--app-viewport-height);
   }
 }
 

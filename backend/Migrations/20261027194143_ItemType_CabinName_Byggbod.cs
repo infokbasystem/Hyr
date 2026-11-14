@@ -5,12 +5,12 @@
 namespace Backend.Migrations
 {
     /// <inheritdoc />
-    public partial class ItemType_CabinName_Byggbod : Migration
+    public partial class ItemType_CabinName_Bod : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql("UPDATE [ItemType] SET [Name] = N'Byggbod' WHERE [Code] = 'CABIN';");
+            migrationBuilder.Sql("UPDATE [ItemType] SET [Name] = N'Bod' WHERE [Code] = 'CABIN';");
         }
 
         /// <inheritdoc />

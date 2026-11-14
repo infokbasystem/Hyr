@@ -114,7 +114,7 @@ export default function PlanningRightInfoBar({
                     >
                       <StatusIcon
                         className="h-2.5 w-2.5"
-                        strokeWidth={3}
+                        strokeWidth={2}
                         fill={key === 'started' || key === 'paused' ? 'currentColor' : 'none'}
                         aria-hidden="true"
                       />
@@ -244,7 +244,7 @@ export default function PlanningRightInfoBar({
         <div className="grid grid-cols-2 gap-y-1.5 gap-x-2 text-tiny">
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full border border-sky-500 bg-sky-400 text-white flex items-center justify-center font-bold text-[8px]">
-              <Minus className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
+              <Minus className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
             </span>
             <span className="text-slate-600">Ej påbörjad</span>
           </div>
@@ -262,7 +262,7 @@ export default function PlanningRightInfoBar({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full border border-emerald-600 bg-emerald-500 text-white flex items-center justify-center font-bold text-[8px]">
-              <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
+              <Check className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
             </span>
             <span className="text-slate-600">Klar</span>
           </div>

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261027194143_ItemType_CabinName_Byggbod")]
-    partial class ItemType_CabinName_Byggbod
+    [Migration("20261027194143_ItemType_CabinName_Bod")]
+    partial class ItemType_CabinName_Bod
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

@@ -18,6 +18,10 @@ namespace Backend.Models
         public int? KmIn { get; set; }
         public decimal? FuelLitres { get; set; }
         public decimal? FuelUnitPrice { get; set; }
+        public decimal? BasePrice { get; set; }
+        public decimal? PricePerDay { get; set; }
+        public decimal? PricePerWeek { get; set; }
+        public decimal? PricePerMonth { get; set; }
         public int? DebitCategoryId { get; set; }
         public bool IsCheckedIn { get; set; }
         public bool EvProlonging { get; set; }
@@ -65,8 +69,13 @@ namespace Backend.Models
         [NotMapped]
         public string YearModel { get; set; } = string.Empty;
 
+        [NotMapped]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public ICollection<ReservationItemArticle>? ArticleSelections { get; set; }
+
         public virtual Office? Office { get; set; }
         public virtual Reservation? Reservation { get; set; }
         public virtual Item? Item { get; set; }
+        public virtual ICollection<ReservationItemArticle> ReservationItemArticles { get; set; } = new List<ReservationItemArticle>();
     }
 }

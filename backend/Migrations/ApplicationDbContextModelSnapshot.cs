@@ -83,6 +83,11 @@ namespace Backend.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("KeyFortnox")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -134,6 +139,26 @@ namespace Backend.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("CabinType", (string)null);
+                });
+
+            modelBuilder.Entity("Backend.Models.CategoryArticle", b =>
+                {
+                    b.Property<int>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ArticleId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,5)")
+                        .HasDefaultValue(1m);
+
+                    b.HasKey("ItemCategoryId", "ArticleId");
+
+                    b.HasIndex("ArticleId");
+
+                    b.ToTable("CategoryArticle", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.Currency", b =>
@@ -1162,6 +1187,9 @@ namespace Backend.Migrations
                     b.Property<int?>("OfficeId")
                         .HasColumnType("int");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OfficeId");
@@ -1326,6 +1354,13 @@ namespace Backend.Migrations
                     b.Property<int?>("DefaultPaymentDays")
                         .HasColumnType("int");
 
+                    b.Property<string>("DefaultPricingCalendarCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("ALLDAYS");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1376,6 +1411,11 @@ namespace Backend.Migrations
 
                     b.Property<decimal?>("LatePaymentInterest")
                         .HasColumnType("decimal(18,5)");
+
+                    b.Property<bool>("LockPlanningTimelineDrag")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("LogoContentType")
                         .HasMaxLength(100)
@@ -2424,6 +2464,9 @@ namespace Backend.Migrations
                     b.Property<int?>("ReservationCalcId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ReservationItemArticleId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("Sum")
                         .HasColumnType("decimal(18,5)");
 
@@ -2451,6 +2494,8 @@ namespace Backend.Migrations
 
                     b.HasIndex("ReservationCalcId");
 
+                    b.HasIndex("ReservationItemArticleId");
+
                     b.HasIndex("VatId");
 
                     b.ToTable("ReservationCalcItem", (string)null);
@@ -2472,6 +2517,9 @@ namespace Backend.Migrations
 
                     b.Property<DateTime?>("ActualTo")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("BasePrice")
+                        .HasColumnType("decimal(10,5)");
 
                     b.Property<DateTime?>("BookedFrom")
                         .HasColumnType("datetime2");
@@ -2584,6 +2632,15 @@ namespace Backend.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<decimal?>("PricePerDay")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerMonth")
+                        .HasColumnType("decimal(10,5)");
+
+                    b.Property<decimal?>("PricePerWeek")
+                        .HasColumnType("decimal(10,5)");
+
                     b.Property<int?>("ReservationId")
                         .HasColumnType("int");
 
@@ -2599,6 +2656,38 @@ namespace Backend.Migrations
                     b.HasIndex("ReservationId");
 
                     b.ToTable("ReservationItem", (string)null);
+                });
+
+            modelBuilder.Entity("Backend.Models.ReservationItemArticle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ArticleId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,5)")
+                        .HasDefaultValue(1m);
+
+                    b.Property<int>("ReservationItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("UnitPrice")
+                        .HasColumnType("decimal(18,5)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArticleId");
+
+                    b.HasIndex("ReservationItemId", "ArticleId")
+                        .IsUnique();
+
+                    b.ToTable("ReservationItemArticle", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.ServiceType", b =>
@@ -2865,6 +2954,25 @@ namespace Backend.Migrations
                     b.Navigation("Office");
 
                     b.Navigation("VatRate");
+                });
+
+            modelBuilder.Entity("Backend.Models.CategoryArticle", b =>
+                {
+                    b.HasOne("Backend.Models.Article", "Article")
+                        .WithMany("CategoryArticles")
+                        .HasForeignKey("ArticleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Backend.Models.ItemCategory", "ItemCategory")
+                        .WithMany("CategoryArticles")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Article");
+
+                    b.Navigation("ItemCategory");
                 });
 
             modelBuilder.Entity("Backend.Models.Currency", b =>
@@ -3467,6 +3575,25 @@ namespace Backend.Migrations
                     b.Navigation("Reservation");
                 });
 
+            modelBuilder.Entity("Backend.Models.ReservationItemArticle", b =>
+                {
+                    b.HasOne("Backend.Models.Article", "Article")
+                        .WithMany("ReservationItemArticles")
+                        .HasForeignKey("ArticleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Backend.Models.ReservationItem", "ReservationItem")
+                        .WithMany("ReservationItemArticles")
+                        .HasForeignKey("ReservationItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Article");
+
+                    b.Navigation("ReservationItem");
+                });
+
             modelBuilder.Entity("Backend.Models.ServiceType", b =>
                 {
                     b.HasOne("Backend.Models.Office", "Office")
@@ -3541,7 +3668,11 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.Article", b =>
                 {
+                    b.Navigation("CategoryArticles");
+
                     b.Navigation("InvoiceRows");
+
+                    b.Navigation("ReservationItemArticles");
                 });
 
             modelBuilder.Entity("Backend.Models.CabinType", b =>
@@ -3580,6 +3711,8 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.ItemCategory", b =>
                 {
+                    b.Navigation("CategoryArticles");
+
                     b.Navigation("DayPriceFreeKms");
 
                     b.Navigation("DayPrices");
@@ -3716,6 +3849,11 @@ namespace Backend.Migrations
             modelBuilder.Entity("Backend.Models.ReservationCalcItem", b =>
                 {
                     b.Navigation("InvoiceRows");
+                });
+
+            modelBuilder.Entity("Backend.Models.ReservationItem", b =>
+                {
+                    b.Navigation("ReservationItemArticles");
                 });
 
             modelBuilder.Entity("Backend.Models.User", b =>

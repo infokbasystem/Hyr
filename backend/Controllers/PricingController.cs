@@ -459,6 +459,10 @@ namespace Backend.Controllers
                 .Where(entry => entry.Id == request.ReservationId && entry.OfficeId == officeId)
                 .Include(entry => entry.ReservationItems)
                     .ThenInclude(item => item.Item)
+                .Include(entry => entry.ReservationItems)
+                    .ThenInclude(item => item.ReservationItemArticles)
+                        .ThenInclude(link => link.Article)
+                            .ThenInclude(article => article!.VatRate)
                 .Include(entry => entry.ReservationCalcs)
                     .ThenInclude(calc => calc.ReservationCalcItems)
                         .ThenInclude(calcItem => calcItem.InvoiceRows)
@@ -482,6 +486,26 @@ namespace Backend.Controllers
             if (reservationItems.Any(item => item.Item == null || item.Item.OfficeId != officeId))
             {
                 return BadRequest(new { message = "Alla bokningsrader måste ha en vald artikel från det aktuella kontoret." });
+            }
+
+            foreach (var link in reservationItems.SelectMany(item => item.ReservationItemArticles))
+            {
+                if (link.Id <= 0 || link.Article == null || link.Article.OfficeId != officeId
+                    || (link.Article.VatRate != null && link.Article.VatRate.OfficeId != officeId))
+                {
+                    return BadRequest(new { message = "Bokningens artiklar och momssatser måste tillhöra det aktuella kontoret." });
+                }
+                if (link.Quantity <= 0m || link.Quantity > 9999999999999.99999m
+                    || decimal.Round(link.Quantity, 5) != link.Quantity
+                    || !link.UnitPrice.HasValue || link.UnitPrice < 0m || link.UnitPrice > 9999999999999.99999m
+                    || decimal.Round(link.UnitPrice.Value, 5) != link.UnitPrice.Value)
+                {
+                    return BadRequest(new { message = $"Artikel {link.Article.ArticleNr}: ange ett positivt antal och ett à-pris som är noll eller positivt, med högst fem decimaler." });
+                }
+                if (RoundMoney(link.Quantity * link.UnitPrice.Value) > 9999999999999.99999m)
+                {
+                    return BadRequest(new { message = $"Artikel {link.Article.ArticleNr}: artikelbeloppet är för stort." });
+                }
             }
 
             var vehicleItems = reservationItems
@@ -527,7 +551,12 @@ namespace Backend.Controllers
                 {
                     try
                     {
-                        var directRows = DirectItemPricingCalculator.Calculate(reservationItem.Item, periodStart.Value, periodEnd.Value, reservation.PricingCalendarCode)
+                        var prices = string.Equals(reservationItem.Item.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase)
+                            ? DirectItemPricingCalculator.Calculate(
+                                reservationItem.BasePrice, reservationItem.PricePerDay, reservationItem.PricePerWeek, reservationItem.PricePerMonth,
+                                periodStart.Value, periodEnd.Value, reservation.PricingCalendarCode)
+                            : DirectItemPricingCalculator.Calculate(reservationItem.Item, periodStart.Value, periodEnd.Value, reservation.PricingCalendarCode);
+                        var directRows = prices
                             .Select(row => new VehiclePriceRow("DIRECT", CalcPriceTypeCodes.Rent, row.Text, row.Qty, row.UnitPrice, row.Sum))
                             .ToList();
                         quotes.Add((reservationItem, periodStart.Value, periodEnd.Value, "DIRECT", directRows));
@@ -590,9 +619,17 @@ namespace Backend.Controllers
                 .Except(uninvoicedCalcs)
                 .Where(calc => ReceiverTypeCodes.NormalizeOrDefault(calc.ReceiverTypeCode) == receiverTypeCode)
                 .SelectMany(calc => calc.ReservationCalcItems)
-                .Where(row => row.ItemId.HasValue)
+                .Where(row => row.ItemId.HasValue && !row.ReservationItemArticleId.HasValue)
                 .GroupBy(row => row.ItemId!.Value)
                 .ToDictionary(group => group.Key, group => group.Sum(row => row.Sum ?? 0m));
+            var priorArticleTotals = reservation.ReservationCalcs
+                .Except(uninvoicedCalcs)
+                .Where(calc => ReceiverTypeCodes.NormalizeOrDefault(calc.ReceiverTypeCode) == receiverTypeCode)
+                .SelectMany(calc => calc.ReservationCalcItems)
+                .Where(row => row.ItemId.HasValue && row.ReservationItemArticleId.HasValue)
+                .GroupBy(row => new { row.ItemId, row.ReservationItemArticleId, row.VatId, row.VatRate })
+                .Select(group => new { group.Key, Sum = group.Sum(row => row.Sum ?? 0m) })
+                .ToList();
             var newCalcs = new List<ReservationCalc>();
             foreach (var quote in quotes)
             {
@@ -620,6 +657,47 @@ namespace Backend.Controllers
                         Qty = RoundMoney(row.Qty),
                         UnitPrice = RoundMoney(row.UnitPrice),
                         Sum = RoundMoney(row.Sum),
+                    });
+                }
+
+                foreach (var link in quote.Item.ReservationItemArticles.OrderBy(link => link.Id))
+                {
+                    var article = link.Article!;
+                    newReservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                    {
+                        OfficeId = officeId,
+                        ItemId = quote.Item.ItemId,
+                        ReservationItemArticleId = link.Id,
+                        VatId = article.VatRate?.Id ?? reservationCalcVatId,
+                        VatRate = RoundMoney(article.VatRate?.Rate ?? reservationCalcVatRate),
+                        CalcPriceTypeCode = CalcPriceTypeCodes.FreeText,
+                        Text = string.IsNullOrWhiteSpace(article.Name) ? article.ArticleNr : article.Name,
+                        Qty = link.Quantity,
+                        UnitPrice = link.UnitPrice,
+                        Sum = RoundMoney(link.Quantity * link.UnitPrice!.Value),
+                    });
+                }
+
+                foreach (var prior in priorArticleTotals.Where(prior => prior.Key.ItemId == quote.Item.ItemId).ToList())
+                {
+                    priorArticleTotals.Remove(prior);
+                    if (prior.Sum == 0m)
+                    {
+                        continue;
+                    }
+                    var deduction = RoundMoney(-prior.Sum);
+                    newReservationCalc.ReservationCalcItems.Add(new ReservationCalcItem
+                    {
+                        OfficeId = officeId,
+                        ItemId = quote.Item.ItemId,
+                        ReservationItemArticleId = prior.Key.ReservationItemArticleId,
+                        VatId = prior.Key.VatId,
+                        VatRate = prior.Key.VatRate,
+                        CalcPriceTypeCode = CalcPriceTypeCodes.FreeText,
+                        Text = "Avdrag tidigare fakturerad artikel",
+                        Qty = 1m,
+                        UnitPrice = deduction,
+                        Sum = deduction,
                     });
                 }
 
@@ -1476,6 +1554,7 @@ namespace Backend.Controllers
                         {
                             Id = item.Id,
                             ItemId = item.ItemId,
+                            ReservationItemArticleId = item.ReservationItemArticleId,
                             PriceListId = item.PriceListId,
                             VatId = item.VatId,
                             VatRate = item.VatRate,

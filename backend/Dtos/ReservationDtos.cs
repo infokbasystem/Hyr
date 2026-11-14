@@ -57,6 +57,7 @@ public sealed class ReservationFormOptionsDto
     public List<PriceListOptionDto> PriceLists { get; set; } = [];
     public string DefaultBookedFromTime { get; set; } = string.Empty;
     public string DefaultBookedToTime { get; set; } = string.Empty;
+    public string DefaultPricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
 }
 
 public sealed class PriceListOptionDto

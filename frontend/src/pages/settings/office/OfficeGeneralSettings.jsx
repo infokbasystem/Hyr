@@ -4,12 +4,19 @@ import { Save } from 'lucide-react'
 
 import ActionButton from '../../../components/ActionButton'
 import ConfirmationModal from '../../../components/ConfirmationModal'
+import LabeledSelect from '../../../components/LabeledSelect'
 import LabeledSwitch from '../../../components/LabeledSwitch'
 import TimeDropdownInput from '../../../components/TimeDropdownInput'
 import { getSharedRequest } from '../../../lib/sharedRequest'
 import { getOfficeItemTypeSettings, updateOfficeItemTypeSettings } from '../../../lib/officeApi'
 
-function createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBookedToTime) {
+const PRICING_CALENDAR_OPTIONS = [
+    { id: 'ALLDAYS', name: 'Alla dagar' },
+    { id: 'WEEKDAYS', name: 'Vardagar' },
+    { id: 'WORKINGDAYS', name: 'Arbetsdagar' },
+]
+
+function createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBookedToTime, defaultPricingCalendarCode, lockPlanningTimelineDrag) {
     const selectedIds = (itemTypes ?? [])
         .filter((itemType) => itemType?.isSelected)
         .map((itemType) => Number(itemType.id))
@@ -20,6 +27,8 @@ function createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBooked
         selectedIds,
         defaultBookedFromTime: String(defaultBookedFromTime ?? '').trim(),
         defaultBookedToTime: String(defaultBookedToTime ?? '').trim(),
+        defaultPricingCalendarCode: String(defaultPricingCalendarCode ?? 'ALLDAYS').trim(),
+        lockPlanningTimelineDrag: Boolean(lockPlanningTimelineDrag),
     })
 }
 
@@ -36,10 +45,12 @@ export default function OfficeGeneralSettings() {
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     const [defaultBookedFromTime, setDefaultBookedFromTime] = useState('')
     const [defaultBookedToTime, setDefaultBookedToTime] = useState('')
+    const [defaultPricingCalendarCode, setDefaultPricingCalendarCode] = useState('ALLDAYS')
+    const [lockPlanningTimelineDrag, setLockPlanningTimelineDrag] = useState(false)
 
     const currentSnapshot = useMemo(() => (
-        createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBookedToTime)
-    ), [itemTypes, defaultBookedFromTime, defaultBookedToTime])
+        createSelectionSnapshot(itemTypes, defaultBookedFromTime, defaultBookedToTime, defaultPricingCalendarCode, lockPlanningTimelineDrag)
+    ), [itemTypes, defaultBookedFromTime, defaultBookedToTime, defaultPricingCalendarCode, lockPlanningTimelineDrag])
     const isDirty = currentSnapshot !== initialSnapshot
     const isVehicleEnabled = itemTypes.some((itemType) => (
         Boolean(itemType?.isSelected) && String(itemType?.code ?? '').toUpperCase() === 'VEHICLE'
@@ -88,11 +99,15 @@ export default function OfficeGeneralSettings() {
                 const nextItemTypes = Array.isArray(data?.itemTypes) ? data.itemTypes : []
                 const nextDefaultBookedFromTime = String(data?.defaultBookedFromTime ?? '').trim()
                 const nextDefaultBookedToTime = String(data?.defaultBookedToTime ?? '').trim()
+                const nextDefaultPricingCalendarCode = String(data?.defaultPricingCalendarCode ?? 'ALLDAYS').trim()
+                const nextLockPlanningTimelineDrag = Boolean(data?.lockPlanningTimelineDrag)
 
                 setItemTypes(nextItemTypes)
                 setDefaultBookedFromTime(nextDefaultBookedFromTime)
                 setDefaultBookedToTime(nextDefaultBookedToTime)
-                setInitialSnapshot(createSelectionSnapshot(nextItemTypes, nextDefaultBookedFromTime, nextDefaultBookedToTime))
+                setDefaultPricingCalendarCode(nextDefaultPricingCalendarCode)
+                setLockPlanningTimelineDrag(nextLockPlanningTimelineDrag)
+                setInitialSnapshot(createSelectionSnapshot(nextItemTypes, nextDefaultBookedFromTime, nextDefaultBookedToTime, nextDefaultPricingCalendarCode, nextLockPlanningTimelineDrag))
             } catch (error) {
                 if (!isActive) {
                     return
@@ -156,17 +171,23 @@ export default function OfficeGeneralSettings() {
                 itemTypeIds: selectedIds,
                 defaultBookedFromTime,
                 defaultBookedToTime,
+                defaultPricingCalendarCode,
+                lockPlanningTimelineDrag,
             })
 
             const nextItemTypes = Array.isArray(saved?.itemTypes) ? saved.itemTypes : []
             const nextDefaultBookedFromTime = String(saved?.defaultBookedFromTime ?? '').trim()
             const nextDefaultBookedToTime = String(saved?.defaultBookedToTime ?? '').trim()
+            const nextDefaultPricingCalendarCode = String(saved?.defaultPricingCalendarCode ?? 'ALLDAYS').trim()
+            const nextLockPlanningTimelineDrag = Boolean(saved?.lockPlanningTimelineDrag)
 
             setItemTypes(nextItemTypes)
             setDefaultBookedFromTime(nextDefaultBookedFromTime)
             setDefaultBookedToTime(nextDefaultBookedToTime)
-            setInitialSnapshot(createSelectionSnapshot(nextItemTypes, nextDefaultBookedFromTime, nextDefaultBookedToTime))
-            setMessages([mapMessage('success', 'Objekttypsinställningar sparade.')])
+            setDefaultPricingCalendarCode(nextDefaultPricingCalendarCode)
+            setLockPlanningTimelineDrag(nextLockPlanningTimelineDrag)
+            setInitialSnapshot(createSelectionSnapshot(nextItemTypes, nextDefaultBookedFromTime, nextDefaultBookedToTime, nextDefaultPricingCalendarCode, nextLockPlanningTimelineDrag))
+            setMessages([mapMessage('success', 'Kontorsinställningar sparade.')])
         } catch (error) {
             const errorText = error?.payload?.message ?? error?.message ?? 'Kunde inte spara objekttypsinställningar.'
             setMessages([mapMessage('error', errorText)])
@@ -275,6 +296,37 @@ export default function OfficeGeneralSettings() {
                         </div>
                     </>
                 )}
+
+                <h2 className="mt-6 text-xs uppercase tracking-[0.12em] text-gray-600">Standardkalender för bokning</h2>
+                <p className="mt-2 text-xs text-gray-500">Används som förvald kalender när en ny bokning skapas.</p>
+                <div className="mt-3">
+                    <LabeledSelect
+                        label="Kalender"
+                        value={defaultPricingCalendarCode}
+                        onChange={(value) => {
+                            setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+                            setDefaultPricingCalendarCode(value)
+                        }}
+                        items={PRICING_CALENDAR_OPTIONS}
+                        labelWidth="w-16"
+                        disabled={isLoading || isSaving}
+                    />
+                </div>
+
+                <h2 className="mt-6 text-xs uppercase tracking-[0.12em] text-gray-600">Planering</h2>
+                <p className="mt-2 text-xs text-gray-500">Förhindrar att bokningar flyttas genom att dra dem i planeringsöversikterna.</p>
+                <LabeledSwitch
+                    id="office-lock-planning-timeline-drag"
+                    name="office-lock-planning-timeline-drag"
+                    label="Lås dragning"
+                    labelWidth="w-20"
+                    value={lockPlanningTimelineDrag}
+                    onChange={(value) => {
+                        setMessages((previous) => previous.filter((message) => message.type !== 'success'))
+                        setLockPlanningTimelineDrag(value)
+                    }}
+                    disabled={isLoading || isSaving}
+                />
             </div>
         </div>
     )

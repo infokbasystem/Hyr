@@ -31,6 +31,7 @@ function createEmptyArticleForm() {
     accountId: null,
     vatRateId: null,
     isActive: true,
+    keyFortnox: '',
     calcPriceTypeCode: null,
   }
 }
@@ -51,6 +52,7 @@ function createArticleSnapshot(form) {
     accountId: form?.accountId ?? null,
     vatRateId: form?.vatRateId ?? null,
     isActive: Boolean(form?.isActive),
+    keyFortnox: form?.keyFortnox ?? '',
   })
 }
 
@@ -209,6 +211,7 @@ export default function Articles() {
           accountId: result?.accountId ?? null,
           vatRateId: result?.vatRateId ?? null,
           isActive: Boolean(result?.isActive),
+          keyFortnox: result?.keyFortnox ?? '',
           calcPriceTypeCode: result?.calcPriceTypeCode ?? null,
         }
 
@@ -456,6 +459,7 @@ export default function Articles() {
         accountId: form.accountId,
         vatRateId: form.vatRateId,
         isActive: form.isActive,
+        keyFortnox: form.keyFortnox,
       })
 
       const savedForm = {
@@ -467,6 +471,7 @@ export default function Articles() {
         accountId: saved?.accountId ?? null,
         vatRateId: saved?.vatRateId ?? null,
         isActive: Boolean(saved?.isActive),
+        keyFortnox: saved?.keyFortnox ?? '',
         calcPriceTypeCode: saved?.calcPriceTypeCode ?? null,
       }
       const savedRow = mapArticleToListItem(saved)
@@ -757,6 +762,16 @@ export default function Articles() {
                       items={vatRateSelectItems}
                       disabled={isDetailDisabled}
                       onChange={(value) => handleSelectChange('vatRateId', value)}
+                    />
+                    <LabeledInput
+                      name="keyFortnox"
+                      label="Nyckel Fortnox"
+                      labelWidth="w-20"
+                      inputWidth="w-28"
+                      margintop="0"
+                      value={form.keyFortnox}
+                      disabled={isDetailDisabled}
+                      onChange={(value) => handleFieldChange('keyFortnox', value ?? '')}
                     />
                     <LabeledCheckbox
                       id="article-active"

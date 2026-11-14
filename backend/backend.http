@@ -1,6 +1,76 @@
 @Api_HostAddress = http://localhost:5068
+@token = replace-with-authenticated-token
 
 
 Accept: application/json
 
 ###
+
+### Active cabin categories in the current office
+GET {{Api_HostAddress}}/api/planning/categories?ItemTypeCode=CABIN
+Authorization: Bearer {{token}}
+
+### All unreturned customer rentals in the current office, including future bookings
+GET {{Api_HostAddress}}/api/planning/customer-rentals
+Authorization: Bearer {{token}}
+
+### Active lift categories in the current office
+GET {{Api_HostAddress}}/api/planning/categories?ItemTypeCode=LIFT
+Authorization: Bearer {{token}}
+
+### Category-filtered cabins (legacy CabinTypeCodes may also be supplied)
+GET {{Api_HostAddress}}/api/planning/cabins?CategoryIds=1&AvailableFrom=2026-11-08T00:00:00&AvailableTo=2026-11-10T23:59:59
+Authorization: Bearer {{token}}
+
+### Category-filtered available lifts
+GET {{Api_HostAddress}}/api/planning/lifts?CategoryIds=1&AvailableFrom=2026-11-08T00:00:00&AvailableTo=2026-11-10T23:59:59
+Authorization: Bearer {{token}}
+
+### Lift reservations use the linked item's category
+GET {{Api_HostAddress}}/api/planning/reservations?ItemTypeCode=LIFT&CategoryIds=1&From=2026-11-08T00:00:00&To=2026-11-30T23:59:59
+Authorization: Bearer {{token}}
+
+### Available articles for category assignment (current office only)
+GET {{Api_HostAddress}}/api/itemcategory/form-options
+Authorization: Bearer {{token}}
+
+### Read category articles and quantities (use IDs from this office)
+GET {{Api_HostAddress}}/api/itemcategory/1
+Authorization: Bearer {{token}}
+
+### Save category article quantities; [] clears them and omission preserves them
+POST {{Api_HostAddress}}/api/itemcategory
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "Kategori",
+  "sortOrder": 0,
+  "articles": [
+    { "articleId": 1, "quantity": 2 },
+    { "articleId": 2, "quantity": 1.5 }
+  ]
+}
+
+### Invalid or other-office article IDs are rejected without saving changes
+POST {{Api_HostAddress}}/api/itemcategory
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "Kategori",
+  "articles": [{ "articleId": -1, "quantity": 1 }]
+}
+
+### Zero and negative article quantities are rejected without saving changes
+POST {{Api_HostAddress}}/api/itemcategory
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "Kategori",
+  "articles": [{ "articleId": 1, "quantity": 0 }]
+}

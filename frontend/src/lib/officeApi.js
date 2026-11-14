@@ -77,6 +77,17 @@ export function clearFortnoxToken() {
   })
 }
 
+export function importFromFortnox(entity, { page = 1, pageSize, updateExisting = false } = {}) {
+  return requestJson(`/office/settings/fortnox/import/${encodeURIComponent(entity)}`, {
+    method: 'POST',
+    body: {
+      page,
+      pageSize: pageSize ?? null,
+      updateExisting: Boolean(updateExisting),
+    },
+  })
+}
+
 
 export async function updateOfficeItemTypeSettings(body) {
   const data = await requestJson('/office/settings/item-types', {
@@ -85,6 +96,8 @@ export async function updateOfficeItemTypeSettings(body) {
       itemTypeIds: normalizeItemTypeIds(body?.itemTypeIds),
       defaultBookedFromTime: normalizeTimeOfDay(body?.defaultBookedFromTime),
       defaultBookedToTime: normalizeTimeOfDay(body?.defaultBookedToTime),
+      defaultPricingCalendarCode: normalizePricingCalendarCode(body?.defaultPricingCalendarCode),
+      lockPlanningTimelineDrag: Boolean(body?.lockPlanningTimelineDrag),
     },
   })
 
@@ -163,6 +176,8 @@ function mapOfficeItemTypeSettings(data) {
   return {
     defaultBookedFromTime: normalizeTimeOfDay(data?.defaultBookedFromTime),
     defaultBookedToTime: normalizeTimeOfDay(data?.defaultBookedToTime),
+    defaultPricingCalendarCode: normalizePricingCalendarCode(data?.defaultPricingCalendarCode),
+    lockPlanningTimelineDrag: Boolean(data?.lockPlanningTimelineDrag),
     itemTypes: rows.map((itemType) => ({
       id: Number(itemType?.id),
       code: `${itemType?.code ?? ''}`,
@@ -174,4 +189,9 @@ function mapOfficeItemTypeSettings(data) {
 
 function normalizeTimeOfDay(value) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizePricingCalendarCode(value) {
+  const normalized = typeof value === 'string' ? value.trim().toUpperCase() : ''
+  return ['ALLDAYS', 'WEEKDAYS', 'WORKINGDAYS'].includes(normalized) ? normalized : 'ALLDAYS'
 }

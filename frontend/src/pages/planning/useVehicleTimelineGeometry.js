@@ -1,5 +1,24 @@
 import { useMemo } from 'react';
 
+export function getTimelineBookingRange(booking, wholeDays = true) {
+    if (!wholeDays) return { start: booking.start, end: booking.end };
+    const start = Math.floor(booking.start);
+    return { start, end: Math.max(start + 1, Math.floor(booking.end) + 1) };
+}
+
+export function getTimelineYearSpans(monthSpans) {
+    const years = [];
+    for (const month of monthSpans) {
+        const previous = years.at(-1);
+        if (previous?.year === month.year) {
+            previous.widthPx = month.startPx + month.widthPx - previous.startPx;
+        } else {
+            years.push({ year: month.year, startPx: month.startPx, widthPx: month.widthPx });
+        }
+    }
+    return years;
+}
+
 export function getInitialTimelineRange(viewportDays, startDay = 0) {
     const screenDays = Math.max(3, Math.ceil(viewportDays));
     const bufferDays = Math.ceil(screenDays / 2);
@@ -109,7 +128,16 @@ function resolveMinimumDayWidth(daysVisible) {
     if (daysVisible <= 7) return 100;
     if (daysVisible <= 14) return 80;
     if (daysVisible <= 31) return 28;
+    if (daysVisible >= 730) return 1.5;
+    if (daysVisible >= 365) return 3;
     return 12;
+}
+
+export function getTimelineDayWidth(availableWidth, daysVisible) {
+    const minimumDayWidth = resolveMinimumDayWidth(daysVisible);
+    return availableWidth > 0
+        ? Math.max(minimumDayWidth, Math.floor(availableWidth / daysVisible))
+        : minimumDayWidth;
 }
 
 export default function useVehicleTimelineGeometry({
@@ -121,10 +149,7 @@ export default function useVehicleTimelineGeometry({
 }) {
     return useMemo(() => {
         const availableWidth = Math.max(0, containerWidth - labelWidth);
-        const minimumDayWidth = resolveMinimumDayWidth(daysVisible);
-        const dayWidth = availableWidth > 0
-            ? Math.max(minimumDayWidth, Math.floor(availableWidth / daysVisible))
-            : minimumDayWidth;
+        const dayWidth = getTimelineDayWidth(availableWidth, daysVisible);
         const populatedPastDays = loadedRange ? -loadedRange.startDay : daysVisible * 2;
         const populatedFutureDays = loadedRange ? loadedRange.endDay : daysVisible * 3;
         const totalTimelineDays = populatedPastDays + populatedFutureDays;

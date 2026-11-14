@@ -94,7 +94,7 @@ const LabeledTextArea = ({
     return (
         <div className={`w-full pb-[1px] mt-${margintop} ${labelPosition === 'top' ? 'flex flex-col' : 'flex items-start'}`} ref={wrapperRef}>
             <div className={`relative flex flex-none justify-between ${labelPosition === 'top' ? 'w-full items-start' : `items-center ${labelWidth}`}`}>
-                <label className={`text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${labelPosition === 'top' ? 'ml-1' : 'mt-1'}`}>{label}</label>
+                <label className={`text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : ''} ${labelPosition === 'top' ? 'ml-1' : 'mt-1'}`}>{label}</label>
                 {popupItems && Array.isArray(popupItems) && (
                     <button
                         type="button"

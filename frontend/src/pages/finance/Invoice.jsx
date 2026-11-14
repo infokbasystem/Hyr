@@ -106,9 +106,9 @@ const getIsInvoiceDue = (invoice) => {
 const renderMetaRow = (label, value, userName) => {
     return (
         <div className="grid grid-cols-21 gap-1">
-            <div className="col-span-5"><span className="text-gray-500">{label}</span></div>
-            <div className="col-span-8">{value && formatDateTime(value)}</div>
-            <div className="col-span-8 text-gray-500">{userName && `av ${userName}`}</div>
+            <div className="col-span-4"><span className="text-gray-500">{label}</span></div>
+            <div className="col-span-9 ml-1">{value && formatDateTime(value)}</div>
+            <div className="col-span-8 text-gray-500">{userName && `${userName}`}</div>
         </div>
     );
 };
@@ -117,7 +117,7 @@ const renderInfoRow = (label, value, pill = null) => {
     return (
         <div className="flex items-center justify-between gap-2">
             <span className="text-gray-500">{label}</span>
-            <span className="flex items-center gap-2 text-gray-700">
+            <span className="flex items-center gap-2 text-gray-700 pr-2">
                 {pill}
                 <span>{value}</span>
             </span>
@@ -924,7 +924,7 @@ const Invoice = () => {
         return (
             <div className="relative flex flex-col h-full md:px-[clamp(4px,3vw,6vw)] animate-pulse">
                 <div className="mt-1 flex min-h-0 flex-1 flex-col">
-                    <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                    <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:items-start">
                         <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
                             <aside className="text-gray-700 lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                                 <div className="space-y-4 pr-0 pb-4 ml-2">
@@ -1225,7 +1225,7 @@ const Invoice = () => {
 
             <div className="mt-1 flex min-h-0 flex-1 flex-col">
 
-                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:items-start">
 
                     <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
                         <aside className="lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
@@ -1279,7 +1279,7 @@ const Invoice = () => {
                         </aside>
                     </div>
 
-                    <div className='flex-grow lg:pl-2 pb-10 mr-20'>
+                    <div className='flex-grow lg:pl-2 pb-10 mr-10'>
                         <h2 className="flex flex-row items-center pb-3 text-sm text-gray-500 tracking-[0.10em] font-semibold">
                             {invoice?.id ? (
                                 <>
@@ -1713,7 +1713,7 @@ const Invoice = () => {
                                 {/* Summary Section */}
                                 {visibleInvoiceRows.length > 0 && (
                                     <div className="flex justify-end mt-6">
-                                        <div className="border border-gray-300 bg-yellow-50 px-6 py-3">
+                                        <div className="border border-gray-300 bg-lime-50 px-6 py-3">
                                             <div className="grid grid-cols-4 gap-8 text-xs">
                                                 <div className="text-left">
                                                     <div className="text-gray-500 font-medium mb-1">BELOPP</div>

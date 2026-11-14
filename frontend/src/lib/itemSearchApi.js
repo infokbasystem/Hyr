@@ -7,7 +7,7 @@ const SORT_FIELD_TO_API_FIELD = {
   regnr: 'RegNr',
   machinenr: 'MachineNr',
   itemtypename: 'ItemTypeCode',
-  itemcategoryname: 'ItemCategoryName',
+  itemcategoryname: 'ItemCategory.SortOrder',
   itemmodelname: 'ItemModelName',
   isactive: 'IsActive',
   note: 'Note',

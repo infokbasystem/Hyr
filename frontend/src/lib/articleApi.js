@@ -94,6 +94,7 @@ function mapApiArticle(entry) {
     accountId: normalizeId(entry?.accountId ?? entry?.AccountId),
     vatRateId: normalizeId(entry?.vatRateId ?? entry?.VatRateId),
     isActive: Boolean(entry?.isActive ?? entry?.IsActive),
+    keyFortnox: `${entry?.keyFortnox ?? entry?.KeyFortnox ?? ''}`,
     calcPriceTypeCode: entry?.calcPriceTypeCode ?? entry?.CalcPriceTypeCode ?? null,
   }
 }
@@ -118,9 +119,10 @@ function toArticleDto(entry) {
     articleNr: `${entry?.articleNr ?? ''}`.trim(),
     name: `${entry?.name ?? ''}`.trim(),
     price: normalizeDecimal(entry?.price),
-    accountId: Number.isFinite(Number(entry?.accountId)) ? Number(entry.accountId) : null,
-    vatRateId: Number.isFinite(Number(entry?.vatRateId)) ? Number(entry.vatRateId) : null,
+    accountId: normalizeId(entry?.accountId),
+    vatRateId: normalizeId(entry?.vatRateId),
     isActive: Boolean(entry?.isActive),
+    keyFortnox: `${entry?.keyFortnox ?? ''}`.trim(),
   }
 }
 

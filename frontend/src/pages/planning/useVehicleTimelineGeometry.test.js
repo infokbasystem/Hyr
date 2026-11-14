@@ -4,10 +4,66 @@ import {
     getAutoScrollDelta,
     getInitialTimelineRange,
     getRowRenderWindow,
+    getTimelineBookingRange,
+    getTimelineDayWidth,
     getTimelineRangeExtension,
     getTimelineRenderWindow,
     getTimelineScrollBounds,
+    getTimelineYearSpans,
 } from './useVehicleTimelineGeometry.js';
+
+test('daily reservation bounds include the end date without changing stored times', () => {
+    for (const [start, end, expectedStart, expectedEnd] of [
+        [2.4, 2.6, 2, 3],
+        [2.4, 5.6, 2, 6],
+        [2.4, 5, 2, 6],
+        [2, 5, 2, 6],
+        [-2.6, -0.4, -3, 0],
+        [-2.6, 0, -3, 1],
+        [2, 2, 2, 3],
+    ]) {
+        const booking = Object.freeze({ start, end });
+        const range = getTimelineBookingRange(booking);
+        assert.ok(range.start === expectedStart);
+        assert.ok(range.end === expectedEnd);
+        assert.deepEqual(getTimelineBookingRange(booking, false), { start, end });
+    }
+});
+
+test('a reservation from 22 November through 4 December includes all of 4 December', () => {
+    const range = getTimelineBookingRange({ start: 21, end: 33 });
+    assert.deepEqual(range, { start: 21, end: 34 });
+    assert.equal(range.end - range.start, 13);
+    assert.deepEqual(getTimelineBookingRange({ start: 21, end: 33 }, false), {
+        start: 21, end: 33,
+    });
+});
+
+test('daily rendering separates same-day bookings but allows adjacent days in one lane', () => {
+    const morning = getTimelineBookingRange({ start: 2.25, end: 2.5 });
+    const afternoon = getTimelineBookingRange({ start: 2.6, end: 2.75 });
+    const tomorrow = getTimelineBookingRange({ start: 3.25, end: 3.5 });
+    assert.ok(morning.end > afternoon.start);
+    assert.equal(afternoon.end, tomorrow.start);
+    for (const dayWidth of [1.5, 3, 12, 28, 80]) {
+        assert.equal((morning.end - morning.start) * dayWidth, dayWidth);
+    }
+});
+
+test('year header spans group adjacent months and preserve year boundaries', () => {
+    assert.deepEqual(getTimelineYearSpans([]), []);
+    assert.deepEqual(getTimelineYearSpans([
+        { year: 2026, startPx: -46.5, widthPx: 46.5 },
+        { year: 2027, startPx: 0, widthPx: 46.5 },
+        { year: 2027, startPx: 46.5, widthPx: 42 },
+        { year: 2028, startPx: 88.5, widthPx: 46.5 },
+        { year: 2028, startPx: 135, widthPx: 43.5 },
+    ]), [
+        { year: 2026, startPx: -46.5, widthPx: 46.5 },
+        { year: 2027, startPx: 0, widthPx: 88.5 },
+        { year: 2028, startPx: 88.5, widthPx: 90 },
+    ]);
+});
 
 function makeOffsets(heights) {
     const offsets = [0];
@@ -17,15 +73,48 @@ function makeOffsets(heights) {
 
 function makeGeometry(daysVisible, viewportWidth = 1970) {
     return {
-        dayWidth: Math.max(12, Math.floor(viewportWidth / daysVisible)),
+        dayWidth: getTimelineDayWidth(viewportWidth, daysVisible),
         timelineViewportWidth: viewportWidth,
         populatedPastDays: daysVisible * 2,
         totalTimelineDays: daysVisible * 5,
     };
 }
 
+test('yearly weeks are compact and still scale with the viewport', () => {
+    for (const [viewportWidth, expectedDayWidth] of [
+        [0, 3], [320, 3], [1024, 3], [1440, 3], [1970, 5], [3840, 10],
+    ]) {
+        const dayWidth = getTimelineDayWidth(viewportWidth, 365);
+        assert.equal(dayWidth, expectedDayWidth);
+        assert.equal(dayWidth * 7, expectedDayWidth * 7);
+        assert.ok(dayWidth < Math.max(12, Math.floor(viewportWidth / 365)));
+    }
+});
+
+test('shorter periods retain their minimum widths and responsive sizing', () => {
+    for (const [daysVisible, minimumWidth] of [
+        [3, 120], [7, 100], [14, 80], [31, 28], [90, 12], [92, 12], [183, 12],
+    ]) {
+        for (const viewportWidth of [0, 320, 1970]) {
+            assert.equal(
+                getTimelineDayWidth(viewportWidth, daysVisible),
+                Math.max(minimumWidth, Math.floor(viewportWidth / daysVisible)),
+            );
+        }
+    }
+});
+
+test('two-year views use a more compact scale than yearly views', () => {
+    for (const [viewportWidth, expectedDayWidth] of [
+        [0, 1.5], [320, 1.5], [1024, 1.5], [1440, 1.5], [1970, 2], [3840, 5],
+    ]) {
+        assert.equal(getTimelineDayWidth(viewportWidth, 730), expectedDayWidth);
+        assert.ok(expectedDayWidth < getTimelineDayWidth(viewportWidth, 365));
+    }
+});
+
 test('all periods cover the viewport throughout the populated scroll range', () => {
-    for (const daysVisible of [3, 7, 31, 90]) {
+    for (const daysVisible of [3, 7, 31, 90, 92, 183, 365, 730]) {
         for (const viewportWidth of [320, 1970]) {
             const geometry = makeGeometry(daysVisible, viewportWidth);
             let previousWindow = null;
@@ -70,7 +159,7 @@ test('an unmeasured viewport still renders a buffered day', () => {
 });
 
 test('progressive ranges start near two screens and add only the approached interval', () => {
-    for (const days of [3, 7, 31, 90]) {
+    for (const days of [3, 7, 31, 90, 92, 183, 365, 730]) {
         const range = getInitialTimelineRange(days);
         assert.ok(range.endDay - range.startDay <= days * 2 + 1);
         assert.equal(getTimelineRangeExtension(range, 0, days, 1), null);

@@ -34,6 +34,7 @@ builder.Services.AddScoped<IReservationPdfService, ReservationPdfService>();
 builder.Services.AddScoped<ISecretProtector, SecretProtector>();
 builder.Services.AddScoped<ITinkPaymentService, TinkPaymentService>();
 builder.Services.AddScoped<IFortnoxInvoicePaymentSyncService, FortnoxInvoicePaymentSyncService>();
+builder.Services.AddScoped<IFortnoxImportService, FortnoxImportService>();
 builder.Services.AddScoped<IEmailSender, MailKitEmailSender>();
 builder.Services.AddScoped<ISmsSender, PixieSmsSender>();
 

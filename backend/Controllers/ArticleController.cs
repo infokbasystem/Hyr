@@ -151,6 +151,11 @@ namespace Backend.Controllers
                 return BadRequest(new { message = "Systemartiklar kan inte tas bort." });
             }
 
+            if (await _context.ReservationItemArticles.AnyAsync(link => link.ArticleId == id))
+            {
+                return Conflict(new { message = "Artikeln används på en bokning och kan inte tas bort. Inaktivera den i stället." });
+            }
+
             _context.Articles.Remove(article);
             await _context.SaveChangesAsync();
 
@@ -220,6 +225,7 @@ namespace Backend.Controllers
                 AccountNr = source.Account?.AccountNr,
                 VatRateId = source.VatRateId,
                 IsActive = source.IsActive,
+                KeyFortnox = source.KeyFortnox,
                 CalcPriceTypeCode = source.CalcPriceTypeCode,
             };
         }
@@ -232,6 +238,7 @@ namespace Backend.Controllers
             target.AccountId = source.AccountId;
             target.VatRateId = source.VatRateId;
             target.IsActive = source.IsActive;
+            target.KeyFortnox = source.KeyFortnox?.Trim() ?? string.Empty;
         }
 
         private async Task<ArticleFormOptionsDto> BuildArticleFormOptions(int officeId)

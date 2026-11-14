@@ -8,6 +8,7 @@ const LabeledInput = ({
     margintop,
     name,
     type = 'text',
+    align = type === 'number' ? 'right' : 'left',
     decimals = 2,
     integerOnly = false,
     value,
@@ -96,7 +97,7 @@ const LabeledInput = ({
     return (
         <div className={`flex items-center ${!inputWidth ? 'w-full' : ''} pb-[1px] mt-${margintop}`} ref={wrapperRef}>
             <div className={`relative flex items-center flex-none justify-between`}>
-                <label className={`text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${labelWidth || ''}`}>{label}</label>
+                <label className={`text-xs text-gray-700 ${disabled ? 'cursor-not-allowed opacity-60' : ''} ${labelWidth || ''}`}>{label}</label>
                 {popupItems && Array.isArray(popupItems) && (
                     <button
                         type="button"
@@ -152,7 +153,7 @@ const LabeledInput = ({
                     autoComplete="off"
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`text-xs h-full w-full border border-gray-300 rounded-sm px-2 focus:outline-none ${!disabled ? 'bg-white' : ''} ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
+                    className={`text-xs h-full w-full border border-gray-300 rounded-sm px-2 focus:outline-none ${align === 'right' ? 'text-right' : 'text-left'} ${!disabled ? 'bg-white' : ''} ${prefix ? 'pl-6' : ''} ${suffix ? 'pr-6' : ''}`}
                     {...props}
                 />
                 {suffix && (

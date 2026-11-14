@@ -4,44 +4,13 @@ import { ArrowLeft, Clock3, Save, Trash2 } from 'lucide-react'
 
 import ActionButton from '../../components/ActionButton'
 import ConfirmationModal from '../../components/ConfirmationModal'
-import LabeledInput from '../../components/LabeledInput'
-import LabeledSwitch from '../../components/LabeledSwitch'
-import LabeledTextArea from '../../components/LabeledTextArea'
-import Input from '../../components/Input'
-import { formatUserName } from '../../utils/nameFormatters'
+import CustomerFormFields from '../../components/CustomerFormFields'
+import { EMPTY_CUSTOMER, validateCustomer } from '../../lib/customerForm'
 import { createCustomer, getCustomerById, updateCustomer } from '../../lib/customerApi'
 import { getSharedRequest } from '../../lib/sharedRequest'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { useDelayedSkeleton } from '../../hooks/useDelayedSkeleton'
-
-const EMPTY_CUSTOMER = {
-    id: 0,
-    customerNr: null,
-    customerName: '',
-    orgNr: '',
-    vatNr: '',
-    street1: '',
-    street2: '',
-    zipCode: '',
-    city: '',
-    telephone: '',
-    mobilePhone: '',
-    email: '',
-    note: '',
-    isActive: true,
-    vatRegisterd: false,
-    isCompany: false,
-    nrOfInvoiceDays: null,
-    creditLimit: null,
-    discountPercent: null,
-    pgNr: '',
-    bgNr: '',
-    keyFortnox: '',
-    keyWinassist: '',
-    crediflowPartyId: null,
-    glnnr: null,
-}
 
 function cloneCustomer(value) {
     return JSON.parse(JSON.stringify(value))
@@ -213,13 +182,9 @@ export default function Customer() {
             return
         }
 
-        if (!customer.customerName?.trim()) {
-            setMessages([{ type: 'error', text: 'Namn måste anges.' }])
-            return
-        }
-
-        if (customer.discountPercent != null && (customer.discountPercent < 0 || customer.discountPercent > 100)) {
-            setMessages([{ type: 'error', text: 'Rabatt måste vara mellan 0 och 100 %.' }])
+        const validationError = validateCustomer(customer)
+        if (validationError) {
+            setMessages([{ type: 'error', text: validationError }])
             return
         }
 
@@ -287,7 +252,7 @@ export default function Customer() {
             return (
                 <div className="flex h-full min-h-full w-full flex-1 flex-col px-0 py-0 md:px-[clamp(8px,5vw,10vw)]">
                     <div className="mt-1 flex min-h-0 flex-1 flex-col">
-                        <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                        <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:items-start">
                             <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
                                 <aside className="text-gray-700 lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
                                     <div className="space-y-4 pr-0 pb-4 ml-2">
@@ -351,9 +316,9 @@ export default function Customer() {
     const renderMetaRow = (label, value, userName) => {
         return (
             <div className="grid grid-cols-21 gap-1">
-                <div className="col-span-5"><span className="font-medium">{label}</span></div>
-                <div className="col-span-8">{value && formatDateTime(value)}</div>
-                <div className="col-span-8 text-gray-500">{userName && `av ${userName}`}</div>
+                <div className="col-span-4"><span className="font-medium">{label}</span></div>
+                <div className="col-span-9 ml-1">{value && formatDateTime(value)}</div>
+                <div className="col-span-8 text-gray-500">{userName && `${userName}`}</div>
             </div>
         );
     };
@@ -373,7 +338,7 @@ export default function Customer() {
 
             <div className="mt-1 flex min-h-0 flex-1 flex-col">
 
-                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8 lg:items-start">
+                <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8 lg:items-start">
 
                     <div className="mt-6 mb-8 pr-3 border-b border-gray-300 lg:mb-6 lg:self-stretch lg:border-b-0 lg:border-r">
                         <aside className="lg:sticky lg:top-[calc(48px+72px+1rem)] lg:z-10 lg:self-start">
@@ -428,220 +393,8 @@ export default function Customer() {
                             </div> */}
                         </div>
 
-                        <form autoComplete="off" className="grid gap-15 md:grid-cols-[360px_380px_200px] overflow-auto">
-                            <div>
-                                <LabeledInput
-                                    name="customerName"
-                                    label="Namn"
-                                    value={customer.customerName ?? ''}
-                                    onChange={(value) => handleChange('customerName', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="organization"
-                                />
-                                <LabeledInput
-                                    name="customerNr"
-                                    label="Kundnr"
-                                    type="number"
-                                    integerOnly
-                                    value={customer.customerNr}
-                                    onChange={(value) => handleChange('customerNr', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="off"
-                                />
-                                <LabeledInput
-                                    name="orgNr"
-                                    label="Org./persnr"
-                                    value={customer.orgNr ?? ''}
-                                    onChange={(value) => handleChange('orgNr', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="off"
-                                />
-                                <LabeledInput
-                                    name="vatNr"
-                                    label="VAT-nr"
-                                    value={customer.vatNr ?? ''}
-                                    onChange={(value) => handleChange('vatNr', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="off"
-                                />
-                                <LabeledInput
-                                    name="telephone"
-                                    label="Telefon"
-                                    value={customer.telephone ?? ''}
-                                    onChange={(value) => handleChange('telephone', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="tel"
-                                />
-                                <LabeledInput
-                                    name="mobilePhone"
-                                    label="Mobiltelefon"
-                                    value={customer.mobilePhone ?? ''}
-                                    onChange={(value) => handleChange('mobilePhone', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="tel-national"
-                                />
-                                <LabeledInput
-                                    name="email"
-                                    label="Epost"
-                                    value={customer.email ?? ''}
-                                    onChange={(value) => handleChange('email', value)}
-                                    labelWidth="w-22"
-                                    margintop="0"
-                                    autoComplete="email"
-                                />
-
-                                <LabeledSwitch
-                                    name="isActive"
-                                    label="Aktiv"
-                                    value={Boolean(customer.isActive)}
-                                    onChange={(checked) => handleChange('isActive', checked)}
-                                    labelWidth="w-22"
-                                    margintop="2"
-                                />
-                            </div>
-
-                            <div>
-                                <div className="flex w-full pb-[1px]">
-                                    <p className="min-w-22 text-xs pt-2 text-gray-700">Besöksadress</p>
-                                    <div className="">
-                                        <Input name="invoiceStreet1" value={customer.street1} onChange={(e) => handleChange('street1', e.target.value)} autoComplete="section-invoice billing address-line1" />
-                                        <Input name="invoiceStreet2" value={customer.street2} onChange={(e) => handleChange('street2', e.target.value)} className="mt-[1px]" autoComplete="section-invoice billing address-line2" />
-                                        <div className="flex mt-[1px] grid grid-cols-[1fr_2fr] gap-1">
-                                            <Input name="invoiceZip" value={customer.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} autoComplete="section-invoice billing postal-code" />
-                                            <Input name="invoiceCity" value={customer.city} onChange={(e) => handleChange('city', e.target.value)} autoComplete="section-invoice billing address-level2" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <LabeledTextArea
-                                    name="note"
-                                    label="Märkning"
-                                    value={customer.note ?? ''}
-                                    onChange={(value) => handleChange('note', value)}
-                                    labelWidth="w-22"
-                                    margintop="2"
-                                    height="h-[80px]"
-                                />
-                            </div>
-
-                            <div>
-                                <LabeledSwitch
-                                    name="vatRegisterd"
-                                    label="Momspliktig"
-                                    value={Boolean(customer.vatRegisterd)}
-                                    onChange={(checked) => handleChange('vatRegisterd', checked)}
-                                    labelWidth="w-28"
-                                    margintop="0"
-                                />
-                                <LabeledSwitch
-                                    name="isCompany"
-                                    label="Är försäkringsbolag"
-                                    value={Boolean(customer.isCompany)}
-                                    onChange={(checked) => handleChange('isCompany', checked)}
-                                    labelWidth="w-28"
-                                    margintop="0"
-                                />
-
-                                <LabeledInput
-                                    name="nrOfInvoiceDays"
-                                    label="Antal kreditdagar"
-                                    type="number"
-                                    integerOnly
-                                    value={customer.nrOfInvoiceDays}
-                                    onChange={(value) => handleChange('nrOfInvoiceDays', value)}
-                                    labelWidth="w-28"
-                                    margintop="1"
-                                    autoComplete="off"
-                                />
-                                <LabeledInput
-                                    name="creditLimit"
-                                    label="Kreditlimit (kr)"
-                                    type="number"
-                                    value={customer.creditLimit}
-                                    onChange={(value) => handleChange('creditLimit', value)}
-                                    labelWidth="w-28"
-                                    margintop="0"
-                                    autoComplete="off"
-                                />
-                                <LabeledInput
-                                    name="discountPercent"
-                                    label="Rabatt (%)"
-                                    type="number"
-                                    value={customer.discountPercent}
-                                    onChange={(value) => handleChange('discountPercent', value)}
-                                    labelWidth="w-28"
-                                    margintop="0"
-                                    autoComplete="off"
-                                />
-
-                                <div className="mt-4">
-                                    <LabeledInput
-                                        name="pgNr"
-                                        label="Pg.nr."
-                                        value={customer.pgNr ?? ''}
-                                        onChange={(value) => handleChange('pgNr', value)}
-                                        labelWidth="w-28"
-                                        margintop="0"
-                                        autoComplete="off"
-                                    />
-                                    <LabeledInput
-                                        name="bgNr"
-                                        label="Bg.nr."
-                                        value={customer.bgNr ?? ''}
-                                        onChange={(value) => handleChange('bgNr', value)}
-                                        labelWidth="w-28"
-                                        margintop="0"
-                                        autoComplete="off"
-                                    />
-                                    <LabeledInput
-                                        name="keyFortnox"
-                                        label="Nyckel Fortnox"
-                                        value={customer.keyFortnox ?? ''}
-                                        onChange={(value) => handleChange('keyFortnox', value)}
-                                        labelWidth="w-28"
-                                        margintop="0"
-                                        autoComplete="off"
-                                    />
-                                    <LabeledInput
-                                        name="keyWinassist"
-                                        label="Nyckel E-ekonomi"
-                                        value={customer.keyWinassist ?? ''}
-                                        onChange={(value) => handleChange('keyWinassist', value)}
-                                        labelWidth="w-28"
-                                        margintop="0"
-                                        autoComplete="off"
-                                    />
-                                    <LabeledInput
-                                        name="crediflowPartyId"
-                                        label="Nyckel Crediflow"
-                                        type="number"
-                                        integerOnly
-                                        value={customer.crediflowPartyId}
-                                        onChange={(value) => handleChange('crediflowPartyId', value)}
-                                        labelWidth="w-28"
-                                        margintop="0"
-                                        autoComplete="off"
-                                    />
-                                    <LabeledInput
-                                        name="glnnr"
-                                        label="GLN.nr."
-                                        type="number"
-                                        integerOnly
-                                        value={customer.glnnr}
-                                        onChange={(value) => handleChange('glnnr', value)}
-                                        labelWidth="w-28"
-                                        margintop="0"
-                                        autoComplete="off"
-                                    />
-                                </div>
-                            </div>
-
+                        <form autoComplete="off">
+                            <CustomerFormFields customer={customer} onChange={handleChange} />
                         </form>
                     </section>
 

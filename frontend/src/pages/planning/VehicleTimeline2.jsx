@@ -326,7 +326,7 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
             >
                 <ChevronLeft
                     className="h-10 w-10 text-white"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     style={{ opacity: isHovered ? 0.9 : 0, transition: "opacity 0.12s" }}
                 />
             </div>
@@ -394,7 +394,7 @@ const VehicleTimelineBar = memo(function VehicleTimelineBar({
             >
                 <ChevronRight
                     className="h-10 w-10 text-white"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     style={{ opacity: isHovered ? 0.9 : 0, transition: "opacity 0.12s" }}
                 />
             </div>

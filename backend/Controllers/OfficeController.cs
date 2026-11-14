@@ -18,6 +18,7 @@ public class OfficeController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
     private readonly ISecretProtector _secretProtector;
+    private readonly IFortnoxImportService _fortnoxImportService;
     private static readonly Regex TimeOfDayPattern = new("^(?:[01]\\d|2[0-3]):[0-5]\\d$", RegexOptions.Compiled);
     private static readonly HashSet<string> AllowedLogoContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -25,11 +26,16 @@ public class OfficeController : ControllerBase
     };
     private const long MaxLogoSizeBytes = 2 * 1024 * 1024;
 
-    public OfficeController(ApplicationDbContext context, ICurrentUserService currentUserService, ISecretProtector secretProtector)
+    public OfficeController(
+        ApplicationDbContext context,
+        ICurrentUserService currentUserService,
+        ISecretProtector secretProtector,
+        IFortnoxImportService fortnoxImportService)
     {
         _context = context;
         _currentUserService = currentUserService;
         _secretProtector = secretProtector;
+        _fortnoxImportService = fortnoxImportService;
     }
 
     [HttpGet("company-info")]
@@ -153,6 +159,8 @@ public class OfficeController : ControllerBase
         var settings = await BuildOfficeItemTypeSettingsAsync(office.Id);
         settings.DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty;
         settings.DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty;
+        settings.DefaultPricingCalendarCode = ReservationPricingCalendarCodes.NormalizeOrDefault(office.DefaultPricingCalendarCode);
+        settings.LockPlanningTimelineDrag = office.LockPlanningTimelineDrag;
         return Ok(settings);
     }
 
@@ -183,6 +191,14 @@ public class OfficeController : ControllerBase
 
         var normalizedDefaultBookedFromTime = NormalizeTimeOfDay(dto.DefaultBookedFromTime);
         var normalizedDefaultBookedToTime = NormalizeTimeOfDay(dto.DefaultBookedToTime);
+        var normalizedDefaultPricingCalendarCode = ReservationPricingCalendarCodes.NormalizeOrDefault(
+            dto.DefaultPricingCalendarCode ?? office.DefaultPricingCalendarCode);
+        var lockPlanningTimelineDrag = dto.LockPlanningTimelineDrag ?? office.LockPlanningTimelineDrag;
+
+        if (!ReservationPricingCalendarCodes.IsValid(normalizedDefaultPricingCalendarCode))
+        {
+            return BadRequest(new { message = "Default pricing calendar is invalid." });
+        }
 
         if (!string.IsNullOrEmpty(normalizedDefaultBookedFromTime) && !TimeOfDayPattern.IsMatch(normalizedDefaultBookedFromTime))
         {
@@ -226,12 +242,18 @@ public class OfficeController : ControllerBase
 
         var hasDefaultBookedFromTimeChanged = (office.DefaultBookedFromTime ?? string.Empty) != normalizedDefaultBookedFromTime;
         var hasDefaultBookedToTimeChanged = (office.DefaultBookedToTime ?? string.Empty) != normalizedDefaultBookedToTime;
+        var hasDefaultPricingCalendarCodeChanged = ReservationPricingCalendarCodes.NormalizeOrDefault(office.DefaultPricingCalendarCode)
+            != normalizedDefaultPricingCalendarCode;
+        var hasLockPlanningTimelineDragChanged = office.LockPlanningTimelineDrag != lockPlanningTimelineDrag;
 
         office.DefaultBookedFromTime = normalizedDefaultBookedFromTime;
         office.DefaultBookedToTime = normalizedDefaultBookedToTime;
+        office.DefaultPricingCalendarCode = normalizedDefaultPricingCalendarCode;
+        office.LockPlanningTimelineDrag = lockPlanningTimelineDrag;
 
         if (linksToRemove.Count > 0 || linksToAdd.Count > 0 ||
-            hasDefaultBookedFromTimeChanged || hasDefaultBookedToTimeChanged)
+            hasDefaultBookedFromTimeChanged || hasDefaultBookedToTimeChanged || hasDefaultPricingCalendarCodeChanged ||
+            hasLockPlanningTimelineDragChanged)
         {
             await _context.SaveChangesAsync();
         }
@@ -239,6 +261,8 @@ public class OfficeController : ControllerBase
         var settings = await BuildOfficeItemTypeSettingsAsync(office.Id);
         settings.DefaultBookedFromTime = office.DefaultBookedFromTime ?? string.Empty;
         settings.DefaultBookedToTime = office.DefaultBookedToTime ?? string.Empty;
+        settings.DefaultPricingCalendarCode = normalizedDefaultPricingCalendarCode;
+        settings.LockPlanningTimelineDrag = office.LockPlanningTimelineDrag;
         return Ok(settings);
     }
 
@@ -381,6 +405,46 @@ public class OfficeController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(MapFortnoxSettings(office));
+    }
+
+    [HttpPost("settings/fortnox/import/{entity}")]
+    public async Task<IActionResult> ImportFromFortnox(
+        string entity,
+        [FromBody] OfficeFortnoxImportRequestDto dto,
+        CancellationToken cancellationToken)
+    {
+        var normalizedEntity = entity?.Trim().ToLowerInvariant();
+        if (!FortnoxImportEntity.IsValid(normalizedEntity))
+        {
+            return BadRequest(new { message = $"Okänd importtyp: {entity}" });
+        }
+
+        var user = await _currentUserService.GetCurrentUserAsync(User);
+        if (user?.OfficeId == null)
+        {
+            return BadRequest(new { message = "Office not found" });
+        }
+
+        var office = await _context.Offices.FirstOrDefaultAsync(o => o.Id == user.OfficeId.Value, cancellationToken);
+        if (office == null)
+        {
+            return BadRequest(new { message = "Office not found" });
+        }
+
+        try
+        {
+            var result = await _fortnoxImportService.ImportPageAsync(
+                office,
+                user.Id,
+                normalizedEntity!,
+                dto ?? new OfficeFortnoxImportRequestDto(),
+                cancellationToken);
+            return Ok(result);
+        }
+        catch (FortnoxImportException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     private static OfficeFortnoxSettingsDto MapFortnoxSettings(Office office)

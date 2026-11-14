@@ -2,16 +2,20 @@ import { memo, useState, useRef, useCallback, useEffect, useLayoutEffect, useMem
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CalendarSearch, Calendar, ChevronLeft, ChevronRight, Info, LoaderCircle, RotateCw, X } from 'lucide-react';
-import CabinSearchModal from '../../modals/CabinSearchModal';
+import PlanningItemSearchModal from '../../modals/PlanningItemSearchModal';
 import ItemInfoModal from '../../modals/ItemInfoModal';
 import FilterSelect from '../../components/FilterSelect';
 import SegmentedFilter from '../../components/SegmentedFilter';
 import DateRangePicker from '../../components/DaterangePicker';
 import ActionButton from '../../components/ActionButton';
-import { getPlanningCabinTypes, getPlanningCabins, getPlanningReservations, updatePlanningReservation } from '../../lib/planningApi';
+import { PLANNING_STATUS_COLORS as STATUS_COLORS } from '../../lib/planningStatus';
+import { getPlanningCategories, getPlanningCabins, getPlanningReservations, updatePlanningReservation } from '../../lib/planningApi';
 import useVehicleTimelineDrag from './useVehicleTimelineDrag';
-import useVehicleTimelineGeometry, { getRowRenderWindow, getTimelineRenderWindow } from './useVehicleTimelineGeometry';
+import useVehicleTimelineGeometry, { getRowRenderWindow, getTimelineBookingRange, getTimelineRenderWindow, getTimelineYearSpans } from './useVehicleTimelineGeometry';
 import useProgressivePlanningReservations from './useProgressivePlanningReservations';
+import PlanningSkeleton from './PlanningSkeleton';
+import { useDelayedSkeleton } from '../../hooks/useDelayedSkeleton';
+import { withPlanningLoadingDelay } from '../../lib/planningLoading';
 import bg from "../../assets/content.png";
 // ---------------------------------------------------------------------------
 // Themes
@@ -134,13 +138,6 @@ const INITIAL_BOOKINGS = [
     // { id: 9, carId: 8, start: 8.0, end: 13.5, customer: "Tom Hanks", status: "confirmed" },
 ];
 
-const STATUS_COLORS = {
-    booked: { name: "bokad", bg: "#889DFA", text: "#fff", border: "#889DFA" },
-    out: { name: "utlämnad", bg: "rgb(3,191,127)", text: "#fff", border: "rgb(3,191,127)" },
-    late_out: { name: "sen hämtning", bg: "rgb(251,167,21)", text: "#fff", border: "rgb(255,170,1)" },
-    late_in: { name: "sen återlämning", bg: "#A8120B", text: "#fff", border: "#A8120B" },
-};
-
 // ---------------------------------------------------------------------------
 // Layout constants
 // ---------------------------------------------------------------------------
@@ -153,7 +150,7 @@ const LANE_TOP_PAD = 2;
 const LANE_BOTTOM_PAD = LANE_TOP_PAD + 2;
 const LABEL_W = 200;
 const HEADER_H = 72;
-const TIMELINE_MAX_HEIGHT = "calc(100vh - 189px)";
+const TIMELINE_MAX_HEIGHT = "calc(var(--app-viewport-height) - 189px)";
 const TIMELINE_HEADER_H = 88;
 
 const PERIOD_OPTIONS = [
@@ -161,6 +158,7 @@ const PERIOD_OPTIONS = [
     { value: 92, label: '3 mån' },
     { value: 183, label: '6 mån' },
     { value: 365, label: '1 år' },
+    { value: 730, label: '2 år' },
 ];
 
 const EMPTY_TICKS = [];
@@ -243,11 +241,12 @@ function assignLanes(carBookings) {
     const lastBookingByLane = new Map();
     const bookingsWithFollowers = new Set();
     for (const b of sorted) {
+        const { start, end } = getTimelineBookingRange(b);
         let placed = false;
         for (let i = 0; i < lanes.length; i++) {
-            if (lanes[i] <= b.start) { lanes[i] = b.end; result.set(b.id, i); placed = true; break; }
+            if (lanes[i] <= start) { lanes[i] = end; result.set(b.id, i); placed = true; break; }
         }
-        if (!placed) { result.set(b.id, lanes.length); lanes.push(b.end); }
+        if (!placed) { result.set(b.id, lanes.length); lanes.push(end); }
         const lane = result.get(b.id);
         const previousBookingId = lastBookingByLane.get(lane);
         if (previousBookingId !== undefined) bookingsWithFollowers.add(previousBookingId);
@@ -290,6 +289,8 @@ function computeMonthSpans(visibleStartDayI, totalVisible, dayW, startDate) {
         const monthDays = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
         spans.push({
             label: monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+            monthLabel: monthDate.toLocaleDateString("en-US", { month: "short" }),
+            year: monthDate.getFullYear(),
             startPx: dayIdx * dayW,
             widthPx: monthDays * dayW,
         });
@@ -307,17 +308,19 @@ const CabinTimelineBar = memo(function CabinTimelineBar({
     hasFollowingBooking,
     isMoving,
     isHovered,
+    lockPlanningTimelineDrag,
     onBookingMouseDown,
     onOpenReservation,
     onHoverChange,
 }) {
     const color = STATUS_COLORS[booking.status] || STATUS_COLORS.booked;
-    const widthPx = (booking.end - booking.start) * dayW;
+    const { start, end } = getTimelineBookingRange(booking);
+    const widthPx = (end - start) * dayW;
     const barTop = LANE_TOP_PAD + lane * (LANE_H + LANE_GAP);
     const barWidth = Math.max(widthPx - (hasFollowingBooking ? 1 : 0), 8);
     const arrowSize = Math.min(10, barWidth / 2);
-    const labelLeft = `max(${arrowSize + 4}px, calc(var(--timeline-scroll-x) - ${booking.start * dayW}px + ${arrowSize + 4}px))`;
-    const labelRight = `max(${arrowSize + 4}px, calc(${booking.end * dayW}px - var(--timeline-scroll-x) - ${timelineViewportWidth}px + ${arrowSize + 4}px))`;
+    const labelLeft = `max(${arrowSize + 4}px, calc(var(--timeline-scroll-x) - ${start * dayW}px + ${arrowSize + 4}px))`;
+    const labelRight = `max(${arrowSize + 4}px, calc(${end * dayW}px - var(--timeline-scroll-x) - ${timelineViewportWidth}px + ${arrowSize + 4}px))`;
 
     return (
         <div
@@ -327,14 +330,14 @@ const CabinTimelineBar = memo(function CabinTimelineBar({
             onMouseLeave={() => onHoverChange(null)}
             style={{
                 position: "absolute",
-                left: booking.start * dayW,
+                left: start * dayW,
                 top: 0,
                 transform: `translateY(${barTop}px)`,
                 height: LANE_H,
                 width: barWidth,
                 background: color.bg,
                 clipPath: `polygon(${arrowSize}px 0, calc(100% - ${arrowSize}px) 0, 100% 50%, calc(100% - ${arrowSize}px) 100%, ${arrowSize}px 100%, 0 50%)`,
-                cursor: isMoving ? "grabbing" : isHovered ? "grab" : "default",
+                cursor: lockPlanningTimelineDrag ? "not-allowed" : isMoving ? "grabbing" : isHovered ? "grab" : "default",
                 display: "flex",
                 alignItems: "center",
                 overflow: "hidden",
@@ -354,7 +357,7 @@ const CabinTimelineBar = memo(function CabinTimelineBar({
             >
                 <ChevronLeft
                     className="h-10 w-10 text-white"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     style={{ opacity: isHovered ? 0.9 : 0, transition: "opacity 0.12s" }}
                 />
             </div>
@@ -417,7 +420,7 @@ const CabinTimelineBar = memo(function CabinTimelineBar({
             >
                 <ChevronRight
                     className="h-10 w-10 text-white"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     style={{ opacity: isHovered ? 0.9 : 0, transition: "opacity 0.12s" }}
                 />
             </div>
@@ -435,18 +438,20 @@ const CabinTimelineRowContent = memo(function CabinTimelineRowContent({
     movingId,
     draggingId,
     hoveredBooking,
+    lockPlanningTimelineDrag,
     onBookingMouseDown,
     onOpenReservation,
     onHoverChange,
 }) {
     return (
         <div style={{ position: "absolute", inset: 0, transform: "translateX(calc(-1 * var(--timeline-scroll-x)))" }}>
-            {row.bookings.filter(booking => (
-                booking.id === draggingId
-                || booking.id === hoveredBooking
-                || (booking.start < renderWindow.endDay
-                    && Math.max(booking.end, booking.start + 8 / dayW) > renderWindow.startDay)
-            )).map(booking => (
+            {row.bookings.filter(booking => {
+                const { start, end } = getTimelineBookingRange(booking);
+                return booking.id === draggingId
+                    || booking.id === hoveredBooking
+                    || (start < renderWindow.endDay
+                        && Math.max(end, start + 8 / dayW) > renderWindow.startDay);
+            }).map(booking => (
                 <CabinTimelineBar
                     key={booking.id}
                     booking={booking}
@@ -457,6 +462,7 @@ const CabinTimelineRowContent = memo(function CabinTimelineRowContent({
                     hasFollowingBooking={row.bookingsWithFollowers.has(booking.id)}
                     isMoving={movingId === booking.id}
                     isHovered={hoveredBooking === booking.id}
+                    lockPlanningTimelineDrag={lockPlanningTimelineDrag}
                     onBookingMouseDown={onBookingMouseDown}
                     onOpenReservation={onOpenReservation}
                     onHoverChange={onHoverChange}
@@ -512,7 +518,7 @@ const timelineViewState = {
     daysVisible: 92,
     startDate: null,
     populateFromDate: null,
-    selectedCabinTypes: [],
+    selectedCategories: [],
     searchSelection: null,
     loadedRange: null,
     loadedRangeQueryKey: null,
@@ -590,9 +596,12 @@ function CabinTimeline(props) {
     const closeItemInfo = useCallback(() => setInfoItemId(null), []);
     const dateSelectRef = useRef(null);
     const [searchSelection, setSearchSelection] = useState(timelineViewState.searchSelection);
-    const [selectedCabinTypes, setSelectedCabinTypes] = useState(timelineViewState.selectedCabinTypes);
-    const [cabinTypeOptions, setCabinTypeOptions] = useState(EMPTY_VEHICLES);
+    const [selectedCategories, setSelectedCategories] = useState(timelineViewState.selectedCategories);
+    const [categoryOptions, setCategoryOptions] = useState(EMPTY_VEHICLES);
     const [visibleCars, setVisibleCars] = useState(EMPTY_VEHICLES);
+    const [itemsLoading, setItemsLoading] = useState(true);
+    const [itemsError, setItemsError] = useState(null);
+    const [itemsReloadKey, setItemsReloadKey] = useState(0);
 
     const isPlanningBusy = useCallback((kind) => (
         kind === 'replace'
@@ -619,60 +628,62 @@ function CabinTimeline(props) {
         timelineViewState.daysVisible = daysVisible;
         timelineViewState.startDate = startDate;
         timelineViewState.populateFromDate = populateFromDate;
-        timelineViewState.selectedCabinTypes = selectedCabinTypes;
+        timelineViewState.selectedCategories = selectedCategories;
         timelineViewState.searchSelection = searchSelection;
-    }, [scrollX, daysVisible, startDate, populateFromDate, selectedCabinTypes, searchSelection]);
+    }, [scrollX, daysVisible, startDate, populateFromDate, selectedCategories, searchSelection]);
 
     useEffect(() => {
         let isActive = true;
 
-        getPlanningCabinTypes()
-            .then(cabinTypes => {
+        getPlanningCategories({ itemTypeCode: 'CABIN' })
+            .then(categories => {
                 if (!isActive) return;
-                setCabinTypeOptions(cabinTypes.map(cabinType => ({ value: cabinType.code, label: cabinType.name })));
+                setCategoryOptions(categories.map(category => ({ value: category.id, label: category.name })));
             })
             .catch(() => {
-                if (isActive) setCabinTypeOptions(EMPTY_VEHICLES);
+                if (isActive) setCategoryOptions(EMPTY_VEHICLES);
             });
 
         return () => { isActive = false; };
     }, []);
 
-    const cabinTypeKey = useMemo(
-        () => selectedCabinTypes.map(option => option.value).sort().join(','),
-        [selectedCabinTypes]
+    const categoryKey = useMemo(
+        () => selectedCategories.map(option => Number(option.value)).sort((first, second) => first - second).join(','),
+        [selectedCategories]
     );
 
     useEffect(() => {
         let isActive = true;
-        const selectedCodes = cabinTypeKey ? cabinTypeKey.split(',') : [];
-        const cabinTypeCodes = searchSelection?.cabinTypeCode ? [searchSelection.cabinTypeCode] : selectedCodes;
-
-        getPlanningCabins({
-            cabinTypeCodes,
+        setItemsLoading(true);
+        setItemsError(null);
+        withPlanningLoadingDelay(getPlanningCabins({
+            categoryIds: categoryKey ? categoryKey.split(',').map(Number) : [],
             availableFrom: searchSelection?.from ?? '',
             availableTo: searchSelection?.to ?? '',
-        })
+        }))
             .then(cabins => {
                 if (isActive) setVisibleCars(cabins);
             })
-            .catch(() => {
-                if (isActive) setVisibleCars(EMPTY_VEHICLES);
+            .catch(error => {
+                if (isActive) {
+                    setItemsError(error);
+                    setVisibleCars(EMPTY_VEHICLES);
+                }
+            })
+            .finally(() => {
+                if (isActive) setItemsLoading(false);
             });
 
         return () => { isActive = false; };
-    }, [cabinTypeKey, searchSelection]);
+    }, [categoryKey, searchSelection, itemsReloadKey]);
 
     const handleCabinSearch = (params) => {
         const from = toIsoDateTime(params?.period?.from);
         const to = toIsoDateTime(params?.period?.to);
 
-        setSearchSelection({
-            cabinTypeCode: params?.cabinTypeCode ?? '',
-            cabinTypeName: params?.cabinTypeName ?? '',
-            from,
-            to,
-        });
+        const selectedCategory = categoryOptions.find(option => String(option.value) === String(params?.categoryId));
+        setSelectedCategories(selectedCategory ? [selectedCategory] : []);
+        setSearchSelection({ from, to });
 
         if (from && to) {
             const nextDaysVisible = resolveDaysVisible(from, to);
@@ -769,15 +780,15 @@ function CabinTimeline(props) {
     const viewportDays = baseGeometry.timelineViewportWidth > 0
         ? baseGeometry.timelineViewportWidth / baseGeometry.dayWidth
         : daysVisible;
-    const currentQueryKey = `categories:${cabinTypeKey}|${startDate.getTime()}|${daysVisible}`;
+    const currentQueryKey = `categories:${categoryKey}|${startDate.getTime()}|${daysVisible}`;
     const fetchCabinReservations = useCallback(({ filterKey, from, to }) => getPlanningReservations({
         itemTypeCode: 'CABIN',
-        cabinTypeCodes: filterKey ? filterKey.split(',') : [],
+        categoryIds: filterKey ? filterKey.split(',').map(Number) : [],
         from,
         to,
     }), []);
     const progressive = useProgressivePlanningReservations({
-        categoryKey: cabinTypeKey,
+        categoryKey,
         startDate,
         daysVisible,
         viewportDays,
@@ -793,6 +804,10 @@ function CabinTimeline(props) {
         getRevision: getBookingRevision,
     });
     const { loadedRange, queryKey, extend, refresh, flush, ensureCoverage } = progressive;
+    const isInitialLoading = itemsLoading || progressive.initialLoading;
+    const delayedInitialLoading = useDelayedSkeleton(isInitialLoading, 200);
+    const delayedBackgroundLoading = useDelayedSkeleton(!isInitialLoading && progressive.loading, 200);
+    const showLoadingSkeleton = isInitialLoading && delayedInitialLoading;
     const geometry = useVehicleTimelineGeometry({
         containerWidth: containerW,
         daysVisible,
@@ -916,8 +931,10 @@ function CabinTimeline(props) {
 
     const showMonthRow = true;
     const showDayHeader = daysVisible <= 31 && dayW >= DAY_HEADER_MIN_W;
+    const showWeekHeader = !showDayHeader && daysVisible < 365;
     const showWeekDayTicks = !showDayHeader && daysVisible <= 92;
     const showWeekendShade = dayW >= WEEKEND_SHADE_MIN_W;
+    const showYearRow = daysVisible >= 365;
     const MONTH_ROW_H = 24;
     const headerH = TIMELINE_HEADER_H;
 
@@ -1146,6 +1163,7 @@ function CabinTimeline(props) {
         isReservationClickSuppressed,
         onBookingMouseDown,
     } = useVehicleTimelineDrag({
+        wholeDays: true,
         daysVisible,
         geometry: dragGeometry,
         gridRef,
@@ -1160,6 +1178,7 @@ function CabinTimeline(props) {
         statusColors: STATUS_COLORS,
         minimumDay: loadedRange.startDay,
         maximumDay: loadedRange.endDay,
+        lockPlanningTimelineDrag: props.lockPlanningTimelineDrag,
     });
 
     const handleOpenReservationInNewTab = useCallback((e, reservationId) => {
@@ -1186,22 +1205,23 @@ function CabinTimeline(props) {
 
 
     return (
-        <div className="px-4" style={{ position: "relative" }}>
+        <div className="px-4 min-w-0" style={{ position: "relative" }}>
             <div ref={containerRef} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 0, pointerEvents: "none" }} />
 
             <ItemInfoModal itemId={infoItemId} onClose={closeItemInfo} />
 
-            <CabinSearchModal
+            <PlanningItemSearchModal
                 isOpen={cabinSearchOpen}
                 onClose={() => setCabinSearchOpen(false)}
                 onSearch={handleCabinSearch}
-                cabinTypeOptions={cabinTypeOptions}
+                categoryOptions={categoryOptions}
+                title="Sök lediga bodar"
             />
 
             {/* ── Top Bar ── */}
-            <div className="flex flex-row items-center justify-between pt-6 pb-7 2xl:px-10">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-6 pb-7 2xl:px-10">
 
-                <div className="flex flex-row items-center gap-5">
+                <div className="flex flex-wrap items-center gap-3 min-w-0">
 
                     {props.typeSelector && <div className="shrink-0">{props.typeSelector}</div>}
 
@@ -1262,10 +1282,10 @@ function CabinTimeline(props) {
 
                 <div className="flex flex-row items-center gap-4">
                     <FilterSelect
-                        value={selectedCabinTypes}
-                        onChange={(selected) => setSelectedCabinTypes(selected ?? [])}
-                        options={cabinTypeOptions}
-                        placeholder="Alla byggbodtyper"
+                        value={selectedCategories}
+                        onChange={(selected) => setSelectedCategories(selected ?? [])}
+                        options={categoryOptions}
+                        placeholder="Alla kategorier"
                         width="w-50"
                         isMulti
                         closeMenuOnSelect={false}
@@ -1273,7 +1293,7 @@ function CabinTimeline(props) {
                     />
                 </div>
 
-                <div className="flex flex-row items-center gap-4 w-140">
+                <div className="flex flex-wrap items-center gap-3 min-w-0 max-w-full">
                     <ActionButton
                         label="Sök lediga tider"
                         icon={CalendarSearch}
@@ -1282,11 +1302,10 @@ function CabinTimeline(props) {
                     />
 
                     {searchSelection && (
-                        <div className="flex flex-row items-center gap-2 rounded-full border border-lime-500 bg-lime-50 px-3 h-7">
-                            <span className="text-xs text-lime-900">
+                        <div className="flex items-center gap-2 rounded-sm border border-lime-500 bg-lime-50 px-3 py-1 min-h-7 min-w-0 max-w-full">
+                            <span className="text-xs text-lime-900 min-w-0 break-words">
                                 {[
-                                    searchSelection.cabinTypeName || 'Alla byggbodtyper',
-                                    // searchSelection.model || 'Alla modeller',
+                                    selectedCategories.map(category => category.label).join(', ') || 'Alla kategorier',
                                     searchSelection.from && searchSelection.to
                                         ? `${formatSelectionDate(searchSelection.from)} – ${formatSelectionDate(searchSelection.to)}`
                                         : '',
@@ -1297,7 +1316,7 @@ function CabinTimeline(props) {
                                 aria-label="Rensa sökning"
                                 title="Rensa sökning"
                                 onClick={handleClearCabinSearch}
-                                className="cursor-pointer text-lime-600 hover:text-lime-800"
+                                className="cursor-pointer shrink-0 text-lime-600 hover:text-lime-800"
                             >
                                 <X className="h-3.5 w-3.5" strokeWidth={2.4} />
                             </button>
@@ -1306,8 +1325,8 @@ function CabinTimeline(props) {
                 </div>
 
                 {/* Legend */}
-                <div style={{ display: "flex", gap: 16 }}>
-                    {progressive.loading && <LoaderCircle className="h-4 w-4 animate-spin text-gray-500" aria-label="Läser bokningar" />}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                    {/* {progressive.loading && <LoaderCircle className="h-4 w-4 animate-spin text-gray-500" aria-label="Läser bokningar" />} */}
                     {progressive.error && (
                         <button
                             type="button"
@@ -1331,21 +1350,41 @@ function CabinTimeline(props) {
             </div>
 
             {/* ── Grid ── */}
+            {itemsError && (
+                <div role="alert" className="mb-3 flex items-center gap-3 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+                    Kunde inte läsa objekten. {itemsError.message}
+                    <ActionButton label="Försök igen" icon={RotateCw} onClick={() => setItemsReloadKey(value => value + 1)} accent="lime" />
+                </div>
+            )}
             <div
                 style={{ position: "relative" }}
+                aria-busy={isInitialLoading || progressive.loading}
                 onMouseDownCapture={(event) => {
-                    if (event.button === 0) gestureRef.current = 'pointer';
+                    if (!isInitialLoading && event.button === 0) gestureRef.current = 'pointer';
                 }}
             >
+                {showLoadingSkeleton && (
+                    <div className="absolute inset-0 z-50">
+                        <PlanningSkeleton labelWidth={LABEL_W} headerHeight={headerH} />
+                    </div>
+                )}
+                {!isInitialLoading && progressive.loading && delayedBackgroundLoading && (
+                    <div className="pointer-events-none absolute inset-x-0 top-0 z-50">
+                        <PlanningSkeleton variant="progress" />
+                    </div>
+                )}
                 <div
                     className=""
                     ref={gridRef}
+                    inert={isInitialLoading}
+                    aria-hidden={isInitialLoading}
                     style={{
                         height: TIMELINE_MAX_HEIGHT,
                         maxHeight: TIMELINE_MAX_HEIGHT,
                         overflowX: "hidden",
                         overflowY: "auto",
                         position: "relative",
+                        visibility: isInitialLoading ? "hidden" : "visible",
                         '--timeline-scroll-x': '0px',
                     }}
                 >
@@ -1445,6 +1484,23 @@ function CabinTimeline(props) {
                             <div style={{ height: headerH, position: "sticky", top: 0, zIndex: 20, width: "100%", overflow: "hidden", borderBottom: `1px solid ${T.border}`, background: `url(${bg})` }}>
                               <div style={{ position: "relative", width: "100%", height: "100%", transform: "translateX(calc(-1 * var(--timeline-scroll-x)))" }}>
 
+                                {showYearRow && getTimelineYearSpans(monthSpans).map(span => (
+                                    <div key={span.year} style={{
+                                        position: "absolute", left: span.startPx, top: 0,
+                                        width: span.widthPx, height: MONTH_ROW_H,
+                                        borderRight: `1px solid ${T.border}`,
+                                        borderBottom: `1px solid ${T.borderMonth}`,
+                                        overflow: "hidden", boxSizing: "border-box",
+                                    }}>
+                                        <span style={{
+                                            position: "absolute", left: `max(6px, calc(var(--timeline-scroll-x) - ${span.startPx}px + 6px))`, top: 0, bottom: 0,
+                                            display: "flex", alignItems: "center",
+                                            fontSize: 10, fontWeight: 700, color: T.textFaint,
+                                            letterSpacing: 1, whiteSpace: "nowrap",
+                                        }}>{span.year}</span>
+                                    </div>
+                                ))}
+
                                 {/* Month row */}
                                 {showMonthRow && (() => {
                                     const spans = monthSpans.filter(span => (
@@ -1456,22 +1512,22 @@ function CabinTimeline(props) {
                                         const labelLeft = hiddenLeft + 6;
                                         return (
                                             <div key={si} style={{
-                                                position: "absolute", left: span.startPx, top: 0,
-                                                width: span.widthPx, height: MONTH_ROW_H,
+                                                position: "absolute", left: span.startPx, top: showYearRow ? MONTH_ROW_H : 0,
+                                                width: span.widthPx, height: showYearRow ? headerH - MONTH_ROW_H : MONTH_ROW_H,
                                                 borderRight: `1px solid ${T.border}`,
                                                 borderBottom: `1px solid ${T.borderMonth}`,
                                                 // background: si % 2 === 0 ? T.bgDeep : T.bgAlt,
                                                 overflow: "hidden",
                                                 boxSizing: "border-box",
                                             }}>
-                                                <span style={{
+                                                <span title={span.label} style={{
                                                     position: "absolute", left: labelLeft, top: 0, bottom: 0,
                                                     display: "flex", alignItems: "center",
                                                     fontSize: 10, fontWeight: 700, color: T.textFaint,
                                                     textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap",
                                                     pointerEvents: "none",
                                                 }}>
-                                                    {span.label}
+                                                    {showYearRow ? span.monthLabel : span.label}
                                                 </span>
                                             </div>
                                         );
@@ -1491,7 +1547,7 @@ function CabinTimeline(props) {
                                 ))}
 
                                 {/* Week columns when days are too narrow for labels */}
-                                {!showDayHeader && dayLabels.filter(label => label.isMonday).map(({ dayIdx, week }) => (
+                                {showWeekHeader && dayLabels.filter(label => label.isMonday).map(({ dayIdx, week }) => (
                                         <div key={dayIdx} style={{ position: "absolute", left: dayIdx * dayW, top: MONTH_ROW_H, width: dayW * 7, height: `calc(100% - ${MONTH_ROW_H}px)`, borderLeft: `1px solid ${T.border}`, background: "white", display: "flex", flexDirection: "column", overflow: "hidden" }}>
                                             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                                                 {showWeekDayTicks && <div style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 0.5 }}>Vecka</div>}
@@ -1536,6 +1592,7 @@ function CabinTimeline(props) {
                                             movingId={row.laneMap.has(movingId) ? movingId : null}
                                             draggingId={row.laneMap.has(dragging?.bookingId) ? dragging.bookingId : null}
                                             hoveredBooking={row.laneMap.has(hoveredBooking) ? hoveredBooking : null}
+                                            lockPlanningTimelineDrag={props.lockPlanningTimelineDrag}
                                             onBookingMouseDown={onBookingMouseDown}
                                             onOpenReservation={handleOpenReservationInNewTab}
                                             onHoverChange={setHoveredBooking}
@@ -1556,6 +1613,9 @@ function CabinTimeline(props) {
                 {/* Scrollbar */}
                 <div
                     ref={scrollbarRef}
+                    className={isInitialLoading ? 'invisible' : ''}
+                    inert={isInitialLoading}
+                    aria-hidden={isInitialLoading}
                     data-timeline-scrollbar="true"
                     onClick={onScrollbarTrackClick}
                     style={{ height: 10, background: T.scrollTrack, borderRadius: 5, position: "absolute", left: LABEL_W + 8, right: 8, bottom: 4, cursor: "pointer", zIndex: 40 }}

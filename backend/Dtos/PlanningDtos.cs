@@ -35,3 +35,32 @@ public class PlanningCabinTypeOptionDto
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
 }
+
+public sealed record PlanningLiftDto
+{
+    public int Id { get; init; }
+    public string ItemNr { get; init; } = string.Empty;
+    public string SerialNr { get; init; } = string.Empty;
+    public int? ItemCategoryId { get; init; }
+    public string ItemCategoryName { get; init; } = string.Empty;
+    public string Manufacturer { get; init; } = string.Empty;
+    public string ItemModelName { get; init; } = string.Empty;
+}
+
+/// <summary>An unreturned rental item in the current office's customer overview.</summary>
+public sealed record PlanningCustomerRentalDto
+{
+    public int Id { get; init; }
+    public int ReservationId { get; init; }
+    public int? CustomerId { get; init; }
+    public string Customer { get; init; } = string.Empty;
+    public int ItemId { get; init; }
+    public string ItemNr { get; init; } = string.Empty;
+    public string ItemName { get; init; } = string.Empty;
+    public string RegNr { get; init; } = string.Empty;
+    public string SerialNr { get; init; } = string.Empty;
+    public string DeliveryPlace { get; init; } = string.Empty;
+    public DateTimeOffset? Start { get; init; }
+    public DateTimeOffset? End { get; init; }
+    public string Status { get; init; } = string.Empty;
+}

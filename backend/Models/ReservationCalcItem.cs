@@ -9,6 +9,8 @@ namespace Backend.Models
         public int? OfficeId { get; set; }
         public int? ReservationCalcId { get; set; }
         public int? ItemId { get; set; }
+        // Historical source ID is retained even if the reservation article is later removed.
+        public int? ReservationItemArticleId { get; set; }
         public int? PriceListId { get; set; }
         public int? VatId { get; set; }
         public decimal? VatRate { get; set; }
