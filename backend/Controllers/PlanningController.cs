@@ -470,7 +470,7 @@ namespace Backend.Controllers
                 return BadRequest(new { message = "Objektet hittades inte eller är av fel typ" });
             }
 
-            if (currentItemTypeCode == "CABIN" && reservationItem.ItemId != targetItem.Id)
+            if ((currentItemTypeCode == "CABIN" || currentItemTypeCode == "LIFT") && reservationItem.ItemId != targetItem.Id)
             {
                 reservationItem.BasePrice = targetItem.BasePrice;
                 reservationItem.PricePerDay = targetItem.PricePerDay;

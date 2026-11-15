@@ -103,7 +103,7 @@ public class PlanningControllerTests
     }
 
     [Fact]
-    public async Task LiftReassignmentRetainsPricesAndClockTimeAndRejectsWrongOfficeOrType()
+    public async Task LiftReassignmentCopiesPricesAndRetainsClockTimeAndRejectsWrongOfficeOrType()
     {
         using var context = await Seed();
         var controller = Controller(context);
@@ -120,8 +120,8 @@ public class PlanningControllerTests
         Assert.IsType<OkObjectResult>((await controller.UpdateReservation(row.Id, request, CancellationToken.None)).Result);
         Assert.Equal(22, row.ItemId);
         Assert.Equal(Start.TimeOfDay, row.BookedFrom!.Value.TimeOfDay);
-        Assert.Equal(42m, row.BasePrice);
-        Assert.Equal(84m, row.PricePerDay);
+        Assert.Equal(100m, row.BasePrice);
+        Assert.Equal(200m, row.PricePerDay);
 
         foreach (var targetId in new[] { 11, 31, 71 })
         {
@@ -133,6 +133,8 @@ public class PlanningControllerTests
             };
             Assert.IsType<BadRequestObjectResult>((await controller.UpdateReservation(row.Id, rejectedRequest, CancellationToken.None)).Result);
             Assert.Equal(22, row.ItemId);
+            Assert.Equal(100m, row.BasePrice);
+            Assert.Equal(200m, row.PricePerDay);
         }
     }
 
@@ -161,7 +163,7 @@ public class PlanningControllerTests
     }
 
     [Fact]
-    public async Task NewLiftReservationSavesAppearsInPlanningAndMovesWithoutCabinSnapshots()
+    public async Task NewLiftReservationSavesAppearsInPlanningAndCopiesPricesOnMove()
     {
         using var context = await Seed();
         var previousIds = await context.Reservations.Select(reservation => reservation.Id).ToListAsync();
@@ -202,7 +204,8 @@ public class PlanningControllerTests
         var readRow = Assert.Single(read.ReservationItems);
         Assert.Equal(22, readRow.ItemId);
         Assert.Equal(Start.AddDays(10), readRow.BookedFrom);
-        Assert.Null(readRow.PricePerDay);
+        Assert.Equal(100m, readRow.BasePrice);
+        Assert.Equal(200m, readRow.PricePerDay);
         Assert.Equal(200m, (await context.Items.SingleAsync(item => item.Id == 22)).PricePerDay);
     }
 

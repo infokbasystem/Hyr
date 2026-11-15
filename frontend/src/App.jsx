@@ -1,65 +1,107 @@
-import { useState } from 'react'
-import { Navigate, Route, createBrowserRouter, createRoutesFromElements, RouterProvider } from 'react-router-dom'
+import { lazy, Suspense, useState } from 'react'
+import { Navigate, Outlet, Route, createBrowserRouter, createRoutesFromElements, RouterProvider, useLocation } from 'react-router-dom'
 
 import { AuthProvider } from "./AuthContext";
 import { useAuth } from "./hooks/AuthProvider";
 import ProtectedRoute from "./ProtectedRoute"
+import { getMobileRedirectTarget, isMobileDevice, isMobilePath, prefersDesktop } from './mobile/mobileRouting'
 
 
-import MainLayout from './layouts/MainLayout'
-import OperationsLayout from './layouts/OperationsLayout'
-import FinanceLayout from './layouts/FinanceLayout'
-import SettingsLayout from './layouts/SettingsLayout';
+const MainLayout = lazy(() => import('./layouts/MainLayout'))
+const OperationsLayout = lazy(() => import('./layouts/OperationsLayout'))
+const FinanceLayout = lazy(() => import('./layouts/FinanceLayout'))
+const SettingsLayout = lazy(() => import('./layouts/SettingsLayout'))
 
-import Login from './pages/Login'
-import NotFound from './pages/NotFound'
-import SomethingWentWrong from './pages/SomethingWentWrong'
-import Overview from './pages/planning/Overview'
+const Login = lazy(() => import('./pages/Login'))
+const NotFound = lazy(() => import('./pages/NotFound'))
+const SomethingWentWrong = lazy(() => import('./pages/SomethingWentWrong'))
+const Overview = lazy(() => import('./pages/planning/Overview'))
 
-import OperationsOverview from './pages/operations/Overview'
-import Reservation from './pages/operations/Reservation';
-import Reservations from './pages/operations/Reservations';
-import Customers from './pages/operations/Customers';
-import Customer from './pages/operations/Customer';
-import Items from './pages/operations/Items';
-import Item from './pages/operations/Item';
-import InOut from './pages/operations/InOut';
+const OperationsOverview = lazy(() => import('./pages/operations/Overview'))
+const Reservation = lazy(() => import('./pages/operations/Reservation'))
+const Reservations = lazy(() => import('./pages/operations/Reservations'))
+const Customers = lazy(() => import('./pages/operations/Customers'))
+const Customer = lazy(() => import('./pages/operations/Customer'))
+const Items = lazy(() => import('./pages/operations/Items'))
+const Item = lazy(() => import('./pages/operations/Item'))
+const InOut = lazy(() => import('./pages/operations/InOut'))
 
-import FinanceOverview from './pages/finance/FinanceOverview'
-import Invoice from './pages/finance/Invoice';
-import InvoicesToAccount from './pages/finance/InvoicesToAccount';
-import Invoices from './pages/finance/Invoices';
-import ToBeInvoiced from './pages/finance/ToBeInvoiced';
-import FinanceSectionPlaceholder from './pages/finance/FinanceSectionPlaceholder';
+const FinanceOverview = lazy(() => import('./pages/finance/FinanceOverview'))
+const Invoice = lazy(() => import('./pages/finance/Invoice'))
+const InvoicesToAccount = lazy(() => import('./pages/finance/InvoicesToAccount'))
+const Invoices = lazy(() => import('./pages/finance/Invoices'))
+const ToBeInvoiced = lazy(() => import('./pages/finance/ToBeInvoiced'))
+const FinanceSectionPlaceholder = lazy(() => import('./pages/finance/FinanceSectionPlaceholder'))
 
-import OfficeSettingsLayout from './pages/settings/OfficeSettingsLayout';
-import OfficeCompanyInfo from './pages/settings/office/OfficeCompanyInfo';
-import OfficeGeneralSettings from './pages/settings/office/OfficeGeneralSettings';
-import OfficeDepartments from './pages/settings/office/OfficeDepartments';
-import OfficeFinance from './pages/settings/office/OfficeFinance';
-import OfficeMailTexts from './pages/settings/office/OfficeMailTexts';
-import OfficeSmsTexts from './pages/settings/office/OfficeSmsTexts';
-import OfficeWebBooking from './pages/settings/office/OfficeWebBooking';
-import OfficeIntegrations from './pages/settings/office/OfficeIntegrations';
-import SettingsSection from './pages/settings/SettingsSection';
-import FortnoxRedirect from './pages/settings/FortnoxRedirect';
-import Categories from './pages/settings/Categories';
-import Models from './pages/settings/Models';
-import Articles from './pages/settings/Articles';
-import ServiceTypes from './pages/settings/ServiceTypes';
-import InsuranceCompanies from './pages/settings/InsuranceCompanies';
-import Currencies from './pages/settings/Currencies';
-import Vat from './pages/settings/Vat';
-import Accounts from './pages/settings/Accounts';
-import Users from './pages/settings/Users';
-import Pricing from './pages/settings/Pricing';
-import TinkPaymentDone from './pages/pay/TinkPaymentDone';
-import Reports from './pages/Reports';
-import Management from './pages/Management';
+const OfficeSettingsLayout = lazy(() => import('./pages/settings/OfficeSettingsLayout'))
+const OfficeCompanyInfo = lazy(() => import('./pages/settings/office/OfficeCompanyInfo'))
+const OfficeGeneralSettings = lazy(() => import('./pages/settings/office/OfficeGeneralSettings'))
+const OfficeDepartments = lazy(() => import('./pages/settings/office/OfficeDepartments'))
+const OfficeFinance = lazy(() => import('./pages/settings/office/OfficeFinance'))
+const OfficeMailTexts = lazy(() => import('./pages/settings/office/OfficeMailTexts'))
+const OfficeSmsTexts = lazy(() => import('./pages/settings/office/OfficeSmsTexts'))
+const OfficeWebBooking = lazy(() => import('./pages/settings/office/OfficeWebBooking'))
+const OfficeIntegrations = lazy(() => import('./pages/settings/office/OfficeIntegrations'))
+const SettingsSection = lazy(() => import('./pages/settings/SettingsSection'))
+const FortnoxRedirect = lazy(() => import('./pages/settings/FortnoxRedirect'))
+const Categories = lazy(() => import('./pages/settings/Categories'))
+const Models = lazy(() => import('./pages/settings/Models'))
+const Articles = lazy(() => import('./pages/settings/Articles'))
+const ServiceTypes = lazy(() => import('./pages/settings/ServiceTypes'))
+const InsuranceCompanies = lazy(() => import('./pages/settings/InsuranceCompanies'))
+const Currencies = lazy(() => import('./pages/settings/Currencies'))
+const Vat = lazy(() => import('./pages/settings/Vat'))
+const Accounts = lazy(() => import('./pages/settings/Accounts'))
+const Users = lazy(() => import('./pages/settings/Users'))
+const Pricing = lazy(() => import('./pages/settings/Pricing'))
+const TinkPaymentDone = lazy(() => import('./pages/pay/TinkPaymentDone'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Management = lazy(() => import('./pages/Management'))
+
+const MobileShell = lazy(() => import('./mobile/MobileShell'))
+const MobileAuthGuard = lazy(() => import('./mobile/MobileAuthGuard'))
+const MobileLayout = lazy(() => import('./mobile/MobileLayout'))
+const MobileLogin = lazy(() => import('./mobile/MobileLogin'))
+const MobileInOutList = lazy(() => import('./mobile/pages/MobileInOutList'))
+const MobileAvailableNow = lazy(() => import('./mobile/pages/MobileAvailableNow'))
+const MobileAvailabilitySearch = lazy(() => import('./mobile/pages/MobileAvailabilitySearch'))
+const MobileReservation = lazy(() => import('./mobile/pages/MobileReservation'))
+
+// Sends phones from desktop entry points to /m unless the user has chosen the desktop version.
+function AppShell() {
+  const location = useLocation()
+  const mobileTarget = !isMobilePath(location.pathname) && isMobileDevice() && !prefersDesktop()
+    ? getMobileRedirectTarget(location.pathname)
+    : null
+
+  if (mobileTarget) {
+    return <Navigate to={mobileTarget} replace state={location.state} />
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <Outlet />
+    </Suspense>
+  )
+}
 
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route>
+    <Route element={<AppShell />}>
+      <Route path="m" element={<MobileShell />}>
+        <Route path="login" element={<MobileLogin />} />
+        <Route element={<MobileAuthGuard />}>
+          <Route element={<MobileLayout />}>
+            <Route index element={<Navigate to="out" replace />} />
+            <Route path="out" element={<MobileInOutList key="return" type="return" />} />
+            <Route path="upcoming" element={<MobileInOutList key="delivery" type="delivery" />} />
+            <Route path="available" element={<MobileAvailableNow />} />
+            <Route path="search" element={<MobileAvailabilitySearch />} />
+            <Route path="reservation/:id" element={<MobileReservation />} />
+            <Route path="*" element={<Navigate to="out" replace />} />
+          </Route>
+        </Route>
+      </Route>
       {/* <Route element={<ProtectedRoute />}>
       </Route> */}
       <Route path="/" element={< MainLayout />}>

@@ -246,6 +246,8 @@ public sealed class ReservationPdfService(ApplicationDbContext dbContext) : IRes
             {
                 var item = ri.Item;
                 var isCabin = string.Equals(ri.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase);
+                var useReservationDayRate = isCabin
+                    || (string.Equals(ri.ItemTypeCode, "LIFT", StringComparison.OrdinalIgnoreCase) && ri.HasPriceSnapshot());
                 var cabinSize = item?.LengthMm is int length && item.WidthMm is int width
                     ? $"{length} x {width} mm"
                     : "";
@@ -265,7 +267,7 @@ public sealed class ReservationPdfService(ApplicationDbContext dbContext) : IRes
                     HandedOut = FormatDate(ri.ActualFrom),
                     Returned = FormatDate(ri.ActualTo),
                     RentDays = ri.ItemId is int itemId && rentDaysByItemId.TryGetValue(itemId, out var days) ? FormatNumber(days) : "",
-                    DayRate = FormatNumber(isCabin ? ri.PricePerDay : item?.PricePerDay),
+                    DayRate = FormatNumber(useReservationDayRate ? ri.PricePerDay : item?.PricePerDay),
                     DeliveryPlace = FirstNonEmpty(ri.DeliveryPlaceNote),
                     PickupPlace = FirstNonEmpty(ri.PickupPlaceNote),
                 };

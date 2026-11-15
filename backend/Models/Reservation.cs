@@ -38,6 +38,11 @@ namespace Backend.Models
         public bool IsOngoingInvoicing { get; set; }
         public string OngoingInvoicingInterval { get; set; } = string.Empty;
         public string PricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
+        public string PlacementStreet { get; set; } = string.Empty;
+        public string PlacementZipCode { get; set; } = string.Empty;
+        public string PlacementCity { get; set; } = string.Empty;
+        public decimal? PlacementLatitude { get; set; }
+        public decimal? PlacementLongitude { get; set; }
 
         public virtual Office? Office { get; set; }
         public virtual User? CreatedByUser { get; set; }

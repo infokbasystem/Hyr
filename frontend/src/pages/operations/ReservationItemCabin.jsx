@@ -247,7 +247,7 @@ const ReservationItemCabin = ({
                                     </tr>
                                 );
                             })}
-                            <tr className="border-b border-gray-100">
+                            <tr className="">
                                 <td colSpan="4" className="px-0 py-1">
                                     <button
                                         type="button"

@@ -583,6 +583,125 @@ public class ReservationPricingTests
     }
 
     [Fact]
+    public async Task LiftPricesAndArticlesSurviveSaveAndDriveCalculation()
+    {
+        using var context = CreateContext();
+        context.Items.Add(new Item { Id = 1, OfficeId = 1, ItemTypeCode = "LIFT", PricePerDay = 999m });
+        context.Articles.Add(new Article { Id = 1, OfficeId = 1, ArticleNr = "A1", Name = "Extra", Price = 100m });
+        await context.SaveChangesAsync();
+        var controller = new ReservationController(context, new TestUserService());
+        var request = new ReservationUpsertDto
+        {
+            ReservationItems = new List<ReservationItem>
+            {
+                new()
+                {
+                    ItemId = 1, ItemTypeCode = "LIFT", BookedFrom = Start, BookedTo = Start.AddDays(2),
+                    BasePrice = 20m, PricePerDay = 100m, PricePerWeek = 500m, PricePerMonth = 1000m,
+                    ArticleSelections = new List<ReservationItemArticle>
+                    {
+                        new() { ArticleId = 1, Quantity = 2m, UnitPrice = 5m }
+                    }
+                }
+            }
+        };
+
+        Assert.IsType<OkObjectResult>((await controller.PostReservation(request)).Result);
+        var saved = await context.Reservations.Include(reservation => reservation.ReservationItems).SingleAsync();
+        var row = Assert.Single(saved.ReservationItems);
+        var firstCalculation = await Calculate(context, saved);
+        Assert.Equal(230m, firstCalculation.ReservationCalcs.SelectMany(calc => calc.ReservationCalcItems).Sum(item => item.Sum));
+
+        request.Id = saved.Id;
+        var requestedRow = request.ReservationItems.Single();
+        requestedRow.Id = row.Id;
+        requestedRow.BasePrice = 0m;
+        requestedRow.PricePerDay = 123.45678m;
+        requestedRow.PricePerWeek = null;
+        requestedRow.ArticleSelections!.Single().UnitPrice = 0m;
+        Assert.IsType<OkObjectResult>((await controller.PostReservation(request)).Result);
+        context.ChangeTracker.Clear();
+
+        var read = Assert.IsType<Reservation>(Assert.IsType<OkObjectResult>((await controller.GetReservation(saved.Id)).Result).Value);
+        var readRow = Assert.Single(read.ReservationItems);
+        Assert.Equal(0m, readRow.BasePrice);
+        Assert.Equal(123.45678m, readRow.PricePerDay);
+        Assert.Null(readRow.PricePerWeek);
+        Assert.Equal(1000m, readRow.PricePerMonth);
+        Assert.Equal(0m, Assert.Single(readRow.ReservationItemArticles).UnitPrice);
+        Assert.Equal(999m, (await context.Items.SingleAsync()).PricePerDay);
+        var updatedCalculation = await Calculate(context, read);
+        Assert.Equal(246.91356m, updatedCalculation.ReservationCalcs.SelectMany(calc => calc.ReservationCalcItems).Sum(item => item.Sum));
+    }
+
+    [Fact]
+    public async Task LegacyLiftUsesMasterPricesUntilAReservationPriceIsSet()
+    {
+        using var context = CreateContext();
+        var reservation = AddReservation(context, "LIFT");
+        var row = Assert.Single(reservation.ReservationItems);
+        row.Item!.BasePrice = 20m;
+        await context.SaveChangesAsync();
+
+        var controller = new ReservationController(context, new TestUserService());
+        var read = Assert.IsType<Reservation>(Assert.IsType<OkObjectResult>((await controller.GetReservation(reservation.Id)).Result).Value);
+        Assert.Equal(20m, Assert.Single(read.ReservationItems).BasePrice);
+        Assert.Equal(100m, Assert.Single(read.ReservationItems).PricePerDay);
+        Assert.Null(row.PricePerDay);
+        Assert.Equal(220m, (await Calculate(context, reservation)).ReservationCalcs
+            .SelectMany(calc => calc.ReservationCalcItems).Sum(item => item.Sum));
+
+        Assert.IsType<OkObjectResult>((await controller.PostReservation(new ReservationUpsertDto
+        {
+            Id = read.Id,
+            ReservationItems = read.ReservationItems,
+        })).Result);
+        Assert.Equal(20m, row.BasePrice);
+        Assert.Equal(100m, row.PricePerDay);
+        row.Item.PricePerDay = 500m;
+        await context.SaveChangesAsync();
+        Assert.Equal(220m, (await Calculate(context, reservation)).ReservationCalcs
+            .SelectMany(calc => calc.ReservationCalcItems).Sum(item => item.Sum));
+
+        row.BasePrice = null;
+        row.PricePerDay = null;
+        row.PricePerWeek = 0m;
+        await context.SaveChangesAsync();
+        read = Assert.IsType<Reservation>(Assert.IsType<OkObjectResult>((await controller.GetReservation(reservation.Id)).Result).Value);
+        Assert.Null(Assert.Single(read.ReservationItems).PricePerDay);
+        Assert.Equal(0m, Assert.Single(read.ReservationItems).PricePerWeek);
+        Assert.IsType<BadRequestObjectResult>((await Controller(context).ExecuteReservationPricing(new() { ReservationId = reservation.Id })).Result);
+    }
+
+    [Theory]
+    [InlineData(2, 0)]
+    [InlineData(3, 0)]
+    [InlineData(1, -1)]
+    public async Task RejectsInvalidLiftPricesOrSelectedItems(int itemId, int price)
+    {
+        using var context = CreateContext();
+        var reservation = AddReservation(context, "LIFT");
+        context.Items.AddRange(
+            new Item { Id = 2, OfficeId = 1, ItemTypeCode = "TOOL" },
+            new Item { Id = 3, OfficeId = 2, ItemTypeCode = "LIFT" });
+        await context.SaveChangesAsync();
+        var row = Assert.Single(reservation.ReservationItems);
+        var request = new ReservationUpsertDto
+        {
+            Id = reservation.Id,
+            ReservationItems = new List<ReservationItem>
+            {
+                new() { Id = row.Id, ItemId = itemId, ItemTypeCode = "LIFT", PricePerDay = price }
+            }
+        };
+
+        var result = await new ReservationController(context, new TestUserService()).PostReservation(request);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(1, row.ItemId);
+        Assert.Null(row.PricePerDay);
+    }
+
+    [Fact]
     public async Task RejectsNegativeCabinPricesOnSave()
     {
         using var context = CreateContext();
@@ -595,12 +714,14 @@ public class ReservationPricingTests
         Assert.Empty(await context.Reservations.ToListAsync());
     }
 
-    [Fact]
-    public async Task PlanningCabinChangeCopiesPricesButDateMoveRetainsEdits()
+    [Theory]
+    [InlineData("CABIN")]
+    [InlineData("LIFT")]
+    public async Task PlanningItemChangeCopiesPricesButDateMoveRetainsEdits(string itemType)
     {
         using var context = CreateContext();
-        var reservation = AddReservation(context, "CABIN");
-        context.Items.Add(new Item { Id = 2, OfficeId = 1, ItemTypeCode = "CABIN", BasePrice = 200m, PricePerDay = 150m, PricePerWeek = 450m, PricePerMonth = 1200m });
+        var reservation = AddReservation(context, itemType);
+        context.Items.Add(new Item { Id = 2, OfficeId = 1, ItemTypeCode = itemType, BasePrice = 200m, PricePerDay = 150m, PricePerWeek = 450m, PricePerMonth = 1200m });
         await context.SaveChangesAsync();
         var row = reservation.ReservationItems.Single();
         var controller = new PlanningController(context, new TestUserService());

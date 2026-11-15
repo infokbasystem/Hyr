@@ -648,6 +648,11 @@ namespace Backend.Controllers
                     NoteExternal = reservationInDb.NoteExternal,
                     OngoingInvoicingInterval = reservationInDb.OngoingInvoicingInterval,
                     PricingCalendarCode = ReservationPricingCalendarCodes.NormalizeOrDefault(reservationInDb.PricingCalendarCode),
+                    PlacementStreet = reservationInDb.PlacementStreet,
+                    PlacementZipCode = reservationInDb.PlacementZipCode,
+                    PlacementCity = reservationInDb.PlacementCity,
+                    PlacementLatitude = reservationInDb.PlacementLatitude,
+                    PlacementLongitude = reservationInDb.PlacementLongitude,
                     Orderer = reservationInDb.Orderer,
                     PickupPlaceNote = reservationInDb.PickupPlaceNote,
                     Reference = reservationInDb.Reference,
@@ -658,6 +663,9 @@ namespace Backend.Controllers
 
                 foreach (var item in reservationInDb.ReservationItems)
                 {
+                    var useLegacyLiftPrices = string.Equals(item.ItemTypeCode, "LIFT", StringComparison.OrdinalIgnoreCase)
+                        && !item.HasPriceSnapshot()
+                        && item.Item?.OfficeId == user.OfficeId;
                     var categoryName = string.Empty;
                     if (item.Item?.ItemCategoryId is int itemCategoryId && categoryNamesById.TryGetValue(itemCategoryId, out var resolvedCategoryName))
                     {
@@ -684,10 +692,10 @@ namespace Backend.Controllers
                         EvProlonging = item.EvProlonging,
                         FuelLitres = item.FuelLitres,
                         FuelUnitPrice = item.FuelUnitPrice,
-                        BasePrice = item.BasePrice,
-                        PricePerDay = item.PricePerDay,
-                        PricePerWeek = item.PricePerWeek,
-                        PricePerMonth = item.PricePerMonth,
+                        BasePrice = useLegacyLiftPrices ? item.Item?.BasePrice : item.BasePrice,
+                        PricePerDay = useLegacyLiftPrices ? item.Item?.PricePerDay : item.PricePerDay,
+                        PricePerWeek = useLegacyLiftPrices ? item.Item?.PricePerWeek : item.PricePerWeek,
+                        PricePerMonth = useLegacyLiftPrices ? item.Item?.PricePerMonth : item.PricePerMonth,
                         InsuranceCompanyId = item.InsuranceCompanyId,
                         InsuranceCounterpartRegNr = item.InsuranceCounterpartRegNr,
                         InsuranceCustomerIsCause = item.InsuranceCustomerIsCause,
@@ -921,22 +929,30 @@ namespace Backend.Controllers
                     return BadRequest(new { message = "Invalid pricing calendar code" });
                 }
 
-                var cabinRows = reservation.ReservationItems
-                    .Where(item => string.Equals(item.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                if (cabinRows.Any(item => new[] { item.BasePrice, item.PricePerDay, item.PricePerWeek, item.PricePerMonth }.Any(price => price < 0m)))
+                var placementError = PlacementLocation.Validate(reservation.PlacementLatitude, reservation.PlacementLongitude);
+                if (placementError != null)
                 {
-                    return BadRequest(new { message = "Bodens bokningspriser får inte vara negativa." });
+                    return BadRequest(new { message = placementError });
                 }
 
-                var cabinIds = cabinRows.Where(item => item.ItemId.HasValue).Select(item => item.ItemId!.Value).Distinct().ToList();
-                var validCabinIds = await _context.Items
-                    .Where(item => cabinIds.Contains(item.Id) && item.OfficeId == user.OfficeId && item.ItemTypeCode == "CABIN")
-                    .Select(item => item.Id)
-                    .ToListAsync();
-                if (cabinIds.Except(validCabinIds).Any())
+                var pricedRows = reservation.ReservationItems
+                    .Where(item => string.Equals(item.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(item.ItemTypeCode, "LIFT", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (pricedRows.Any(item => new[] { item.BasePrice, item.PricePerDay, item.PricePerWeek, item.PricePerMonth }.Any(price => price < 0m)))
                 {
-                    return BadRequest(new { message = "Boden måste tillhöra det aktuella kontoret." });
+                    return BadRequest(new { message = "Bodens eller liftens bokningspriser får inte vara negativa." });
+                }
+
+                var pricedItemIds = pricedRows.Where(item => item.ItemId.HasValue).Select(item => item.ItemId!.Value).Distinct().ToList();
+                var itemTypesById = await _context.Items
+                    .Where(item => pricedItemIds.Contains(item.Id) && item.OfficeId == user.OfficeId)
+                    .ToDictionaryAsync(item => item.Id, item => item.ItemTypeCode);
+                if (pricedRows.Any(item => item.ItemId.HasValue
+                    && (!itemTypesById.TryGetValue(item.ItemId.Value, out var itemType)
+                        || !string.Equals(itemType, item.ItemTypeCode, StringComparison.OrdinalIgnoreCase))))
+                {
+                    return BadRequest(new { message = "Boden eller liften måste tillhöra det aktuella kontoret och ha rätt typ." });
                 }
 
                 var newItemIds = reservation.ReservationItems
@@ -1064,6 +1080,11 @@ namespace Backend.Controllers
                 reservationInDb.IsOngoingInvoicing = reservation.IsOngoingInvoicing;
                 reservationInDb.OngoingInvoicingInterval = reservation.OngoingInvoicingInterval;
                 reservationInDb.PricingCalendarCode = normalizedPricingCalendarCode;
+                reservationInDb.PlacementStreet = reservation.PlacementStreet?.Trim() ?? string.Empty;
+                reservationInDb.PlacementZipCode = reservation.PlacementZipCode?.Trim() ?? string.Empty;
+                reservationInDb.PlacementCity = reservation.PlacementCity?.Trim() ?? string.Empty;
+                reservationInDb.PlacementLatitude = PlacementLocation.Round(reservation.PlacementLatitude);
+                reservationInDb.PlacementLongitude = PlacementLocation.Round(reservation.PlacementLongitude);
 
                 // Handle ReservationItems
                 var existingReservationItemIds = reservationInDb.ReservationItems.Select(ri => ri.Id).ToList();
@@ -1147,11 +1168,12 @@ namespace Backend.Controllers
                     reservationItemInDb.EvProlonging = reservationItem.EvProlonging;
                     reservationItemInDb.FuelLitres = reservationItem.FuelLitres;
                     reservationItemInDb.FuelUnitPrice = reservationItem.FuelUnitPrice;
-                    var isCabin = string.Equals(reservationItem.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase);
-                    reservationItemInDb.BasePrice = isCabin ? reservationItem.BasePrice : null;
-                    reservationItemInDb.PricePerDay = isCabin ? reservationItem.PricePerDay : null;
-                    reservationItemInDb.PricePerWeek = isCabin ? reservationItem.PricePerWeek : null;
-                    reservationItemInDb.PricePerMonth = isCabin ? reservationItem.PricePerMonth : null;
+                    var hasEditablePrices = string.Equals(reservationItem.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(reservationItem.ItemTypeCode, "LIFT", StringComparison.OrdinalIgnoreCase);
+                    reservationItemInDb.BasePrice = hasEditablePrices ? reservationItem.BasePrice : null;
+                    reservationItemInDb.PricePerDay = hasEditablePrices ? reservationItem.PricePerDay : null;
+                    reservationItemInDb.PricePerWeek = hasEditablePrices ? reservationItem.PricePerWeek : null;
+                    reservationItemInDb.PricePerMonth = hasEditablePrices ? reservationItem.PricePerMonth : null;
                     reservationItemInDb.InsuranceCompanyId = reservationItem.InsuranceCompanyId;
                     reservationItemInDb.InsuranceCounterpartRegNr = reservationItem.InsuranceCounterpartRegNr;
                     reservationItemInDb.InsuranceCustomerIsCause = reservationItem.InsuranceCustomerIsCause;

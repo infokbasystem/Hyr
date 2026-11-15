@@ -551,7 +551,10 @@ namespace Backend.Controllers
                 {
                     try
                     {
-                        var prices = string.Equals(reservationItem.Item.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase)
+                        var useReservationPrices = string.Equals(reservationItem.Item.ItemTypeCode, "CABIN", StringComparison.OrdinalIgnoreCase)
+                            || (string.Equals(reservationItem.Item.ItemTypeCode, "LIFT", StringComparison.OrdinalIgnoreCase)
+                                && reservationItem.HasPriceSnapshot());
+                        var prices = useReservationPrices
                             ? DirectItemPricingCalculator.Calculate(
                                 reservationItem.BasePrice, reservationItem.PricePerDay, reservationItem.PricePerWeek, reservationItem.PricePerMonth,
                                 periodStart.Value, periodEnd.Value, reservation.PricingCalendarCode)

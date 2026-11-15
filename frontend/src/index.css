@@ -17,21 +17,36 @@
   --text-xs: 0.7rem;
 }
 
+/* Mobile app (/m) on a phone held in landscape, where vertical space is scarce. */
+@custom-variant mobile-compact {
+  @media (orientation: landscape) and (max-height: 500px) {
+    &:where(html.mobile-app *) {
+      @slot;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .planning-loading-skeleton .react-loading-skeleton::after {
     animation: none;
   }
 }
 
+/* The mobile app (/m) is excluded from the desktop zoom. */
 @media screen and (max-width: 1700px) {
-  html {
+  html:not(.mobile-app) {
     --app-viewport-height: calc(100vh / 0.9);
     zoom: 0.9;
   }
 
-  .min-h-screen {
+  html:not(.mobile-app) .min-h-screen {
     min-height: var(--app-viewport-height);
   }
+}
+
+/* Prevents iOS Safari from zooming in when a form field gets focus. */
+html.mobile-app :is(input, select, textarea) {
+  font-size: max(16px, 1em);
 }
 
 input:-webkit-autofill,

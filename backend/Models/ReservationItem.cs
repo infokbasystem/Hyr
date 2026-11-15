@@ -77,5 +77,8 @@ namespace Backend.Models
         public virtual Reservation? Reservation { get; set; }
         public virtual Item? Item { get; set; }
         public virtual ICollection<ReservationItemArticle> ReservationItemArticles { get; set; } = new List<ReservationItemArticle>();
+
+        public bool HasPriceSnapshot() =>
+            BasePrice.HasValue || PricePerDay.HasValue || PricePerWeek.HasValue || PricePerMonth.HasValue;
     }
 }

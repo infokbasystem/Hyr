@@ -1,8 +1,8 @@
 import React from 'react'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { useParams, useBlocker } from "react-router";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CheckCircle2, Euro, Printer, Save, Trash2, RotateCcw, Wrench, HandCoins } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Euro, MapPin, Printer, Save, Trash2, RotateCcw, Wrench, HandCoins } from 'lucide-react';
 
 import ActionButton from '../../components/ActionButton';
 import { usePdf } from '../../contexts/PdfContext';
@@ -11,6 +11,11 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import SearchCustomer from '../../components/SearchCustomer';
 import AccessorySelectModal from '../../modals/AccessorySelectModal';
 import CarSearchModal from '../../modals/CarSearchModal';
+import { getPlacement, placementToReservationFields } from '../../lib/placementLocation';
+import PlacementSummary from '../../components/PlacementSummary';
+
+// Keep the placement editor out of the main bundle.
+const PlacementLocationModal = lazy(() => import('../../modals/PlacementLocationModal'));
 
 import LabeledInput from '../../components/LabeledInput';
 import LabeledSelect from '../../components/LabeledSelect';
@@ -29,12 +34,13 @@ import apiClient from '../../lib/apiClient';
 import { getCustomerById } from '../../lib/customerApi';
 import { getItemById } from '../../lib/itemApi';
 import { getItemCategoryById, getItemCategoryFormOptions } from '../../lib/itemCategoryApi';
-import { getPlanningCabins } from '../../lib/planningApi';
+import { getPlanningCabins, getPlanningLifts } from '../../lib/planningApi';
 import { getSharedRequest } from '../../lib/sharedRequest';
 import NumberInput from '../../components/NumberInput';
 
 const TIME_OF_DAY_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const ITEM_PERIOD_FIELDS = ['bookedFrom', 'bookedTo', 'actualFrom', 'actualTo'];
+const RESERVATION_PRICE_FIELDS = ['basePrice', 'pricePerDay', 'pricePerWeek', 'pricePerMonth'];
 const savedReservationRouteCache = new Map();
 const SKELETON_SHOW_DELAY_MS = 200;
 const SKELETON_TEST_DELAY_MS = 0;
@@ -51,7 +57,8 @@ const normalizeItemTypeCode = (value) => String(value || '').trim().toUpperCase(
 
 const isVehicleItem = (item) => normalizeItemTypeCode(item?.itemTypeCode) === 'VEHICLE';
 const isAccessoryItem = (item) => normalizeItemTypeCode(item?.itemTypeCode) === 'ACCESSORY';
-const getCabinRowKey = (item) => item?.id ? `id:${item.id}` : item?._cabinKey;
+const isCabinOrLiftItem = (item) => ['CABIN', 'LIFT'].includes(normalizeItemTypeCode(item?.itemTypeCode));
+const getRentalRowKey = (item) => item?.id ? `id:${item.id}` : item?._rentalKey;
 
 const getNowRoundedToNearestQuarterHour = () => {
     const now = new Date();
@@ -89,6 +96,9 @@ const toNumberOrNull = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
 };
+
+const hasAnyReservationPrice = (item) =>
+    RESERVATION_PRICE_FIELDS.some(field => toNumberOrNull(item?.[field]) !== null);
 
 const parseVatRateValue = (value) => {
     if (typeof value === 'number') {
@@ -337,6 +347,7 @@ const Reservation = () => {
         window.open(`/customer/${reservation.customerId}`, '_blank', 'noopener,noreferrer');
     };
     const [showCarSearchModal, setShowCarSearchModal] = useState(false);
+    const [showPlacementModal, setShowPlacementModal] = useState(false);
     const [showAccessorySelectModal, setShowAccessorySelectModal] = useState(false);
     const [showNoInvoiceItemsModal, setShowNoInvoiceItemsModal] = useState(false);
     const [openCalcMenu, setOpenCalcMenu] = useState(null);
@@ -347,11 +358,13 @@ const Reservation = () => {
     const [loading, setLoading] = useState(false);
     const [reservationFormOptions, setReservationFormOptions] = useState(initialReservationFormOptions);
     const [cabinOptions, setCabinOptions] = useState([]);
-    const [cabinArticleOptions, setCabinArticleOptions] = useState([]);
-    const [isLoadingCabinArticles, setIsLoadingCabinArticles] = useState(false);
+    const [liftOptions, setLiftOptions] = useState([]);
+    const [rentalArticleOptions, setRentalArticleOptions] = useState([]);
+    const [isLoadingRentalArticles, setIsLoadingRentalArticles] = useState(false);
     const [isLoadingCabins, setIsLoadingCabins] = useState(false);
-    const [pendingCabinKeys, setPendingCabinKeys] = useState([]);
-    const cabinRequestsRef = useRef(new Map());
+    const [isLoadingLifts, setIsLoadingLifts] = useState(false);
+    const [pendingRentalKeys, setPendingRentalKeys] = useState([]);
+    const rentalRequestsRef = useRef(new Map());
 
     const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
 
@@ -416,7 +429,7 @@ const Reservation = () => {
                 pricePerDay: toNumberOrNull(item?.pricePerDay),
                 pricePerWeek: toNumberOrNull(item?.pricePerWeek),
                 pricePerMonth: toNumberOrNull(item?.pricePerMonth),
-                articleSelections: normalizeItemTypeCode(item?.itemTypeCode) === 'CABIN'
+                articleSelections: isCabinOrLiftItem(item)
                     ? item?.reservationItemArticles
                         ?.filter(article => Number.isInteger(Number(article.articleId)) && Number(article.articleId) > 0)
                         .map(article => ({
@@ -425,7 +438,8 @@ const Reservation = () => {
                             unitPrice: toNumberOrNull(article.unitPrice),
                         }))
                     : undefined,
-                _cabinKey: undefined,
+                _rentalKey: undefined,
+                _liftHasDefaultPrices: undefined,
             }))
             : [];
 
@@ -470,10 +484,12 @@ const Reservation = () => {
     const toolItemTypeCode = getEnabledOfficeItemTypeCode('TOOL');
     const cabinItemTypeCode = getEnabledOfficeItemTypeCode('CABIN');
     const hasCabinRows = (reservation?.reservationItems || []).some(item => normalizeItemTypeCode(item?.itemTypeCode) === 'CABIN');
+    const hasLiftRows = (reservation?.reservationItems || []).some(item => normalizeItemTypeCode(item?.itemTypeCode) === 'LIFT');
+    const hasRentalRows = hasCabinRows || hasLiftRows;
 
     useEffect(() => {
-        const requests = cabinRequestsRef.current;
-        setPendingCabinKeys([]);
+        const requests = rentalRequestsRef.current;
+        setPendingRentalKeys([]);
         return () => requests.clear();
     }, [routeReservationId]);
 
@@ -509,16 +525,21 @@ const Reservation = () => {
     }, [hasCabinRows, routeReservationId]);
 
     useEffect(() => {
-        if (!hasCabinRows) {
+        if (!hasLiftRows) {
             return;
         }
 
         let isActive = true;
-        setIsLoadingCabinArticles(true);
-        getSharedRequest('reservation:cabin-article-options', getItemCategoryFormOptions)
-            .then(options => {
+        setIsLoadingLifts(true);
+        getPlanningLifts()
+            .then(lifts => {
                 if (isActive) {
-                    setCabinArticleOptions(options.articles);
+                    setLiftOptions(lifts.map(lift => ({
+                        id: lift.id,
+                        name: lift.itemNr || lift.serialNr,
+                        category: lift.category || '',
+                        model: lift.model || '',
+                    })));
                 }
             })
             .catch(error => {
@@ -528,12 +549,39 @@ const Reservation = () => {
             })
             .finally(() => {
                 if (isActive) {
-                    setIsLoadingCabinArticles(false);
+                    setIsLoadingLifts(false);
                 }
             });
 
         return () => { isActive = false; };
-    }, [hasCabinRows, routeReservationId]);
+    }, [hasLiftRows, routeReservationId]);
+
+    useEffect(() => {
+        if (!hasRentalRows) {
+            return;
+        }
+
+        let isActive = true;
+        setIsLoadingRentalArticles(true);
+        getSharedRequest('reservation:article-options', getItemCategoryFormOptions)
+            .then(options => {
+                if (isActive) {
+                    setRentalArticleOptions(options.articles);
+                }
+            })
+            .catch(error => {
+                if (isActive) {
+                    setMessages(prev => [...prev, { type: 'error', text: formatErrorMessage(error) }]);
+                }
+            })
+            .finally(() => {
+                if (isActive) {
+                    setIsLoadingRentalArticles(false);
+                }
+            });
+
+        return () => { isActive = false; };
+    }, [hasRentalRows, routeReservationId]);
 
     const isVehicleEnabledForOffice = Boolean(vehicleItemTypeCode);
     const hasMachineInfoItem = (reservation?.reservationItems || []).some((item) => {
@@ -953,6 +1001,16 @@ const Reservation = () => {
         }));
     };
 
+    const handlePlacementSave = (placement) => {
+        markStale();
+        setMessages(prev => prev.filter(msg => msg.type !== 'success'));
+        setReservation(prev => ({
+            ...prev,
+            ...placementToReservationFields(placement),
+        }));
+        setShowPlacementModal(false);
+    };
+
     const handleItemChange = (index, field, value) => {
         markStale();
         setMessages(prev => prev.filter(msg => msg.type !== 'success'));
@@ -1009,8 +1067,8 @@ const Reservation = () => {
     };
 
     const handleRemoveItem = (index) => {
-        cabinRequestsRef.current.delete(getCabinRowKey(reservation?.reservationItems?.[index]));
-        setPendingCabinKeys([...cabinRequestsRef.current.keys()]);
+        rentalRequestsRef.current.delete(getRentalRowKey(reservation?.reservationItems?.[index]));
+        setPendingRentalKeys([...rentalRequestsRef.current.keys()]);
         markStale();
         setMessages(prev => prev.filter(msg => msg.type !== 'success'));
         setReservation(prev => {
@@ -1245,8 +1303,8 @@ const Reservation = () => {
 
             const newItem = {
                 itemTypeCode: itemTypeCode,
-                ...(normalizeItemTypeValue(itemTypeCode) === 'CABIN' ? {
-                    _cabinKey: crypto.randomUUID(),
+                ...(['CABIN', 'LIFT'].includes(normalizeItemTypeValue(itemTypeCode)) ? {
+                    _rentalKey: crypto.randomUUID(),
                     basePrice: null,
                     pricePerDay: null,
                     pricePerWeek: null,
@@ -1338,48 +1396,54 @@ const Reservation = () => {
 
     const newReservationPrefill = location.state?.newReservationPrefill ?? null;
 
-    const loadCabinForRow = async (rowKey, cabinId) => {
+    const loadRentalItemForRow = async (rowKey, itemId, itemTypeCode, prefillItem = null) => {
         const requestToken = {};
-        cabinRequestsRef.current.set(rowKey, requestToken);
-        setPendingCabinKeys([...cabinRequestsRef.current.keys()]);
+        rentalRequestsRef.current.set(rowKey, requestToken);
+        setPendingRentalKeys([...rentalRequestsRef.current.keys()]);
 
         try {
-            const cabin = cabinId
-                ? await getSharedRequest(`reservation-cabin:${cabinId}`, () => getItemById(cabinId))
+            const selectedItem = itemId
+                ? await getSharedRequest(`reservation-item:${itemId}`, () => getItemById(itemId))
                 : null;
-            if (cabinRequestsRef.current.get(rowKey) !== requestToken) {
+            if (rentalRequestsRef.current.get(rowKey) !== requestToken) {
                 return;
             }
-            if (cabin && normalizeItemTypeCode(cabin.itemTypeCode) !== 'CABIN') {
-                throw new Error('Välj en bod.');
+            if (selectedItem && normalizeItemTypeCode(selectedItem.itemTypeCode) !== itemTypeCode) {
+                throw new Error(itemTypeCode === 'CABIN' ? 'Välj en bod.' : 'Välj en lift.');
             }
-            const [category, articleOptions] = cabin?.itemCategoryId
+            const [category, articleOptions] = selectedItem?.itemCategoryId
                 ? await Promise.all([
-                    getSharedRequest(`reservation:cabin-category:${cabin.itemCategoryId}`, () => getItemCategoryById(cabin.itemCategoryId)),
-                    getSharedRequest('reservation:cabin-article-options', getItemCategoryFormOptions),
+                    getSharedRequest(`reservation:item-category:${selectedItem.itemCategoryId}`, () => getItemCategoryById(selectedItem.itemCategoryId)),
+                    getSharedRequest('reservation:article-options', getItemCategoryFormOptions),
                 ])
                 : [null, null];
-            if (cabinRequestsRef.current.get(rowKey) !== requestToken) {
+            if (rentalRequestsRef.current.get(rowKey) !== requestToken) {
                 return;
             }
 
+            const selectedLift = itemTypeCode === 'LIFT'
+                ? liftOptions.find(lift => String(lift.id) === String(itemId))
+                : null;
             markStale();
             setMessages(prev => prev.filter(message => message.type !== 'success'));
             setReservation(prev => ({
                 ...prev,
-                reservationItems: (prev?.reservationItems || []).map(item => getCabinRowKey(item) === rowKey ? {
+                reservationItems: (prev?.reservationItems || []).map(item => getRentalRowKey(item) === rowKey ? {
                     ...item,
-                    itemId: cabin?.id ?? null,
-                    itemNr: cabin?.itemNr ?? '',
-                    itemName: cabin?.itemNr ?? '',
-                    manufacturer: cabin?.manufacturer ?? '',
-                    category: cabin?.itemCategoryName ?? '',
-                    model: cabin?.itemModelName ?? '',
-                    itemNote: cabin?.note ?? '',
-                    basePrice: cabin?.basePrice ?? null,
-                    pricePerDay: cabin?.pricePerDay ?? null,
-                    pricePerWeek: cabin?.pricePerWeek ?? null,
-                    pricePerMonth: cabin?.pricePerMonth ?? null,
+                    itemId: selectedItem?.id ?? null,
+                    itemNr: selectedItem?.itemNr ?? '',
+                    itemName: selectedItem?.itemNr ?? '',
+                    manufacturer: selectedItem?.manufacturer ?? '',
+                    category: selectedItem?.itemCategoryName ?? category?.name ?? '',
+                    model: selectedItem?.itemModelName ?? selectedLift?.model
+                        ?? (String(item.itemId) === String(itemId) ? item.model : null)
+                        ?? prefillItem?.itemModelName ?? prefillItem?.model ?? '',
+                    itemNote: selectedItem?.note ?? '',
+                    basePrice: selectedItem?.basePrice ?? null,
+                    pricePerDay: selectedItem?.pricePerDay ?? null,
+                    pricePerWeek: selectedItem?.pricePerWeek ?? null,
+                    pricePerMonth: selectedItem?.pricePerMonth ?? null,
+                    ...(itemTypeCode === 'LIFT' ? { _liftHasDefaultPrices: hasAnyReservationPrice(selectedItem) } : {}),
                     reservationItemArticles: (category?.articles || []).map(article => ({
                         ...article,
                         unitPrice: articleOptions?.articles.find(option => String(option.id) === String(article.articleId))?.price ?? null,
@@ -1387,25 +1451,25 @@ const Reservation = () => {
                 } : item),
             }));
         } catch (error) {
-            if (cabinRequestsRef.current.get(rowKey) === requestToken) {
+            if (rentalRequestsRef.current.get(rowKey) === requestToken) {
                 setMessages(prev => [...prev, { type: 'error', text: formatErrorMessage(error) }]);
             }
         } finally {
-            if (cabinRequestsRef.current.get(rowKey) === requestToken) {
-                cabinRequestsRef.current.delete(rowKey);
-                setPendingCabinKeys([...cabinRequestsRef.current.keys()]);
+            if (rentalRequestsRef.current.get(rowKey) === requestToken) {
+                rentalRequestsRef.current.delete(rowKey);
+                setPendingRentalKeys([...rentalRequestsRef.current.keys()]);
             }
         }
     };
 
-    const handleCabinSelect = (index, value) => {
+    const handleRentalItemSelect = (index, value, itemTypeCode) => {
         const item = reservation?.reservationItems?.[index];
-        const cabinId = toNumberOrNull(value);
-        const rowKey = getCabinRowKey(item);
-        if (!rowKey || (cabinId === item?.itemId && !cabinRequestsRef.current.has(rowKey))) {
+        const itemId = toNumberOrNull(value);
+        const rowKey = getRentalRowKey(item);
+        if (!rowKey || (itemId === item?.itemId && !rentalRequestsRef.current.has(rowKey))) {
             return;
         }
-        void loadCabinForRow(rowKey, cabinId);
+        void loadRentalItemForRow(rowKey, itemId, itemTypeCode);
     };
 
     const handleCabinPrefill = ({ period, cabin }) => {
@@ -1417,7 +1481,7 @@ const Reservation = () => {
 
             const newItem = {
                 itemTypeCode: 'CABIN',
-                _cabinKey: rowKey,
+                _rentalKey: rowKey,
                 itemId: null,
                 basePrice: null,
                 pricePerDay: null,
@@ -1439,7 +1503,7 @@ const Reservation = () => {
                 reservationItems: [...(prev?.reservationItems || []), newItem]
             };
         });
-        void loadCabinForRow(rowKey, cabin?.id);
+        void loadRentalItemForRow(rowKey, cabin?.id, 'CABIN');
     };
 
     useEffect(() => {
@@ -1468,13 +1532,15 @@ const Reservation = () => {
         };
 
         const handleLiftPrefill = ({ period, lift }) => {
+            const rowKey = crypto.randomUUID();
             markStale();
             setMessages(prev => prev.filter(message => message.type !== 'success'));
             const defaultBookedFromTime = String(reservationFormOptions?.defaultBookedFromTime ?? '').trim();
             const defaultBookedToTime = String(reservationFormOptions?.defaultBookedToTime ?? '').trim();
             const newItem = {
                 itemTypeCode: 'LIFT',
-                itemId: Number.isInteger(lift?.id) ? lift.id : null,
+                _rentalKey: rowKey,
+                itemId: null,
                 itemNr: lift?.itemNr || '',
                 itemName: lift?.itemNr || '',
                 manufacturer: lift?.manufacturer || '',
@@ -1484,11 +1550,17 @@ const Reservation = () => {
                 bookedTo: applyTimeOfDay(period?.to, defaultBookedToTime),
                 actualFrom: '',
                 actualTo: '',
+                basePrice: null,
+                pricePerDay: null,
+                pricePerWeek: null,
+                pricePerMonth: null,
+                reservationItemArticles: [],
             };
             setReservation(prev => ({
                 ...prev,
                 reservationItems: [...(prev?.reservationItems || []), newItem],
             }));
+            void loadRentalItemForRow(rowKey, lift?.id, 'LIFT', lift);
         };
 
         if (newReservationPrefill.cabin) {
@@ -1548,6 +1620,11 @@ const Reservation = () => {
                 pricingCalendarCode: 'ALLDAYS',
                 note: '',
                 noteExternal: '',
+                placementStreet: '',
+                placementZipCode: '',
+                placementCity: '',
+                placementLatitude: null,
+                placementLongitude: null,
                 reservationItems: []
             };
             setReservation(newReservation);
@@ -1662,8 +1739,8 @@ const Reservation = () => {
     }
 
     const saveReservationAndRefresh = async ({ showSuccessMessage = true, reloadPdf = true } = {}) => {
-        if (cabinRequestsRef.current.size > 0) {
-            setMessages([{ type: 'error', text: 'Vänta tills bodens priser har hämtats.' }]);
+        if (rentalRequestsRef.current.size > 0) {
+            setMessages([{ type: 'error', text: 'Vänta tills bodens eller liftens priser har hämtats.' }]);
             return null;
         }
         if (!reservation) {
@@ -1681,13 +1758,28 @@ const Reservation = () => {
             return null;
         }
 
+        const hasClearedLiftPrices = (reservation.reservationItems || []).some(item => {
+            if (normalizeItemTypeCode(item?.itemTypeCode) !== 'LIFT' || !item?.itemId || hasAnyReservationPrice(item)) {
+                return false;
+            }
+            const originalItem = item.id
+                ? (originalReservation?.reservationItems || []).find(original =>
+                    original.id === item.id && original.itemId === item.itemId)
+                : null;
+            return item._liftHasDefaultPrices || hasAnyReservationPrice(originalItem);
+        });
+        if (hasClearedLiftPrices) {
+            setMessages([{ type: 'error', text: 'Ange minst ett pris på liften. Använd 0 om priset ska vara noll.' }]);
+            return null;
+        }
+
         const hasArticleWithoutPrice = (reservation.reservationItems || []).some(item =>
-            normalizeItemTypeCode(item?.itemTypeCode) === 'CABIN'
+            isCabinOrLiftItem(item)
             && (item.reservationItemArticles || []).some(article =>
                 article.articleId && toNumberOrNull(article.unitPrice) === null)
         );
         if (hasArticleWithoutPrice) {
-            setMessages([{ type: 'error', text: 'Ange ett à-pris för alla valda artiklar på bokningens bodar. Ange 0 för en kostnadsfri artikel.' }]);
+            setMessages([{ type: 'error', text: 'Ange ett à-pris för alla valda artiklar på bokningens bodar och liftar. Ange 0 för en kostnadsfri artikel.' }]);
             return null;
         }
 
@@ -1748,8 +1840,8 @@ const Reservation = () => {
     };
 
     const handleCalculatePrice = async () => {
-        if (cabinRequestsRef.current.size > 0) {
-            setMessages([{ type: 'error', text: 'Vänta tills bodens priser har hämtats.' }]);
+        if (rentalRequestsRef.current.size > 0) {
+            setMessages([{ type: 'error', text: 'Vänta tills bodens eller liftens priser har hämtats.' }]);
             return;
         }
         if (!reservation) {
@@ -2174,6 +2266,18 @@ const Reservation = () => {
                 showAvailabilityPanel={true}
             />
 
+            {showPlacementModal && (
+                <Suspense fallback={null}>
+                    <PlacementLocationModal
+                        initialPlacement={getPlacement(reservation)}
+                        customerId={reservation?.customerId ?? null}
+                        fallbackAddress={{ street: reservation?.address ?? '', zipCode: reservation?.zipCode ?? '', city: '' }}
+                        onClose={() => setShowPlacementModal(false)}
+                        onSave={handlePlacementSave}
+                    />
+                </Suspense>
+            )}
+
             {/* Unsaved Changes Warning Modal */}
             <ConfirmationModal
                 isOpen={showUnsavedWarning}
@@ -2273,7 +2377,7 @@ const Reservation = () => {
                                                 ? 'border-rose-200 bg-rose-50 text-rose-800'
                                                 : message.type === 'warning'
                                                     ? 'border-amber-200 bg-amber-50 text-amber-800'
-                                                : 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                    : 'border-emerald-200 bg-emerald-100 text-emerald-800'
                                                 }`}
                                         >
                                             {typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}
@@ -2314,6 +2418,12 @@ const Reservation = () => {
                                             accent="sky"
                                         />
                                     )}
+                                    <ActionButton
+                                        label="Placering"
+                                        icon={MapPin}
+                                        onClick={() => setShowPlacementModal(true)}
+                                        accent="teal"
+                                    />
                                     <div className='ml-20 flex items-center flex-wrap gap-3'>
                                         <ActionButton
                                             label="Lämna ut"
@@ -2444,27 +2554,6 @@ const Reservation = () => {
                                     )}
                                 </span>
                                 <span>
-                                    <LabeledTextArea
-                                        name='internalNote'
-                                        label='Notering, intern'
-                                        value={reservation?.note || ''}
-                                        onChange={(e) => handleChange('note', e)}
-                                        labelWidth="w-18"
-                                        margintop="0"
-                                        height='h-16'
-                                        placeholder="" />
-                                    <LabeledTextArea
-                                        name='externalNoteText'
-                                        label='Notering, extern'
-                                        value={reservation?.noteExternal || ''}
-                                        onChange={(e) => handleChange('noteExternal', e)}
-                                        labelWidth="w-18"
-                                        margintop="0"
-                                        height='h-16'
-                                        placeholder="" />
-                                </span>
-
-                                <span className="w-52">
                                     <LabeledSelect
                                         name='priceListId'
                                         label='Prislista'
@@ -2474,7 +2563,6 @@ const Reservation = () => {
                                                 handleChange('priceListId', null);
                                                 return;
                                             }
-
                                             const nextPriceListId = Number(value);
                                             handleChange('priceListId', Number.isFinite(nextPriceListId) ? nextPriceListId : null);
                                         }}
@@ -2484,13 +2572,22 @@ const Reservation = () => {
                                         margintop="0"
                                     />
                                     <LabeledTextArea
+                                        name='internalNote'
+                                        label='Notering'
+                                        value={reservation?.note || ''}
+                                        onChange={(e) => handleChange('note', e)}
+                                        labelWidth="w-18"
+                                        margintop="0"
+                                        height='h-12'
+                                        placeholder="" />
+                                    <LabeledTextArea
                                         name='externalNote'
                                         label='Märkning'
                                         value={reservation?.customerMarking || ''}
                                         onChange={(e) => handleChange('customerMarking', e)}
                                         labelWidth="w-18"
                                         margintop="0"
-                                        height='h-12'
+                                        height='h-8'
                                         placeholder="" />
                                     <LabeledCheckbox
                                         id="is-ongoing-invoicing"
@@ -2501,9 +2598,23 @@ const Reservation = () => {
                                         checked={Boolean(reservation?.isOngoingInvoicing)}
                                         onChange={(checked) => handleChange('isOngoingInvoicing', checked)}
                                         color="green"
-                                        className="mt-2"
+                                        className="mt-0"
                                     />
+
+                                    {/* <LabeledTextArea
+                                        name='externalNoteText'
+                                        label='Notering, extern'
+                                        value={reservation?.noteExternal || ''}
+                                        onChange={(e) => handleChange('noteExternal', e)}
+                                        labelWidth="w-18"
+                                        margintop="0"
+                                        height='h-16'
+                                        placeholder="" /> */}
                                 </span>
+
+                                <div id="placement-location" className="w-70">
+                                    <PlacementSummary reservation={reservation} onOpen={() => setShowPlacementModal(true)} />
+                                </div>
                             </div>
 
                             <div className="flex items-center space-x-2 mt-4 tracking-[0.10em]">
@@ -2629,12 +2740,18 @@ const Reservation = () => {
                                             case 'LIFT':
                                                 return (
                                                     <ReservationItemLift
-                                                        key={item.id || index}
+                                                        key={item.id || item._rentalKey || index}
                                                         item={item}
                                                         index={index}
                                                         onChange={handleItemChange}
                                                         onRemove={handleRemoveItem}
                                                         itemCategories={itemCategories}
+                                                        liftOptions={liftOptions}
+                                                        onLiftSelect={(rowIndex, value) => handleRentalItemSelect(rowIndex, value, 'LIFT')}
+                                                        isLoadingLifts={isLoadingLifts}
+                                                        isLoadingPrices={pendingRentalKeys.includes(getRentalRowKey(item))}
+                                                        articleOptions={rentalArticleOptions}
+                                                        isLoadingArticles={isLoadingRentalArticles}
                                                         defaultBookedFromTime={defaultBookedFromTime}
                                                         defaultBookedToTime={defaultBookedToTime}
                                                     />
@@ -2687,11 +2804,11 @@ const Reservation = () => {
                                                         onChange={handleItemChange}
                                                         onRemove={handleRemoveItem}
                                                         cabinOptions={cabinOptions}
-                                                        onCabinSelect={handleCabinSelect}
+                                                        onCabinSelect={(rowIndex, value) => handleRentalItemSelect(rowIndex, value, 'CABIN')}
                                                         isLoadingCabins={isLoadingCabins}
-                                                        isLoadingPrices={pendingCabinKeys.includes(getCabinRowKey(item))}
-                                                        articleOptions={cabinArticleOptions}
-                                                        isLoadingArticles={isLoadingCabinArticles}
+                                                        isLoadingPrices={pendingRentalKeys.includes(getRentalRowKey(item))}
+                                                        articleOptions={rentalArticleOptions}
+                                                        isLoadingArticles={isLoadingRentalArticles}
                                                         defaultBookedFromTime={defaultBookedFromTime}
                                                         defaultBookedToTime={defaultBookedToTime}
                                                     />
@@ -2730,159 +2847,159 @@ const Reservation = () => {
                             </div>
 
                             {hasReservationItems && (
-                            <div className="mt-4">
-                                <div className="grid grid-cols-[1fr_3fr_3fr] gap-10 rounded-sm border border-gray-300 bg-sky-50/50 p-3 pb-5">
-                                    <div className="flex flex-col gap-3">
-                                        {/* Debit periods */}
-                                        <h3 className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500 pl-2">PERIODER</h3>
+                                <div className="mt-4">
+                                    <div className="grid grid-cols-[1fr_3fr_3fr] gap-10 rounded-sm border border-gray-300 bg-sky-50/50 p-3 pb-5">
+                                        <div className="flex flex-col gap-3">
+                                            {/* Debit periods */}
+                                            <h3 className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500 pl-2">PERIODER</h3>
 
-                                        {debitPeriods.length === 0 ? (
-                                            <p className="pl-2 text-xs text-gray-500">Inga perioder</p>
-                                        ) : (
-                                            <div className="text-xs text-gray-700">
-                                                {debitPeriods.map((period) => {
-                                                    const isSelected = period.calcIndex === selectedDebitCalcIndex;
-
-                                                    return (
-                                                        <div
-                                                            key={period.key}
-                                                            role="button"
-                                                            tabIndex={0}
-                                                            onClick={() => setSelectedDebitCalcIndex(period.calcIndex)}
-                                                            onKeyDown={(event) => {
-                                                                if (event.key === 'Enter' || event.key === ' ') {
-                                                                    event.preventDefault();
-                                                                    setSelectedDebitCalcIndex(period.calcIndex);
-                                                                }
-                                                            }}
-                                                            className={`mb-2 w-full rounded-sm border px-3 pt-2 pb-2 text-left transition leading-2 ${isSelected
-                                                                ? 'border-lime-500 bg-lime-100/50 text-gray-900'
-                                                                : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300 hover:bg-gray-50'
-                                                                }`}
-                                                        >
-                                                            <div className="text-xs font-semibold uppercase tracking-[0.0em] text-gray-500">{formatDateOnly(period.dateTimeFrom) || '-'} - {formatDateOnly(period.dateTimeTo) || '-'}</div>
-                                                            <div className="mt-1 text-tiny tracking-[0.06em] text-gray-500">Mottagare: {period.receiverTypeCode}</div>
-                                                            <div className="mt-1 flex flex-wrap items-center gap-1 text-tiny">
-                                                                {period.invoices.length === 0 ? (
-                                                                    <span className="text-gray-500">Ej fakturerad</span>
-                                                                ) : (
-                                                                    <>
-                                                                        <span className="text-gray-500">Faktura:</span>
-                                                                        {period.invoices.map((invoice, invoiceIndex) => (
-                                                                            <React.Fragment key={`period-invoice-${period.key}-${invoice.id}`}>
-                                                                                {invoiceIndex > 0 && <span className="text-gray-400">,</span>}
-                                                                                <NavLink
-                                                                                    to={`/finance/invoice/${invoice.id}`}
-                                                                                    className="text-sky-700 hover:text-sky-900 hover:underline"
-                                                                                >
-                                                                                    {invoice.invoiceNr || invoice.id}
-                                                                                </NavLink>
-                                                                            </React.Fragment>
-                                                                        ))}
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="overflow-x-auto pt-2">
-                                        <table className="w-full table-fixed border-collapse text-xs" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
-                                            <colgroup>
-                                                <col />
-                                                <col className="w-[70px]" />
-                                                <col className="w-[70px]" />
-                                                {/* <col className="w-[35px]" /> */}
-                                                <col className="w-[64px]" />
-                                                <col className="w-[80px]" />
-                                                <col className="w-[40px]" />
-                                            </colgroup>
-                                            <thead>
-                                                <tr className="tracking-[0.1em] text-gray-500">
-                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-left"></th>
-                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Antal</th>
-                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Á-pris</th>
-                                                    {/* <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Rbt</th> */}
-                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Moms</th>
-                                                    {/* <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">ex moms</th> */}
-                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">ink moms</th>
-                                                    <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {selectedDebitPeriod === null ? (
-                                                    <tr>
-                                                        <td colSpan={6} className="px-2 py-6 text-center text-xs text-gray-500">
-                                                            Välj en period till vänster
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    (() => {
-                                                        const calcIndex = selectedDebitPeriod.calcIndex;
-                                                        const item = selectedReservationItem;
-                                                        const rows = selectedReservationCalcRows;
-                                                        const itemTypeCode = normalizeItemTypeCode(item?.itemTypeCode);
-                                                        const alwaysGrouped = itemTypeCode === 'VEHICLE' || itemTypeCode === 'LIFT';
-                                                        const accessoryGrouped = itemTypeCode === 'ACCESSORY' && rows.length > 1;
-                                                        const showGroupHeader = alwaysGrouped || accessoryGrouped;
+                                            {debitPeriods.length === 0 ? (
+                                                <p className="pl-2 text-xs text-gray-500">Inga perioder</p>
+                                            ) : (
+                                                <div className="text-xs text-gray-700">
+                                                    {debitPeriods.map((period) => {
+                                                        const isSelected = period.calcIndex === selectedDebitCalcIndex;
 
                                                         return (
-                                                            <>
-                                                                {showGroupHeader && (
-                                                                    <tr>
-                                                                        <td colSpan={6} className="px-2 py-2 text-xs font-semibold tracking-[0.08em] text-gray-700">
-                                                                            {getReservationItemDisplayName(item)}
-                                                                        </td>
-                                                                    </tr>
-                                                                )}
+                                                            <div
+                                                                key={period.key}
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                onClick={() => setSelectedDebitCalcIndex(period.calcIndex)}
+                                                                onKeyDown={(event) => {
+                                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                                        event.preventDefault();
+                                                                        setSelectedDebitCalcIndex(period.calcIndex);
+                                                                    }
+                                                                }}
+                                                                className={`mb-2 w-full rounded-sm border px-3 pt-2 pb-2 text-left transition leading-2 ${isSelected
+                                                                    ? 'border-lime-500 bg-lime-100/50 text-gray-900'
+                                                                    : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300 hover:bg-gray-50'
+                                                                    }`}
+                                                            >
+                                                                <div className="text-xs font-semibold uppercase tracking-[0.0em] text-gray-500">{formatDateOnly(period.dateTimeFrom) || '-'} - {formatDateOnly(period.dateTimeTo) || '-'}</div>
+                                                                <div className="mt-1 text-tiny tracking-[0.06em] text-gray-500">Mottagare: {period.receiverTypeCode}</div>
+                                                                <div className="mt-1 flex flex-wrap items-center gap-1 text-tiny">
+                                                                    {period.invoices.length === 0 ? (
+                                                                        <span className="text-gray-500">Ej fakturerad</span>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span className="text-gray-500">Faktura:</span>
+                                                                            {period.invoices.map((invoice, invoiceIndex) => (
+                                                                                <React.Fragment key={`period-invoice-${period.key}-${invoice.id}`}>
+                                                                                    {invoiceIndex > 0 && <span className="text-gray-400">,</span>}
+                                                                                    <NavLink
+                                                                                        to={`/finance/invoice/${invoice.id}`}
+                                                                                        className="text-sky-700 hover:text-sky-900 hover:underline"
+                                                                                    >
+                                                                                        {invoice.invoiceNr || invoice.id}
+                                                                                    </NavLink>
+                                                                                </React.Fragment>
+                                                                            ))}
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
 
-                                                                {!showGroupHeader && (
-                                                                    <tr aria-hidden="true">
-                                                                        <td colSpan={6} className="h-0.5 p-0 bg-amber-300/50"></td>
-                                                                    </tr>
-                                                                )}
+                                        <div className="overflow-x-auto pt-2">
+                                            <table className="w-full table-fixed border-collapse text-xs" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                                <colgroup>
+                                                    <col />
+                                                    <col className="w-[70px]" />
+                                                    <col className="w-[70px]" />
+                                                    {/* <col className="w-[35px]" /> */}
+                                                    <col className="w-[64px]" />
+                                                    <col className="w-[80px]" />
+                                                    <col className="w-[40px]" />
+                                                </colgroup>
+                                                <thead>
+                                                    <tr className="tracking-[0.1em] text-gray-500">
+                                                        <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-left"></th>
+                                                        <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Antal</th>
+                                                        <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Á-pris</th>
+                                                        {/* <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Rbt</th> */}
+                                                        <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">Moms</th>
+                                                        {/* <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">ex moms</th> */}
+                                                        <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right">ink moms</th>
+                                                        <th className="px-2 pb-0.5 text-tiny font-medium uppercase text-gray-400 text-right"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedDebitPeriod === null ? (
+                                                        <tr>
+                                                            <td colSpan={6} className="px-2 py-6 text-center text-xs text-gray-500">
+                                                                Välj en period till vänster
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        (() => {
+                                                            const calcIndex = selectedDebitPeriod.calcIndex;
+                                                            const item = selectedReservationItem;
+                                                            const rows = selectedReservationCalcRows;
+                                                            const itemTypeCode = normalizeItemTypeCode(item?.itemTypeCode);
+                                                            const alwaysGrouped = itemTypeCode === 'VEHICLE' || itemTypeCode === 'LIFT';
+                                                            const accessoryGrouped = itemTypeCode === 'ACCESSORY' && rows.length > 1;
+                                                            const showGroupHeader = alwaysGrouped || accessoryGrouped;
 
-                                                                {rows.length === 0 && (
-                                                                    <tr>
-                                                                        <td colSpan={6} className="px-2 py-4 text-center text-xs text-gray-500">
-                                                                            Inga beräkningsrader för vald period
-                                                                        </td>
-                                                                    </tr>
-                                                                )}
-                                                                {rows.map((row, rowIndex) => (
-                                                                    <tr key={`calc-row-${row?.id || `${calcIndex}-${rowIndex}`}`} className="bg-white border-b border-gray-100 transition-colors">
-                                                                        <td className="p-0 bg-white">
-                                                                            <Input
-                                                                                type="text"
-                                                                                stylePreset="gridCell"
-                                                                                value={row?.text || ''}
-                                                                                onChange={(e) => handleCalcItemChange(calcIndex, rowIndex, 'text', e.target.value)}
-                                                                            />
-                                                                        </td>
-                                                                        <td className="">
-                                                                            <NumberInput
-                                                                                rowId={row?.id}
-                                                                                field="qty"
-                                                                                value={row?.qty ?? ''}
-                                                                                decimals={2}
-                                                                                stylePreset="gridCell"
-                                                                                onChange={(rowId, field, newValue) => handleCalcItemChange(calcIndex, rowIndex, field, newValue)}
-                                                                            />
-                                                                        </td>
-                                                                        <td className="">
-                                                                            <NumberInput
-                                                                                rowId={row?.id}
-                                                                                field="unitPrice"
-                                                                                value={row?.unitPrice ?? ''}
-                                                                                decimals={2}
-                                                                                stylePreset="gridCell"
-                                                                                onChange={(rowId, field, newValue) => handleCalcItemChange(calcIndex, rowIndex, field, newValue)}
-                                                                            />
-                                                                        </td>
-                                                                        {/* <td className="">
+                                                            return (
+                                                                <>
+                                                                    {showGroupHeader && (
+                                                                        <tr>
+                                                                            <td colSpan={6} className="px-2 py-2 text-xs font-semibold tracking-[0.08em] text-gray-700">
+                                                                                {getReservationItemDisplayName(item)}
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+
+                                                                    {!showGroupHeader && (
+                                                                        <tr aria-hidden="true">
+                                                                            <td colSpan={6} className="h-0.5 p-0 bg-amber-300/50"></td>
+                                                                        </tr>
+                                                                    )}
+
+                                                                    {rows.length === 0 && (
+                                                                        <tr>
+                                                                            <td colSpan={6} className="px-2 py-4 text-center text-xs text-gray-500">
+                                                                                Inga beräkningsrader för vald period
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                    {rows.map((row, rowIndex) => (
+                                                                        <tr key={`calc-row-${row?.id || `${calcIndex}-${rowIndex}`}`} className="bg-white border-b border-gray-100 transition-colors">
+                                                                            <td className="p-0 bg-white">
+                                                                                <Input
+                                                                                    type="text"
+                                                                                    stylePreset="gridCell"
+                                                                                    value={row?.text || ''}
+                                                                                    onChange={(e) => handleCalcItemChange(calcIndex, rowIndex, 'text', e.target.value)}
+                                                                                />
+                                                                            </td>
+                                                                            <td className="">
+                                                                                <NumberInput
+                                                                                    rowId={row?.id}
+                                                                                    field="qty"
+                                                                                    value={row?.qty ?? ''}
+                                                                                    decimals={2}
+                                                                                    stylePreset="gridCell"
+                                                                                    onChange={(rowId, field, newValue) => handleCalcItemChange(calcIndex, rowIndex, field, newValue)}
+                                                                                />
+                                                                            </td>
+                                                                            <td className="">
+                                                                                <NumberInput
+                                                                                    rowId={row?.id}
+                                                                                    field="unitPrice"
+                                                                                    value={row?.unitPrice ?? ''}
+                                                                                    decimals={2}
+                                                                                    stylePreset="gridCell"
+                                                                                    onChange={(rowId, field, newValue) => handleCalcItemChange(calcIndex, rowIndex, field, newValue)}
+                                                                                />
+                                                                            </td>
+                                                                            {/* <td className="">
                                                                             <NumberInput
                                                                                 rowId={row?.id}
                                                                                 field="discount"
@@ -2892,183 +3009,183 @@ const Reservation = () => {
                                                                                 onChange={(rowId, field, newValue) => handleCalcItemChange(calcIndex, rowIndex, field, newValue)}
                                                                             />
                                                                         </td> */}
-                                                                        <td className="px-3 pt-[6px] pb-[3px] text-right text-xs text-gray-800">
-                                                                            {formatAmount(getVatRateFromRow(row))}
-                                                                        </td>
-                                                                        <td className="">
-                                                                            <NumberInput
-                                                                                rowId={row?.id}
-                                                                                field="sumInclVat"
-                                                                                value={getSumInclVat(row?.sum, row) ?? ''}
-                                                                                decimals={2}
-                                                                                stylePreset="gridCell"
-                                                                                onChange={() => { }}
-                                                                                disabled={true}
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-1">
-                                                                            <div className="relative flex justify-end" data-calc-menu-root="true">
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="inline-flex h-7 w-7 items-center justify-center bg-white text-gray-700 hover:bg-gray-100"
-                                                                                    onClick={() => setOpenCalcMenu(openCalcMenu === `${calcIndex}-${rowIndex}` ? null : `${calcIndex}-${rowIndex}`)}
-                                                                                    title="Åtgärder"
-                                                                                >
-                                                                                    <Wrench className="h-4 w-4" />
-                                                                                </button>
+                                                                            <td className="px-3 pt-[6px] pb-[3px] text-right text-xs text-gray-800">
+                                                                                {formatAmount(getVatRateFromRow(row))}
+                                                                            </td>
+                                                                            <td className="">
+                                                                                <NumberInput
+                                                                                    rowId={row?.id}
+                                                                                    field="sumInclVat"
+                                                                                    value={getSumInclVat(row?.sum, row) ?? ''}
+                                                                                    decimals={2}
+                                                                                    stylePreset="gridCell"
+                                                                                    onChange={() => { }}
+                                                                                    disabled={true}
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-1">
+                                                                                <div className="relative flex justify-end" data-calc-menu-root="true">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className="inline-flex h-7 w-7 items-center justify-center bg-white text-gray-700 hover:bg-gray-100"
+                                                                                        onClick={() => setOpenCalcMenu(openCalcMenu === `${calcIndex}-${rowIndex}` ? null : `${calcIndex}-${rowIndex}`)}
+                                                                                        title="Åtgärder"
+                                                                                    >
+                                                                                        <Wrench className="h-4 w-4" />
+                                                                                    </button>
 
-                                                                                {openCalcMenu === `${calcIndex}-${rowIndex}` && (
-                                                                                    <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            className="block w-full px-4 py-3 text-left text-xs text-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                                                                                            onClick={() => {
-                                                                                                handleAddCalcRow(calcIndex, item, rowIndex);
-                                                                                                closeCalcMenu();
-                                                                                            }}
-                                                                                        >
-                                                                                            Lägg till rad under
-                                                                                        </button>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            className="block w-full border-t border-gray-200 px-4 py-3 text-left text-xs text-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white"
-                                                                                            onClick={() => {
-                                                                                                handleRemoveCalcRow(calcIndex, rowIndex, item);
-                                                                                                closeCalcMenu();
-                                                                                            }}
-                                                                                            disabled={rows.length <= 1}
-                                                                                        >
-                                                                                            Ta bort rad
-                                                                                        </button>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </>
-                                                        );
-                                                    })()
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                                                    {openCalcMenu === `${calcIndex}-${rowIndex}` && (
+                                                                                        <div className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="block w-full px-4 py-3 text-left text-xs text-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                                                                                                onClick={() => {
+                                                                                                    handleAddCalcRow(calcIndex, item, rowIndex);
+                                                                                                    closeCalcMenu();
+                                                                                                }}
+                                                                                            >
+                                                                                                Lägg till rad under
+                                                                                            </button>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                className="block w-full border-t border-gray-200 px-4 py-3 text-left text-xs text-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white"
+                                                                                                onClick={() => {
+                                                                                                    handleRemoveCalcRow(calcIndex, rowIndex, item);
+                                                                                                    closeCalcMenu();
+                                                                                                }}
+                                                                                                disabled={rows.length <= 1}
+                                                                                            >
+                                                                                                Ta bort rad
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </>
+                                                            );
+                                                        })()
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
 
-                                    <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-3">
                                             <div className="flex items-center justify-between">
                                                 <h3 className="ml-2 text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Fakturering</h3>
 
-                                            <div className="flex flex-row items-center gap-4">
-                                                <ActionButton
-                                                    label="Kundbetalning"
-                                                    icon={HandCoins}
-                                                    onClick={() => handleCreateInvoice('customer')}
-                                                    accent="violet"
-                                                    disabled={!canCreateInvoices}
-                                                />
-                                                <ActionButton
-                                                    label="Försäkring"
-                                                    icon={HandCoins}
-                                                    onClick={() => handleCreateInvoice('insuranceCompany')}
-                                                    accent="violet"
-                                                    disabled={!canCreateInvoices}
-                                                />
-                                                <ActionButton
-                                                    label="Intern"
-                                                    icon={HandCoins}
-                                                    onClick={() => handleCreateInvoice('internal')}
-                                                    accent="violet"
-                                                    disabled={!canCreateInvoices}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-5 w-full">
-                                            <div className="rounded-sm border border-gray-200 bg-white px-3 py-2">
-                                                <div className="text-tiny font-semibold uppercase tracking-[0.08em] text-gray-500">Totalt att fakturera</div>
-                                                <table className="mt-1 w-full text-xs text-gray-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
-                                                    <tbody>
-                                                        {Object.entries(invoicePartyLabels).map(([partyKey, label]) => (
-                                                            <tr key={`total-${partyKey}`} className="align-top">
-                                                                <td className="pr-2 py-0.5">{label}</td>
-                                                                <td className="tabular-nums py-0.5 text-right text-gray-500">{formatAmount(faktureringSummary.totalByParty[partyKey].exVat)} ex</td>
-                                                                <td className="tabular-nums py-0.5 text-right">{formatAmount(faktureringSummary.totalByParty[partyKey].inclVat)} ink</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+                                                <div className="flex flex-row items-center gap-4">
+                                                    <ActionButton
+                                                        label="Kundbetalning"
+                                                        icon={HandCoins}
+                                                        onClick={() => handleCreateInvoice('customer')}
+                                                        accent="violet"
+                                                        disabled={!canCreateInvoices}
+                                                    />
+                                                    <ActionButton
+                                                        label="Försäkring"
+                                                        icon={HandCoins}
+                                                        onClick={() => handleCreateInvoice('insuranceCompany')}
+                                                        accent="violet"
+                                                        disabled={!canCreateInvoices}
+                                                    />
+                                                    <ActionButton
+                                                        label="Intern"
+                                                        icon={HandCoins}
+                                                        onClick={() => handleCreateInvoice('internal')}
+                                                        accent="violet"
+                                                        disabled={!canCreateInvoices}
+                                                    />
+                                                </div>
                                             </div>
 
-                                            <div className="rounded-sm border border-gray-200 bg-white px-3 py-2">
-                                                <div className="text-tiny font-semibold uppercase tracking-[0.08em] text-gray-500">Kvar att fakturera</div>
-                                                <table className="mt-1 w-full text-xs text-gray-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
-                                                    <tbody>
-                                                        {Object.entries(invoicePartyLabels).map(([partyKey, label]) => {
-                                                            const amountLeftExVat = amountLeftByParty[partyKey].exVat;
-                                                            const amountLeftInclVat = amountLeftByParty[partyKey].inclVat;
-                                                            const exVatClassName = amountLeftExVat > 0
-                                                                ? 'tabular-nums py-0.5 text-right font-bold text-red-600'
-                                                                : 'tabular-nums py-0.5 text-right text-gray-500';
-                                                            const inclVatClassName = amountLeftInclVat > 0
-                                                                ? 'tabular-nums py-0.5 text-right font-bold text-red-600'
-                                                                : 'tabular-nums py-0.5 text-right';
-
-                                                            return (
-                                                                <tr key={`left-${partyKey}`} className="align-top">
-                                                                    <td className="pr-2 py-0.5">{label}</td>
-                                                                    <td className={exVatClassName}>{formatAmount(amountLeftExVat)} ex</td>
-                                                                    <td className={inclVatClassName}>{formatAmount(amountLeftInclVat)} ink</td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <div className="rounded-sm border border-gray-200 bg-white px-3 py-2">
-                                            <div className="text-tiny font-semibold uppercase tracking-[0.08em] text-gray-500">Skapade fakturor</div>
-                                            {createdInvoices.length === 0 ? (
-                                                <p className="mt-2 text-xs text-gray-500">Inga fakturor skapade för bokningen.</p>
-                                            ) : (
-                                                <div className="mt-1 overflow-hidden">
-                                                    <table className="w-full border-collapse text-xs text-gray-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                            <div className="grid grid-cols-2 gap-5 w-full">
+                                                <div className="rounded-sm border border-gray-200 bg-white px-3 py-2">
+                                                    <div className="text-tiny font-semibold uppercase tracking-[0.08em] text-gray-500">Totalt att fakturera</div>
+                                                    <table className="mt-1 w-full text-xs text-gray-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
                                                         <tbody>
-                                                            {createdInvoices.map((invoice) => (
-                                                                <tr key={`invoice-${invoice.id}`} className="align-top">
-                                                                    <td className="py-1 font-medium">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => navigate(`/finance/invoice/${invoice.id}`)}
-                                                                            className="text-left font-medium text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
-                                                                            title="Öppna faktura"
-                                                                        >
-                                                                            {invoice.invoiceNr || invoice.id}
-                                                                        </button>
-                                                                    </td>
-                                                                    <td className="px-2 py-1 text-gray-500">
-                                                                        {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('sv-SE') : '-'}
-                                                                    </td>
-                                                                    <td className="px-2 py-1">
-                                                                        <div className="text-gray-700">{invoice.customerName || '-'}</div>
-                                                                        <div className="mt-0.5 text-tiny text-gray-500">
-                                                                            {[...invoice.partyKeys].map((partyKey) => invoicePartyLabels[partyKey] || partyKey).join(', ')}
-                                                                            {invoice.isCancelled ? ' • Makulerad' : ''}
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="tabular-nums px-2 py-1 text-right text-gray-500">{formatAmount(invoice.exVat)} ex</td>
-                                                                    <td className="tabular-nums px-2 py-1 text-right">{formatAmount(invoice.inclVat)} ink</td>
+                                                            {Object.entries(invoicePartyLabels).map(([partyKey, label]) => (
+                                                                <tr key={`total-${partyKey}`} className="align-top">
+                                                                    <td className="pr-2 py-0.5">{label}</td>
+                                                                    <td className="tabular-nums py-0.5 text-right text-gray-500">{formatAmount(faktureringSummary.totalByParty[partyKey].exVat)} ex</td>
+                                                                    <td className="tabular-nums py-0.5 text-right">{formatAmount(faktureringSummary.totalByParty[partyKey].inclVat)} ink</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
                                                     </table>
                                                 </div>
-                                            )}
-                                            </div>
-                                    </div>
 
+                                                <div className="rounded-sm border border-gray-200 bg-white px-3 py-2">
+                                                    <div className="text-tiny font-semibold uppercase tracking-[0.08em] text-gray-500">Kvar att fakturera</div>
+                                                    <table className="mt-1 w-full text-xs text-gray-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                                        <tbody>
+                                                            {Object.entries(invoicePartyLabels).map(([partyKey, label]) => {
+                                                                const amountLeftExVat = amountLeftByParty[partyKey].exVat;
+                                                                const amountLeftInclVat = amountLeftByParty[partyKey].inclVat;
+                                                                const exVatClassName = amountLeftExVat > 0
+                                                                    ? 'tabular-nums py-0.5 text-right font-bold text-red-600'
+                                                                    : 'tabular-nums py-0.5 text-right text-gray-500';
+                                                                const inclVatClassName = amountLeftInclVat > 0
+                                                                    ? 'tabular-nums py-0.5 text-right font-bold text-red-600'
+                                                                    : 'tabular-nums py-0.5 text-right';
+
+                                                                return (
+                                                                    <tr key={`left-${partyKey}`} className="align-top">
+                                                                        <td className="pr-2 py-0.5">{label}</td>
+                                                                        <td className={exVatClassName}>{formatAmount(amountLeftExVat)} ex</td>
+                                                                        <td className={inclVatClassName}>{formatAmount(amountLeftInclVat)} ink</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-sm border border-gray-200 bg-white px-3 py-2">
+                                                <div className="text-tiny font-semibold uppercase tracking-[0.08em] text-gray-500">Skapade fakturor</div>
+                                                {createdInvoices.length === 0 ? (
+                                                    <p className="mt-2 text-xs text-gray-500">Inga fakturor skapade för bokningen.</p>
+                                                ) : (
+                                                    <div className="mt-1 overflow-hidden">
+                                                        <table className="w-full border-collapse text-xs text-gray-700" style={{ fontFamily: "'Neue Haas Unica', 'Helvetica Neue', Arial, sans-serif" }}>
+                                                            <tbody>
+                                                                {createdInvoices.map((invoice) => (
+                                                                    <tr key={`invoice-${invoice.id}`} className="align-top">
+                                                                        <td className="py-1 font-medium">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => navigate(`/finance/invoice/${invoice.id}`)}
+                                                                                className="text-left font-medium text-sky-700 decoration-sky-300 underline-offset-2 hover:underline hover:text-sky-800"
+                                                                                title="Öppna faktura"
+                                                                            >
+                                                                                {invoice.invoiceNr || invoice.id}
+                                                                            </button>
+                                                                        </td>
+                                                                        <td className="px-2 py-1 text-gray-500">
+                                                                            {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('sv-SE') : '-'}
+                                                                        </td>
+                                                                        <td className="px-2 py-1">
+                                                                            <div className="text-gray-700">{invoice.customerName || '-'}</div>
+                                                                            <div className="mt-0.5 text-tiny text-gray-500">
+                                                                                {[...invoice.partyKeys].map((partyKey) => invoicePartyLabels[partyKey] || partyKey).join(', ')}
+                                                                                {invoice.isCancelled ? ' • Makulerad' : ''}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="tabular-nums px-2 py-1 text-right text-gray-500">{formatAmount(invoice.exVat)} ex</td>
+                                                                        <td className="tabular-nums px-2 py-1 text-right">{formatAmount(invoice.inclVat)} ink</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                    </div>
                                 </div>
-                            </div>
                             )}
 
                         </form>

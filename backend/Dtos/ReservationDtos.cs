@@ -96,6 +96,11 @@ public sealed class ReservationUpsertDto
     public bool IsOngoingInvoicing { get; set; }
     public string OngoingInvoicingInterval { get; set; } = string.Empty;
     public string PricingCalendarCode { get; set; } = ReservationPricingCalendarCodes.AllDays;
+    public string PlacementStreet { get; set; } = string.Empty;
+    public string PlacementZipCode { get; set; } = string.Empty;
+    public string PlacementCity { get; set; } = string.Empty;
+    public decimal? PlacementLatitude { get; set; }
+    public decimal? PlacementLongitude { get; set; }
     public ICollection<ReservationItem> ReservationItems { get; set; } = new List<ReservationItem>();
     public ICollection<ReservationCalc> ReservationCalcs { get; set; } = new List<ReservationCalc>();
 }

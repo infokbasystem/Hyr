@@ -390,6 +390,11 @@ namespace Backend.Data
                 entity.Property(e => e.PickupPlaceNote).HasMaxLength(2000);
                 entity.Property(e => e.OngoingInvoicingInterval).HasMaxLength(50);
                 entity.Property(e => e.PricingCalendarCode).HasMaxLength(20);
+                entity.Property(e => e.PlacementStreet).HasMaxLength(500);
+                entity.Property(e => e.PlacementZipCode).HasMaxLength(100);
+                entity.Property(e => e.PlacementCity).HasMaxLength(200);
+                entity.Property(e => e.PlacementLatitude).HasColumnType("decimal(9,6)");
+                entity.Property(e => e.PlacementLongitude).HasColumnType("decimal(9,6)");
                 entity.Property(e => e.Deposition).HasColumnType("decimal(18,5)");
                 entity.HasOne(e => e.Office)
                     .WithMany(e => e.Reservations)

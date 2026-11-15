@@ -37,14 +37,17 @@ builder.Services.AddScoped<IFortnoxInvoicePaymentSyncService, FortnoxInvoicePaym
 builder.Services.AddScoped<IFortnoxImportService, FortnoxImportService>();
 builder.Services.AddScoped<IEmailSender, MailKitEmailSender>();
 builder.Services.AddScoped<ISmsSender, PixieSmsSender>();
+builder.Services.AddScoped<IGeocodingService, NominatimGeocodingService>();
 
 builder.Services.AddDataProtection();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient(TinkPaymentService.HttpClientName);
 builder.Services.AddHttpClient(PixieSmsSender.HttpClientName);
+builder.Services.AddHttpClient(NominatimGeocodingService.HttpClientName);
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.Configure<SmsSettings>(builder.Configuration.GetSection("Sms"));
 builder.Services.Configure<TinkSettings>(builder.Configuration.GetSection("Tink"));
+builder.Services.Configure<GeocodingSettings>(builder.Configuration.GetSection("Geocoding"));
 
 // JWT Configuration
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "D8C73B12-A68F-4708-8D64-ACA28121F156";
