@@ -17,6 +17,8 @@ const ArticleSearchInput = ({
     className = '',
     stylePreset = 'default',
     gridcell = false,
+    autoFocus = false,
+    onFocus,
 }) => {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -32,7 +34,7 @@ const ArticleSearchInput = ({
 
     const wrapperClassName = isGridCell ? 'relative' : 'relative px-1';
     const inputClassName = isGridCell
-        ? `block h-full w-full border border-transparent bg-transparent pt-[5px] pb-[3px] pl-8 pr-2 text-xs text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-0 ${className}`
+        ? `block h-full w-full border border-transparent bg-transparent pt-[4px] pb-[3px] pl-8 pr-2 text-xs text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-0 ${className}`
         : `w-full h-full border-0 bg-transparent px-2 py-1 pl-6 text-xs focus:border focus:border-blue-400 focus:bg-white focus:outline-none ${className}`;
     const popupClassName = isGridCell
         ? 'fixed z-50 min-w-[300px] max-h-[300px] overflow-y-auto rounded-sm border border-gray-300 bg-white shadow-lg transition-opacity duration-150'
@@ -189,7 +191,7 @@ const ArticleSearchInput = ({
         <>
             <div className={wrapperClassName}>
                 <Search
-                    className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${isGridCell ? 'left-2.5 h-3.5 w-3.5' : 'left-2 mt-[1px] mr-[3px] h-3 w-3'}`}
+                    className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${isGridCell ? 'left-1.5 h-3.5 w-3.5' : 'left-2 mt-[1px] mr-[3px] h-3 w-3'}`}
                 />
                 <input
                     type="text"
@@ -198,6 +200,8 @@ const ArticleSearchInput = ({
                     onChange={handleInputChange}
                     onKeyDown={handleInputKeyDown}
                     onBlur={handleBlur}
+                    onFocus={onFocus}
+                    autoFocus={autoFocus}
                     autoComplete="off"
                     className={inputClassName.trim()}
                 />

@@ -152,6 +152,40 @@ public class PlanningControllerTests
     }
 
     [Fact]
+    public async Task ItemListsIncludeCurrentOutReturnAndCheckInStatuses()
+    {
+        using var context = await Seed();
+        var cabinOut = await context.ReservationItems.SingleAsync(item => item.ItemId == 11);
+        cabinOut.ActualFrom = Start;
+        context.ReservationItems.Add(new ReservationItem
+        {
+            ItemId = 11,
+            ActualTo = Start.AddDays(-1),
+            IsCheckedIn = true,
+        });
+
+        var liftReturned = await context.ReservationItems.SingleAsync(item => item.ItemId == 21);
+        liftReturned.ActualTo = Start;
+        context.ReservationItems.Add(new ReservationItem
+        {
+            ItemId = 21,
+            ActualTo = Start.AddDays(-1),
+            IsCheckedIn = true,
+        });
+
+        var vehicleCheckedIn = await context.ReservationItems.SingleAsync(item => item.ItemId == 31);
+        vehicleCheckedIn.ActualTo = Start;
+        vehicleCheckedIn.IsCheckedIn = true;
+        await context.SaveChangesAsync();
+
+        var controller = Controller(context);
+        Assert.Equal(1, Assert.Single(Value(await controller.GetCabins(new())), item => item.Id == 11).CurrentStatus);
+        Assert.Equal(2, Assert.Single(Value(await controller.GetLifts(new())), item => item.Id == 21).CurrentStatus);
+        Assert.Equal(3, Assert.Single(Value(await controller.GetVehicles(new())), item => item.Id == 31).CurrentStatus);
+        Assert.Equal(3, Assert.Single(Value(await controller.GetCabins(new())), item => item.Id == 12).CurrentStatus);
+    }
+
+    [Fact]
     public async Task NewQueriesRetainAuthenticationSemantics()
     {
         using var context = await Seed();

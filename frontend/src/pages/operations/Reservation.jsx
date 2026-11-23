@@ -1,5 +1,5 @@
 import React from 'react'
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
 import { useParams, useBlocker } from "react-router";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, CheckCircle2, Euro, MapPin, Printer, Save, Trash2, RotateCcw, Wrench, HandCoins } from 'lucide-react';
@@ -32,6 +32,7 @@ import ReservationItemAccessory from './ReservationItemAccessory';
 import ReservationItemTool from './ReservationItemTool';
 import apiClient from '../../lib/apiClient';
 import { getCustomerById } from '../../lib/customerApi';
+import { getPdfFilename } from '../../lib/pdfFilename';
 import { getItemById } from '../../lib/itemApi';
 import { getItemCategoryById, getItemCategoryFormOptions } from '../../lib/itemCategoryApi';
 import { getPlanningCabins, getPlanningLifts } from '../../lib/planningApi';
@@ -366,7 +367,10 @@ const Reservation = () => {
     const [pendingRentalKeys, setPendingRentalKeys] = useState([]);
     const rentalRequestsRef = useRef(new Map());
 
-    const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
+    const {
+        beginPdfPreview, finishPdfPreview, failPdfPreview, setBadges, markStale,
+        showPdfPanel, closePdfPreview, emailResult, consumeEmailResult,
+    } = usePdf();
 
     const skipUnsavedGuardRef = useRef(false);
     const consumedSavedReservationRouteRef = useRef(null);
@@ -882,7 +886,7 @@ const Reservation = () => {
     };
 
 
-    const hasUnsavedChanges = () => {
+    const hasUnsavedChanges = useCallback(() => {
         if (skipUnsavedGuardRef.current) {
             return false;
         }
@@ -895,7 +899,22 @@ const Reservation = () => {
         const normalizedOriginal = normalizeReservationForComparison(originalReservation);
 
         return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedOriginal);
-    };
+    }, [reservation, originalReservation]);
+
+    useEffect(() => {
+        if (showPdfPanel && hasUnsavedChanges()) markStale();
+    }, [hasUnsavedChanges, showPdfPanel, markStale]);
+
+    useEffect(() => {
+        if (emailResult?.document?.kind !== 'reservation' || `${emailResult.document.id}` !== `${routeReservationId}`) return;
+
+        const { result } = emailResult;
+        setMessages([{
+            type: result.warning ? 'warning' : 'success',
+            text: result.warning || result.message || 'E-post skickad.',
+        }]);
+        consumeEmailResult(emailResult);
+    }, [emailResult, routeReservationId, consumeEmailResult]);
 
 
     const handleUnsavedWarningConfirm = () => {
@@ -939,7 +958,7 @@ const Reservation = () => {
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-    }, [reservation, originalReservation]);
+    }, [hasUnsavedChanges]);
 
     const handleDeleteClick = () => {
         setShowDeleteConfirm(true);
@@ -1821,10 +1840,9 @@ const Reservation = () => {
                 navigate(`/operations/reservation/${reservationId}`, { replace: true });
             }
 
-            clearStale?.();
             // Reload the PDF after successful save without triggering unsaved warning
             if (reloadPdf && showPdfPanel) {
-                await getPdf({ ignoreUnsaved: true });
+                await getPdf({ ignoreUnsaved: true, document: normalizedRefreshedReservation });
             }
 
             return normalizedRefreshedReservation;
@@ -1907,7 +1925,9 @@ const Reservation = () => {
                 setSelectedDebitCalcIndex(newCalculationIndex);
             }
 
-            clearStale?.();
+            if (showPdfPanel && refreshedReservation) {
+                await getPdf({ ignoreUnsaved: true, document: refreshedReservation });
+            }
             setMessages([{ type: 'success', text: 'Pris beräknat' }]);
         } catch (error) {
             setMessages([{ type: 'error', text: formatErrorMessage(error) }]);
@@ -1952,8 +1972,8 @@ const Reservation = () => {
         }, 1000);
     };
 
-    const getPdf = async ({ ignoreUnsaved = false } = {}) => {
-        if (!reservation?.id) return;
+    const getPdf = async ({ ignoreUnsaved = false, document = reservation } = {}) => {
+        if (!document?.id) return;
 
         if (!ignoreUnsaved && hasUnsavedChanges()) {
             // setPendingAction('pdf');
@@ -1961,22 +1981,23 @@ const Reservation = () => {
             return;
         }
 
-        // Open the PDF panel immediately
-        openPdfPreview('');
+        const requestId = beginPdfPreview({
+            kind: 'reservation',
+            id: document.id,
+            number: document.reservationNr ?? document.id,
+            customerId: document.customerId,
+            email: document.email,
+        });
 
         try {
-            const res = await apiClient.get(`/pdf/reservation/${reservation.id}`, {
+            const res = await apiClient.get(`/pdf/reservation/${document.id}`, {
                 responseType: 'blob',
             });
-            console.log('Response ok:', true, 'content-type:', res.headers['content-type']);
-            const blob = res.data;
-            console.log('Blob size:', blob.size, 'type:', blob.type);
-            const url = URL.createObjectURL(blob);
-            openPdfPreview(url); // update the panel with the real PDF
-        } catch (error) {
-            console.error('Error getting reservation PDF:', error);
-            // Optional: toast.error('Kunde inte ladda PDF');
-            // Optional: keep panel open to show an error state in PdfPanel
+            const filename = getPdfFilename(res.headers['content-disposition'], 'reservation', document.reservationNr, document.id);
+            finishPdfPreview(requestId, res.data, filename);
+        } catch {
+            console.error('Error getting reservation PDF.');
+            failPdfPreview(requestId);
         }
     };
 
@@ -2119,7 +2140,7 @@ const Reservation = () => {
         return () => {
             closePdfPreview?.();
         };
-    }, [closePdfPreview]);
+    }, [closePdfPreview, routeReservationId]);
 
 
 
@@ -2419,7 +2440,7 @@ const Reservation = () => {
                                         />
                                     )}
                                     <ActionButton
-                                        label="Placering"
+                                        label="Lev.adress"
                                         icon={MapPin}
                                         onClick={() => setShowPlacementModal(true)}
                                         accent="teal"
@@ -2958,7 +2979,7 @@ const Reservation = () => {
 
                                                                     {!showGroupHeader && (
                                                                         <tr aria-hidden="true">
-                                                                            <td colSpan={6} className="h-0.5 p-0 bg-amber-300/50"></td>
+                                                                            <td colSpan={6} className="h-0.5 p-0 bg-sky-200/50"></td>
                                                                         </tr>
                                                                     )}
 

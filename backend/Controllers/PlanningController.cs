@@ -131,6 +131,17 @@ namespace Backend.Controllers
                     ItemCategoryName = i.ItemCategory != null ? i.ItemCategory.Name : string.Empty,
                     Manufacturer = i.Manufacturer,
                     ItemModelName = i.ItemModel != null ? i.ItemModel.Name : string.Empty,
+                    CurrentStatus = _context.ReservationItems.Any(ri =>
+                        ri.ItemId == i.Id && ri.ActualFrom.HasValue && !ri.ActualTo.HasValue)
+                        ? 1
+                        : !_context.ReservationItems.Any(ri => ri.ItemId == i.Id && ri.ActualTo.HasValue)
+                            ? 3
+                            : _context.ReservationItems
+                                .Where(ri => ri.ItemId == i.Id && ri.ActualTo.HasValue)
+                                .OrderByDescending(ri => ri.ActualTo)
+                                .ThenByDescending(ri => ri.Id)
+                                .Select(ri => ri.IsCheckedIn ? 3 : 2)
+                                .FirstOrDefault(),
                 })
                 .ToListAsync();
 
@@ -213,6 +224,17 @@ namespace Backend.Controllers
                     ItemCategoryName = i.ItemCategory != null ? i.ItemCategory.Name : string.Empty,
                     Manufacturer = i.Manufacturer,
                     ItemModelName = i.ItemModel != null ? i.ItemModel.Name : string.Empty,
+                    CurrentStatus = _context.ReservationItems.Any(ri =>
+                        ri.ItemId == i.Id && ri.ActualFrom.HasValue && !ri.ActualTo.HasValue)
+                        ? 1
+                        : !_context.ReservationItems.Any(ri => ri.ItemId == i.Id && ri.ActualTo.HasValue)
+                            ? 3
+                            : _context.ReservationItems
+                                .Where(ri => ri.ItemId == i.Id && ri.ActualTo.HasValue)
+                                .OrderByDescending(ri => ri.ActualTo)
+                                .ThenByDescending(ri => ri.Id)
+                                .Select(ri => ri.IsCheckedIn ? 3 : 2)
+                                .FirstOrDefault(),
                 })
                 .ToListAsync();
 
@@ -270,6 +292,17 @@ namespace Backend.Controllers
                     ItemCategoryName = item.ItemCategory != null ? item.ItemCategory.Name : string.Empty,
                     Manufacturer = item.Manufacturer,
                     ItemModelName = item.ItemModel != null ? item.ItemModel.Name : string.Empty,
+                    CurrentStatus = _context.ReservationItems.Any(booking =>
+                        booking.ItemId == item.Id && booking.ActualFrom.HasValue && !booking.ActualTo.HasValue)
+                        ? 1
+                        : !_context.ReservationItems.Any(booking => booking.ItemId == item.Id && booking.ActualTo.HasValue)
+                            ? 3
+                            : _context.ReservationItems
+                                .Where(booking => booking.ItemId == item.Id && booking.ActualTo.HasValue)
+                                .OrderByDescending(booking => booking.ActualTo)
+                                .ThenByDescending(booking => booking.Id)
+                                .Select(booking => booking.IsCheckedIn ? 3 : 2)
+                                .FirstOrDefault(),
                 })
                 .ToListAsync(cancellationToken);
 
@@ -313,6 +346,12 @@ namespace Backend.Controllers
                     item.Item.RegNr,
                     item.Item.SerialNr,
                     item.Reservation.DeliveryPlace,
+                    item.Reservation.CustomerMarking,
+                    item.Reservation.PlacementStreet,
+                    item.Reservation.PlacementZipCode,
+                    item.Reservation.PlacementCity,
+                    item.Reservation.PlacementLatitude,
+                    item.Reservation.PlacementLongitude,
                     item.BookedFrom,
                     item.BookedTo,
                     item.ActualFrom,
@@ -333,6 +372,12 @@ namespace Backend.Controllers
                 RegNr = item.RegNr,
                 SerialNr = item.SerialNr,
                 DeliveryPlace = item.DeliveryPlace,
+                CustomerMarking = item.CustomerMarking,
+                PlacementStreet = item.PlacementStreet,
+                PlacementZipCode = item.PlacementZipCode,
+                PlacementCity = item.PlacementCity,
+                PlacementLatitude = item.PlacementLatitude,
+                PlacementLongitude = item.PlacementLongitude,
                 Start = (item.ActualFrom ?? item.BookedFrom) is DateTime start ? new DateTimeOffset(start) : null,
                 End = item.BookedTo is DateTime end ? new DateTimeOffset(end) : null,
                 Status = ResolvePlanningReservationStatus(item.ActualFrom, item.ActualTo, item.BookedFrom, item.BookedTo, now),

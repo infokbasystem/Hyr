@@ -10,6 +10,42 @@ Accept: application/json
 GET {{Api_HostAddress}}/api/planning/categories?ItemTypeCode=CABIN
 Authorization: Bearer {{token}}
 
+### Send a previewed invoice PDF through configured SMTP.
+### This sends real mail when SMTP is configured: replace IDs, addresses and the local PDF deliberately.
+POST {{Api_HostAddress}}/api/email/send
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=HyrEmailExample
+
+--HyrEmailExample
+Content-Disposition: form-data; name="subject"
+
+Faktura 123
+--HyrEmailExample
+Content-Disposition: form-data; name="body"
+
+<p>Hej!</p>
+--HyrEmailExample
+Content-Disposition: form-data; name="receivers"
+
+[{"email":"customer@example.invalid","doSend":true}]
+--HyrEmailExample
+Content-Disposition: form-data; name="ccRecipients"
+
+[{"email":"office@example.invalid","doSend":false}]
+--HyrEmailExample
+Content-Disposition: form-data; name="invoiceId"
+
+123
+--HyrEmailExample
+Content-Disposition: form-data; name="files"; filename="invoice_123.pdf"
+Content-Type: application/pdf
+
+< ./example.pdf
+--HyrEmailExample--
+
+### For a reservation, replace invoiceId with reservationId; do not send both.
+### The total multipart request must not exceed 25,000,000 bytes.
+
 ### All unreturned customer rentals in the current office, including future bookings
 GET {{Api_HostAddress}}/api/planning/customer-rentals
 Authorization: Bearer {{token}}

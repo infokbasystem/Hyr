@@ -1,5 +1,9 @@
 # React + Vite
 
+## Desktop navigation
+
+Desktop routes share a persistent header and main menu. Keep the desktop loading boundary inside that layout so lazy route chunks only replace the content area. The `/m` routes use a separate mobile layout.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

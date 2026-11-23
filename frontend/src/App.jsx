@@ -1,9 +1,9 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import { Navigate, Outlet, Route, createBrowserRouter, createRoutesFromElements, RouterProvider, useLocation } from 'react-router-dom'
 
 import { AuthProvider } from "./AuthContext";
-import { useAuth } from "./hooks/AuthProvider";
 import ProtectedRoute from "./ProtectedRoute"
+import DesktopLayout from './layouts/DesktopLayout'
 import { getMobileRedirectTarget, isMobileDevice, isMobilePath, prefersDesktop } from './mobile/mobileRouting'
 
 
@@ -102,14 +102,13 @@ const router = createBrowserRouter(
           </Route>
         </Route>
       </Route>
-      {/* <Route element={<ProtectedRoute />}>
-      </Route> */}
+      <Route element={<DesktopLayout />}>
       <Route path="/" element={< MainLayout />}>
         <Route index element={<ProtectedRoute>< Overview /></ProtectedRoute>} />
         <Route path="reports" element={<ProtectedRoute>< Reports /></ProtectedRoute>} />
         <Route path="management" element={<ProtectedRoute>< Management /></ProtectedRoute>} />
       </Route>
-      <Route path="operations" element={< OperationsLayout />}>
+      <Route path="operations" element={< OperationsLayout />} handle={{ sectionMenu: true }}>
         <Route index element={<ProtectedRoute>< OperationsOverview /></ProtectedRoute>} />
         <Route path="reservation" element={<ProtectedRoute>< Reservation /></ProtectedRoute>} />
         <Route path="reservation/:id" element={<ProtectedRoute>< Reservation /></ProtectedRoute>} />
@@ -119,15 +118,15 @@ const router = createBrowserRouter(
         <Route path="in-out" element={<ProtectedRoute>< InOut /></ProtectedRoute>} />
         <Route path="invoicestoaccount" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
       </Route>
-      <Route path="customer" element={< OperationsLayout />}>
+      <Route path="customer" element={< OperationsLayout />} handle={{ sectionMenu: true }}>
         <Route path="new" element={<ProtectedRoute>< Customer /></ProtectedRoute>} />
         <Route path=":id" element={<ProtectedRoute>< Customer /></ProtectedRoute>} />
       </Route>
-      <Route path="item" element={< OperationsLayout />}>
+      <Route path="item" element={< OperationsLayout />} handle={{ sectionMenu: true }}>
         <Route path="new" element={<ProtectedRoute>< Item /></ProtectedRoute>} />
         <Route path=":id" element={<ProtectedRoute>< Item /></ProtectedRoute>} />
       </Route>
-      <Route path="finance" element={< FinanceLayout />}>
+      <Route path="finance" element={< FinanceLayout />} handle={{ sectionMenu: true }}>
         <Route index element={<ProtectedRoute>< FinanceOverview /></ProtectedRoute>} />
         <Route path="tobeinvoiced" element={<ProtectedRoute>< ToBeInvoiced /></ProtectedRoute>} />
         <Route path="invoices" element={<ProtectedRoute>< Invoices /></ProtectedRoute>} />
@@ -140,7 +139,7 @@ const router = createBrowserRouter(
         <Route path="invoice/:id" element={<ProtectedRoute>< Invoice /></ProtectedRoute>} />  
         <Route path="invoicestoaccount" element={<ProtectedRoute>< InvoicesToAccount /></ProtectedRoute>} />
       </Route>
-      <Route path="settings" element={< SettingsLayout />}>
+      <Route path="settings" element={< SettingsLayout />} handle={{ sectionMenu: true }}>
         <Route index element={<Navigate to="office" replace />} />
         <Route path='office' element={<ProtectedRoute><OfficeSettingsLayout /></ProtectedRoute>}>
           <Route index element={<Navigate to="companyinfo" replace />} />
@@ -168,6 +167,7 @@ const router = createBrowserRouter(
       <Route path="something-went-wrong" element={< MainLayout />}>
         <Route index element={<ProtectedRoute>< SomethingWentWrong /></ProtectedRoute>} />
       </Route>
+      </Route>
       <Route path="login" element={<Login />} />
       <Route path="pay/tink/done" element={<TinkPaymentDone />} />
       <Route path="*" element={< NotFound />} />
@@ -178,9 +178,6 @@ const router = createBrowserRouter(
 
 
 function App() {
-  const [count, setCount] = useState(0)
-  const auth = useAuth();
-
   return (
     <AuthProvider>
       <RouterProvider router={router} />

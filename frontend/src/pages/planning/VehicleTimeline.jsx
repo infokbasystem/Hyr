@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarSearch, Calendar, ChevronLeft, ChevronRight, Info, LoaderCircle, RotateCw, X } from 'lucide-react';
 import CarSearchModal from '../../modals/CarSearchModal';
 import ItemInfoModal from '../../modals/ItemInfoModal';
+import PlanningItemCurrentStatus from './PlanningItemCurrentStatus';
 import FilterSelect from '../../components/FilterSelect';
 import SegmentedFilter from '../../components/SegmentedFilter';
 import DateRangePicker from '../../components/DaterangePicker';
@@ -1374,8 +1375,8 @@ function VehicleTimeline(props) {
                                         <div className="text-xs" style={{ minWidth: 0, color: 'black', overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                             {car.category}
                                         </div>
-                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, width: 86 }}>
+                                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 36px", alignItems: "center", gap: 4, width: "100%" }}>
                                                 <button
                                                     type="button"
                                                     tabIndex={-1}
@@ -1385,22 +1386,25 @@ function VehicleTimeline(props) {
                                                         e.preventDefault();
                                                     }}
                                                     onClick={() => handleOpenNewReservation(car)}
-                                                    style={{ color: 'black', background: "none", border: "none", padding: 0 }}
+                                                    style={{ color: 'black', background: "none", border: "none", padding: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                                                 >
                                                     {car.regNr}
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    tabIndex={-1}
-                                                    className="cursor-pointer text-gray-400 hover:text-black"
-                                                    title="Visa information"
-                                                    aria-label="Visa information"
-                                                    onMouseDown={(e) => e.preventDefault()}
-                                                    onClick={() => setInfoItemId(car.id)}
-                                                    style={{ background: "none", border: "none", padding: 0, display: "flex" }}
-                                                >
-                                                    <Info className="h-3.5 w-3.5" strokeWidth={2} />
-                                                </button>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                                    <button
+                                                        type="button"
+                                                        tabIndex={-1}
+                                                        className="cursor-pointer text-gray-400 hover:text-black"
+                                                        title="Visa information"
+                                                        aria-label="Visa information"
+                                                        onMouseDown={(e) => e.preventDefault()}
+                                                        onClick={() => setInfoItemId(car.id)}
+                                                        style={{ background: "none", border: "none", padding: 0, display: "flex" }}
+                                                    >
+                                                        <Info className="h-3.5 w-3.5" strokeWidth={2} />
+                                                    </button>
+                                                    <PlanningItemCurrentStatus status={car.currentStatus} />
+                                                </div>
                                             </div>
                                             {row.laneCount > 1 && <span style={{ fontSize: 9, color: T.textDim, background: T.overlapBg, padding: "1px 5px", borderRadius: 4 }}>{row.laneCount} overlaps</span>}
                                         </div>

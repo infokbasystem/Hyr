@@ -5,7 +5,7 @@ import ActionButton from '../../components/ActionButton';
 import FilterSelect from '../../components/FilterSelect';
 import { getPlanningCustomerRentals } from '../../lib/planningApi';
 import { PLANNING_STATUS_COLORS } from '../../lib/planningStatus';
-import { formatRentalPeriod, getCustomerRentalGroups, getRentalLocationOptions } from '../../lib/customerOverview';
+import { formatRentalPeriod, getCustomerRentalGroups, getRentalLocationOptions, getRentalMarkingOptions, getRentalPlacementLabel } from '../../lib/customerOverview';
 import { withPlanningLoadingDelay } from '../../lib/planningLoading';
 import PlanningSkeleton from './PlanningSkeleton';
 import { useDelayedSkeleton } from '../../hooks/useDelayedSkeleton';
@@ -17,6 +17,7 @@ const CustomerOverview = ({ typeSelector }) => {
   const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState(null);
+  const [marking, setMarking] = useState(null);
   const [status, setStatus] = useState('out');
   const showLoadingSkeleton = useDelayedSkeleton(loading, 200);
 
@@ -40,10 +41,11 @@ const CustomerOverview = ({ typeSelector }) => {
     setError('');
     setReloadKey(value => value + 1);
   };
-  const locationOptions = useMemo(() => getRentalLocationOptions(rentals), [rentals]);
+  const locationOptions = useMemo(() => getRentalLocationOptions(rentals, status), [rentals, status]);
+  const markingOptions = useMemo(() => getRentalMarkingOptions(rentals), [rentals]);
   const groups = useMemo(() => getCustomerRentalGroups(rentals, {
-    search, location: location?.value ?? '', status,
-  }), [rentals, search, location, status]);
+    search, location: location?.value ?? '', marking: marking?.value ?? '', status,
+  }), [rentals, search, location, marking, status]);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col px-4 pb-4">
@@ -66,6 +68,16 @@ const CustomerOverview = ({ typeSelector }) => {
             onChange={setLocation}
             options={locationOptions}
             placeholder="Alla platser"
+            width="w-50"
+            isSearchable
+          />
+          <FilterSelect
+            inputId="customer-overview-marking"
+            aria-label="Märkning"
+            value={marking}
+            onChange={setMarking}
+            options={markingOptions}
+            placeholder="Alla märkningar"
             width="w-50"
             isSearchable
           />
@@ -142,7 +154,7 @@ const CustomerOverview = ({ typeSelector }) => {
                               <p className="min-h-4 text-tiny text-gray-500">{rental.regNr || rental.serialNr}</p>
                               <p className="mt-1 flex items-center gap-1 text-xs">
                                 <MapPin className="h-3 w-3 shrink-0" />
-                                <span className="break-words">{rental.deliveryPlace || 'Plats saknas'}</span>
+                                <span className="break-words">{getRentalPlacementLabel(rental) || 'Plats saknas'}</span>
                               </p>
                               <div className="mt-1 flex items-center justify-between gap-2 text-tiny text-gray-500">
                                 <span className="min-w-0">{formatRentalPeriod(rental.start, rental.end)}</span>

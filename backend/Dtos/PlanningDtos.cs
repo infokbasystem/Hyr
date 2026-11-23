@@ -9,6 +9,7 @@ public class PlanningVehicleDto
     public string ItemCategoryName { get; set; } = string.Empty;
     public string Manufacturer { get; set; } = string.Empty;
     public string ItemModelName { get; set; } = string.Empty;
+    public int CurrentStatus { get; set; } = 3;
 }
 
 public class PlanningCategoryOptionDto
@@ -28,6 +29,7 @@ public class PlanningCabinDto
     public string ItemCategoryName { get; set; } = string.Empty;
     public string Manufacturer { get; set; } = string.Empty;
     public string ItemModelName { get; set; } = string.Empty;
+    public int CurrentStatus { get; set; } = 3;
 }
 
 public class PlanningCabinTypeOptionDto
@@ -45,6 +47,7 @@ public sealed record PlanningLiftDto
     public string ItemCategoryName { get; init; } = string.Empty;
     public string Manufacturer { get; init; } = string.Empty;
     public string ItemModelName { get; init; } = string.Empty;
+    public int CurrentStatus { get; init; } = 3;
 }
 
 /// <summary>An unreturned rental item in the current office's customer overview.</summary>
@@ -60,6 +63,12 @@ public sealed record PlanningCustomerRentalDto
     public string RegNr { get; init; } = string.Empty;
     public string SerialNr { get; init; } = string.Empty;
     public string DeliveryPlace { get; init; } = string.Empty;
+    public string CustomerMarking { get; init; } = string.Empty;
+    public string PlacementStreet { get; init; } = string.Empty;
+    public string PlacementZipCode { get; init; } = string.Empty;
+    public string PlacementCity { get; init; } = string.Empty;
+    public decimal? PlacementLatitude { get; init; }
+    public decimal? PlacementLongitude { get; init; }
     public DateTimeOffset? Start { get; init; }
     public DateTimeOffset? End { get; init; }
     public string Status { get; init; } = string.Empty;

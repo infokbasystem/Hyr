@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
+import React from 'react'
 import { createServer } from 'vite'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -46,7 +47,12 @@ function createCabin(overrides = {}) {
     ],
     ...overrides,
   }
-  const tree = ReservationItemCabin(props)
+  let tree
+  function CaptureCabin() {
+    tree = ReservationItemCabin(props)
+    return null
+  }
+  renderToStaticMarkup(React.createElement(CaptureCabin))
   const nodes = elements(tree)
   return {
     changes,
@@ -122,7 +128,33 @@ test('adding a row creates an invoice-style article search input and preserves e
   const { searchInputs } = createCabin({ item: { itemId: 10, reservationItemArticles: changes[0][2] } })
   assert.equal(searchInputs.length, 1)
   assert.equal(searchInputs[0].props.value, '')
+  assert.equal(searchInputs[0].props.autoFocus, false)
   assert.equal(typeof searchInputs[0].props.onArticleSelect, 'function')
+})
+
+test('adding a row requests focus only for the new article search', () => {
+  let searchInputs
+  function CabinWithNewRow() {
+    const [item, setItem] = React.useState({
+      itemId: 10,
+      reservationItemArticles: [{ _draftKey: 'existing', articleId: null }],
+    })
+    const tree = ReservationItemCabin({
+      item,
+      index: 0,
+      onChange: (_index, field, value) => setItem(current => ({ ...current, [field]: value })),
+      onCabinSelect: () => {},
+      onRemove: () => {},
+    })
+    const nodes = elements(tree)
+    if (item.reservationItemArticles.length === 1) {
+      nodes.find(node => node.type === 'button' && node.props.children === '+ Lägg till artikel').props.onClick()
+    }
+    searchInputs = nodes.filter(node => node.type === ArticleSearchInput)
+    return null
+  }
+  renderToStaticMarkup(React.createElement(CabinWithNewRow))
+  assert.deepEqual(searchInputs.map(input => input.props.autoFocus), [false, true])
 })
 
 test('invoice-style article search selects a new article into the added row', () => {

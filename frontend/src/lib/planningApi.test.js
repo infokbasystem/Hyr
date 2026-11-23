@@ -94,6 +94,26 @@ test('lift rows map the common timeline shape without cabin fields or price snap
     assert.equal(queryFor(harness.calls[0]).get('CategoryIds'), '3');
 });
 
+test('item list endpoints retain current item status', async () => {
+    const harness = await createHarness(async path => {
+        if (path === '/planning/vehicles') return [{ id: 1, currentStatus: 1 }];
+        if (path === '/planning/cabins') return [{ id: 2, currentStatus: 2 }];
+        if (path === '/planning/lifts') return [{ id: 3, currentStatus: 3 }];
+        return [];
+    });
+
+    const [vehicles, cabins, lifts] = await Promise.all([
+        harness.api.getPlanningVehicles(),
+        harness.api.getPlanningCabins(),
+        harness.api.getPlanningLifts(),
+    ]);
+
+    assert.deepEqual(
+        [vehicles[0].currentStatus, cabins[0].currentStatus, lifts[0].currentStatus],
+        [1, 2, 3],
+    );
+});
+
 test('empty selection omits category filters and partial availability never becomes a range', async () => {
     const harness = await createHarness();
     await harness.api.getPlanningCabins({ categoryIds: [] });

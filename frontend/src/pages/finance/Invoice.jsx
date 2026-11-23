@@ -1,5 +1,5 @@
 import React from 'react'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useParams, useBlocker } from "react-router";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
@@ -7,6 +7,7 @@ import { ArrowLeft, Ban, Landmark, Printer, Save, Smartphone, Trash2 } from 'luc
 import { QRCodeSVG } from 'qrcode.react';
 
 import { usePdf } from '../../contexts/PdfContext';
+import { AuthContext } from '../../AuthContext';
 import ConfirmationModal from '../../components/ConfirmationModal';
 
 import SearchCustomer from '../../components/SearchCustomer';
@@ -22,6 +23,7 @@ import ActionButton from '../../components/ActionButton';
 import InvoiceCalculations from '../../utils/invoiceCalculations';
 import apiClient from '../../lib/apiClient';
 import { getCustomerById } from '../../lib/customerApi';
+import { getPdfFilename } from '../../lib/pdfFilename';
 import { createTinkPaymentRequest, getTinkPaymentStatus, sendTinkPaymentRequest } from '../../lib/tinkApi';
 
 
@@ -223,7 +225,11 @@ const Invoice = () => {
     const skipUnsavedGuardRef = useRef(false);
     const consumedSavedInvoiceRouteRef = useRef(null);
 
-    const { openPdfPreview, setBadges, markStale, clearStale, showPdfPanel, closePdfPreview } = usePdf();
+    const {
+        beginPdfPreview, finishPdfPreview, failPdfPreview, setBadges, markStale,
+        showPdfPanel, closePdfPreview, emailResult, consumeEmailResult,
+    } = usePdf();
+    const { user } = useContext(AuthContext);
 
     const defaultBadges = [
         { text: 'Epostadress finns', color: '#56983cff' }
@@ -626,7 +632,7 @@ const Invoice = () => {
         window.open(`/customer/${invoice.customerId}`, '_blank', 'noopener,noreferrer');
     };
 
-    const hasUnsavedChanges = () => {
+    const hasUnsavedChanges = useCallback(() => {
         if (skipUnsavedGuardRef.current) {
             return false;
         }
@@ -636,7 +642,35 @@ const Invoice = () => {
         }
 
         return JSON.stringify(invoice) !== JSON.stringify(originalInvoice);
-    };
+    }, [invoice, originalInvoice]);
+
+    useEffect(() => {
+        if (showPdfPanel && hasUnsavedChanges()) markStale();
+    }, [hasUnsavedChanges, showPdfPanel, markStale]);
+
+    useEffect(() => {
+        if (emailResult?.document?.kind !== 'invoice' || `${emailResult.document.id}` !== `${routeInvoiceId}`) return;
+
+        const { result } = emailResult;
+        if (result.invoiceStatusUpdated) {
+            const updates = {
+                isEmailed: true,
+                ...(result.modifiedDate ? { modifiedDate: result.modifiedDate } : {}),
+                ...(result.modifiedByUserId ? { modifiedByUserId: result.modifiedByUserId } : {}),
+                ...(user?.name ? { modifiedByUserName: user.name } : {}),
+            };
+            const updateInvoice = current => current?.id === emailResult.document.id
+                ? { ...current, ...updates }
+                : current;
+            setInvoice(updateInvoice);
+            setOriginalInvoice(updateInvoice);
+        }
+        setMessages([{
+            type: result.warning ? 'warning' : 'success',
+            text: result.warning || result.message || 'E-post skickad.',
+        }]);
+        consumeEmailResult(emailResult);
+    }, [emailResult, routeInvoiceId, user?.name, consumeEmailResult]);
 
     const navigationBlocker = useBlocker(({ currentLocation, nextLocation }) => {
         return hasUnsavedChanges() && currentLocation.pathname !== nextLocation.pathname;
@@ -663,7 +697,7 @@ const Invoice = () => {
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-    }, [invoice, originalInvoice]);
+    }, [hasUnsavedChanges]);
 
 
     const getInvoiceById = async (id, calculationId, { dedupe = false, isActive = () => true, newInvoiceParams = null } = {}) => {
@@ -772,10 +806,12 @@ const Invoice = () => {
                 navigate(`/finance/invoice/${invoiceId}`, { replace: true });
             }
 
-            clearStale?.();
             // Reload the PDF after successful save without triggering unsaved warning
-            if (showPdfPanel) {
-                await getPdf({ ignoreUnsaved: true });
+            if (showPdfPanel && refreshedInvoice) {
+                await getPdf({ ignoreUnsaved: true, document: refreshedInvoice });
+            } else if (showPdfPanel) {
+                markStale();
+                setMessages([{ type: 'warning', text: 'Fakturan sparades, men uppgifterna kunde inte laddas om. Ladda om sidan innan PDF skickas.' }]);
             }
         } catch (error) {
             const errorText = error?.response?.data ?? error?.message;
@@ -812,8 +848,8 @@ const Invoice = () => {
         }, 1000);
     };
 
-    const getPdf = async ({ ignoreUnsaved = false } = {}) => {
-        if (!invoice) return;
+    const getPdf = async ({ ignoreUnsaved = false, document = invoice } = {}) => {
+        if (!document?.id) return;
 
         if (!ignoreUnsaved && hasUnsavedChanges()) {
             // setPendingAction('pdf');
@@ -821,22 +857,22 @@ const Invoice = () => {
             return;
         }
 
-        // Open the PDF panel immediately
-        openPdfPreview('');
+        const requestId = beginPdfPreview({
+            kind: 'invoice',
+            id: document.id,
+            number: document.invoiceNr ?? document.id,
+            customerId: document.customerId,
+        });
 
         try {
-            const res = await apiClient.get(`/pdf/invoice/${invoice.id}`, {
+            const res = await apiClient.get(`/pdf/invoice/${document.id}`, {
                 responseType: 'blob',
             });
-            console.log('Response ok:', true, 'content-type:', res.headers['content-type']);
-            const blob = res.data;
-            console.log('Blob size:', blob.size, 'type:', blob.type);
-            const url = URL.createObjectURL(blob);
-            openPdfPreview(url); // update the panel with the real PDF
-        } catch (error) {
-            console.error('Error getting inquiry PDF:', error);
-            // Optional: toast.error('Kunde inte ladda PDF');
-            // Optional: keep panel open to show an error state in PdfPanel
+            const filename = getPdfFilename(res.headers['content-disposition'], 'invoice', document.invoiceNr, document.id);
+            finishPdfPreview(requestId, res.data, filename);
+        } catch {
+            console.error('Error getting invoice PDF.');
+            failPdfPreview(requestId);
         }
     };
 
@@ -917,7 +953,7 @@ const Invoice = () => {
         return () => {
             closePdfPreview?.();
         };
-    }, [closePdfPreview]);
+    }, [closePdfPreview, routeInvoiceId]);
 
 
     if (loading) {
@@ -1266,7 +1302,9 @@ const Invoice = () => {
                                             key={message.id ?? `${message.type}-${message.text}-${index}`}
                                             className={`rounded-sm border px-3 py-2 text-xs text-center ${message.type === 'error'
                                                 ? 'border-rose-200 bg-rose-50 text-rose-800'
-                                                : 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                : message.type === 'warning'
+                                                    ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                                    : 'border-emerald-200 bg-emerald-100 text-emerald-800'
                                                 }`}
                                         >
                                             {typeof message.text === 'string' ? message.text : JSON.stringify(message.text)}

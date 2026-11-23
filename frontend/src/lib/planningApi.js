@@ -41,6 +41,7 @@ export async function getPlanningVehicles({ categoryIds = [], categoryName = '',
     category: vehicle?.itemCategoryName ?? '',
     manufacturer: vehicle?.manufacturer ?? '',
     model: vehicle?.itemModelName ?? '',
+    currentStatus: vehicle?.currentStatus,
   }))
 }
 
@@ -94,6 +95,7 @@ export async function getPlanningCabins({ categoryIds = [], cabinTypeCodes = [],
     category: cabin?.itemCategoryName ?? '',
     manufacturer: cabin?.manufacturer ?? '',
     model: cabin?.itemModelName ?? '',
+    currentStatus: cabin?.currentStatus,
   }))
 }
 
@@ -121,6 +123,7 @@ export async function getPlanningLifts({ categoryIds = [], availableFrom = '', a
     category: lift?.itemCategoryName ?? '',
     manufacturer: lift?.manufacturer ?? '',
     model: lift?.itemModelName ?? '',
+    currentStatus: lift?.currentStatus,
   }))
 }
 

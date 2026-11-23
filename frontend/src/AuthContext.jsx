@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useCallback } from "react";
 import apiClient from "./lib/apiClient";
 
 export const AuthContext = createContext();
@@ -8,17 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(localStorage.getItem("token") || "");
     const [loading, setLoading] = useState(true);
 
-    // On initial load, check if token is still valid
-    useEffect(() => {
-            const token = localStorage.getItem("token");
-            if (token) {
-                verifyToken(token);
-            } else {
-                setLoading(false);
-            }
-    }, []);
-
-    const verifyToken = async (token) => {
+    const verifyToken = useCallback(async (token) => {
         try {
             const res = await apiClient.get('/auth/verify', {
                 headers: {
@@ -36,7 +26,16 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (token) {
+            verifyToken(token);
+        } else {
+            setLoading(false);
+        }
+    }, [verifyToken]);
 
     const login = async (loginData) => {
         let res;

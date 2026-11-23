@@ -16,7 +16,10 @@ namespace Backend.Services
             _context = context;
         }
 
-        public async Task<User?> GetCurrentUserAsync(ClaimsPrincipal? principal)
+        public Task<User?> GetCurrentUserAsync(ClaimsPrincipal? principal) =>
+            GetCurrentUserAsync(principal, CancellationToken.None);
+
+        public async Task<User?> GetCurrentUserAsync(ClaimsPrincipal? principal, CancellationToken cancellationToken)
         {
             var userIdClaim = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
                              ?? principal?.FindFirst("sub")?.Value
@@ -27,7 +30,7 @@ namespace Backend.Services
                 return null;
             }
 
-            return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         }
     }
 }

@@ -95,7 +95,7 @@ builder.Services.AddCors(options =>
                                 "https://localhost:5174")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .WithExposedHeaders(SlidingSessionMiddleware.RenewedTokenHeader);
+              .WithExposedHeaders(SlidingSessionMiddleware.RenewedTokenHeader, "Content-Disposition");
     });
 });
 

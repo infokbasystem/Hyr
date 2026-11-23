@@ -54,6 +54,12 @@ namespace Backend.Controllers
                 query = query.Where(mailText => mailText.Id == filter.Id.Value);
             }
 
+            if (!string.IsNullOrWhiteSpace(filter.Item))
+            {
+                var item = filter.Item.Trim().ToLower();
+                query = query.Where(mailText => mailText.Item.ToLower() == item);
+            }
+
             if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
             {
                 var searchTerm = filter.SearchTerm.Trim().ToLower();

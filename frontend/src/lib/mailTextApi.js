@@ -50,6 +50,19 @@ export async function getMailTextById(mailTextId) {
   return mapApiMailText(data)
 }
 
+export async function getMailTextByItem(item) {
+  const requestedItem = typeof item === 'string' ? item.trim() : ''
+  if (!requestedItem) return null
+
+  const query = new URLSearchParams({ Item: requestedItem, Page: '1', PageSize: '1' })
+  const data = await requestJson(`/mailtext?${query.toString()}`)
+  const rows = data?.data ?? data?.Data
+  if (!Array.isArray(rows)) throw new Error('Invalid mail text response')
+
+  return rows.map(mapApiMailText)
+    .find((mailText) => mailText.item.toLowerCase() === requestedItem.toLowerCase()) ?? null
+}
+
 export async function saveMailText(body) {
   const data = await requestJson('/mailtext', {
     method: 'POST',

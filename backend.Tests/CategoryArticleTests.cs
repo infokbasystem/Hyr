@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Globalization;
@@ -15,6 +16,34 @@ namespace Backend.Tests;
 
 public class CategoryArticleTests
 {
+    [Theory]
+    [InlineData("0", false)]
+    [InlineData("0.00001", true)]
+    [InlineData("1", true)]
+    [InlineData("9999999999999.99999", true)]
+    [InlineData("10000000000000", false)]
+    public void CategoryArticleQuantityValidationWorksInSwedishCulture(string quantity, bool expectedValid)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sv-SE");
+            var article = new CategoryArticleDto
+            {
+                ArticleId = 1,
+                Quantity = decimal.Parse(quantity, CultureInfo.InvariantCulture),
+            };
+
+            var isValid = Validator.TryValidateObject(article, new ValidationContext(article), null, validateAllProperties: true);
+
+            Assert.Equal(expectedValid, isValid);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
     [Fact]
     public async Task ArticleCanBelongToMultipleCategoriesAndLinksCanBeReplaced()
     {

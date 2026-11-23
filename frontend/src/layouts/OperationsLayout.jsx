@@ -1,6 +1,5 @@
-import { Outlet, useLocation } from "react-router-dom";
-import Header from "../components/Header";
-import Navbar from "../components/Navbar";
+import { createPortal } from "react-dom";
+import { Outlet, useLocation, useOutletContext } from "react-router-dom";
 import bg from "../assets/content.png";
 
 import { PdfProvider, usePdf } from "../contexts/PdfContext";
@@ -9,6 +8,7 @@ import OperationsSubMenu from "../pages/operations/OperationsSubMenu";
 
 const OperationsLayoutContent = () => {
     const { showPdfPanel } = usePdf();
+    const navbarSlot = useOutletContext();
     const location = useLocation();
     const activeOverridePath = location.pathname.startsWith("/customer/")
         ? "/operations/customers"
@@ -18,29 +18,23 @@ const OperationsLayoutContent = () => {
 
     return (
         <>
-            <div className="relative flex flex-col min-h-screen">
-                <Header />
-                <div className="relative sticky top-0 z-50">
-                    <Navbar />
-                    {showPdfPanel && <PdfPanel topOffset="48px" />}
-                </div>
-                <OperationsSubMenu activeOverridePath={activeOverridePath} />
-                <div className="relative flex grow items-stretch bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50" style={{ backgroundImage: `url(${bg})` }}>
-                    <div className="relative flex-grow min-w-0 overflow-visible">
-                        <Outlet />
-                    </div>
+            {showPdfPanel && navbarSlot && createPortal(<PdfPanel topOffset="48px" />, navbarSlot)}
+            <OperationsSubMenu activeOverridePath={activeOverridePath} />
+            <div className="relative flex grow items-stretch bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50" style={{ backgroundImage: `url(${bg})` }}>
+                <div className="relative flex-grow min-w-0 overflow-visible">
+                    <Outlet />
                 </div>
             </div>
         </>
     )
 }
 
-    const OperationsLayout = () => {
-        return (
-            <PdfProvider>
-                <OperationsLayoutContent />
-            </PdfProvider>
-        )
-    }
+const OperationsLayout = () => {
+    return (
+        <PdfProvider>
+            <OperationsLayoutContent />
+        </PdfProvider>
+    )
+}
 
 export default OperationsLayout

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import LabeledInput from '../../components/LabeledInput';
 import LabeledTextArea from '../../components/LabeledTextArea';
 import LabeledReactSelect from '../../components/LabeledReactSelect';
@@ -21,6 +21,7 @@ const ReservationItemCabin = ({
     defaultBookedFromTime = '',
     defaultBookedToTime = '',
 }) => {
+    const pendingArticleFocus = useRef(null);
     const handleChange = (field, value) => {
         onChange(index, field, value);
     };
@@ -37,9 +38,11 @@ const ReservationItemCabin = ({
             : article));
     };
     const addArticleRow = () => {
+        const draftKey = crypto.randomUUID();
+        pendingArticleFocus.current = draftKey;
         handleChange('reservationItemArticles', [
             ...articles.map(article => Object.fromEntries(Object.entries(article).filter(([key]) => key !== '_duplicateError'))),
-            { _draftKey: crypto.randomUUID(), articleId: null, articleNr: '', name: '', quantity: 1, unitPrice: null },
+            { _draftKey: draftKey, articleId: null, articleNr: '', name: '', quantity: 1, unitPrice: null },
         ]);
     };
     const selectArticle = (rowKey, selectedArticle) => {
@@ -171,13 +174,13 @@ const ReservationItemCabin = ({
                     </div>
                 </div>
 
-                <div className="min-w-0 w-70">
+                <div className="min-w-0 w-80">
                     <h3 className="text-xs font-bold mb-2 uppercase tracking-[0.1em] text-gray-500">Artiklar</h3>
                     <table className="w-full table-fixed border-collapse text-xs text-gray-700">
                         <colgroup>
                             <col />
-                            <col className="w-9" />
-                            <col className="w-15" />
+                            <col className="w-10" />
+                            <col className="w-20" />
                             <col className="w-8" />
                         </colgroup>
                         {/* <thead>
@@ -197,7 +200,7 @@ const ReservationItemCabin = ({
                                 const isDraft = !article.articleId;
                                 return (
                                     <tr key={rowKey} className="">
-                                        <td className="p-0 align-top">
+                                        <td className="pr-1 align-top">
                                             {isDraft ? (
                                                 <ArticleSearchInput
                                                     value={article.articleNr || ''}
@@ -207,13 +210,19 @@ const ReservationItemCabin = ({
                                                     }))}
                                                     onArticleSelect={selected => selectArticle(rowKey, selected)}
                                                     gridcell
+                                                    autoFocus={rowKey === pendingArticleFocus.current}
+                                                    onFocus={() => {
+                                                        if (pendingArticleFocus.current === rowKey) {
+                                                            pendingArticleFocus.current = null;
+                                                        }
+                                                    }}
                                                     className={articlesDisabled || !item?.itemId ? 'pointer-events-none opacity-50' : ''}
                                                 />
                                             ) : (
                                                 <div className="break-words py-1">{articleName}</div>
                                             )}
                                         </td>
-                                        <td className="p-0 align-top">
+                                        <td className="pr-1 align-top">
                                             <LabeledInput
                                                 type="number"
                                                 value={isDraft ? '' : article.quantity}

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarSearch, Calendar, ChevronLeft, ChevronRight, Info, LoaderCircle, RotateCw, X } from 'lucide-react';
 import PlanningItemSearchModal from '../../modals/PlanningItemSearchModal';
 import ItemInfoModal from '../../modals/ItemInfoModal';
+import PlanningItemCurrentStatus from './PlanningItemCurrentStatus';
 import FilterSelect from '../../components/FilterSelect';
 import SegmentedFilter from '../../components/SegmentedFilter';
 import DateRangePicker from '../../components/DaterangePicker';
@@ -148,7 +149,7 @@ const LANE_H = 27;
 const LANE_GAP = 1;
 const LANE_TOP_PAD = 2;
 const LANE_BOTTOM_PAD = LANE_TOP_PAD + 2;
-const LABEL_W = 200;
+const LABEL_W = 225;
 const HEADER_H = 72;
 const TIMELINE_MAX_HEIGHT = "calc(var(--app-viewport-height) - 189px)";
 const TIMELINE_HEADER_H = 88;
@@ -1404,7 +1405,7 @@ function CabinTimeline(props) {
                             {renderedCars.map((car, i) => {
                                 const row = layout[rowWindow.startIndex + i];
                                 return (
-                                    <div key={car.id} data-timeline-car-id={car.id} style={{ height: row.rowH, background: "#d4defc", borderBottom: "1px solid rgba(0, 0, 0, 0.2)", borderRight: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", alignItems: "center", paddingLeft: 16, paddingRight: 8, gap: 8, transition: "background 0.1s, height 0.2s" }}>
+                                    <div key={car.id} data-timeline-car-id={car.id} style={{ height: row.rowH, background: "#d4defc", borderBottom: "1px solid rgba(0, 0, 0, 0.2)", borderRight: `1px solid ${T.border}`, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto 36px", alignItems: "center", paddingLeft: 16, paddingRight: 8, gap: 8, transition: "background 0.1s, height 0.2s" }}>
                                         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden", paddingBlock: 1 }}>
                                             <button
                                                 type="button"
@@ -1448,7 +1449,7 @@ function CabinTimeline(props) {
                                             </button>
                                             {row.laneCount > 1 && <span style={{ fontSize: 9, color: T.textDim, background: T.overlapBg, padding: "1px 5px", borderRadius: 4 }}>{row.laneCount} overlaps</span>}
                                         </div>
-                                        <div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                                 <button
                                                     type="button"
                                                     tabIndex={-1}
@@ -1461,6 +1462,7 @@ function CabinTimeline(props) {
                                                 >
                                                     <Info className="h-3.5 w-3.5" strokeWidth={2} />
                                                 </button>
+                                                <PlanningItemCurrentStatus status={car.currentStatus} />
                                         </div>
                                                     
                                     </div>

@@ -29,7 +29,7 @@ public sealed record CategoryArticleDto
     [Range(1, int.MaxValue)]
     public int ArticleId { get; init; }
 
-    [Range(typeof(decimal), "0.00001", "9999999999999.99999")]
+    [Range(typeof(decimal), "0.00001", "9999999999999.99999", ParseLimitsInInvariantCulture = true)]
     public decimal Quantity { get; init; } = 1m;
 }
 
